@@ -23,6 +23,8 @@ interface CreateUserModalProps {
 }
 
 export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserModalProps) {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
@@ -54,6 +56,9 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
     setIsLoading(true);
 
     try {
+      if (!firstName.trim() || !lastName.trim()) {
+        throw new Error('First name and last name are required');
+      }
       if (!email || !password) {
         throw new Error('Email and password are required');
       }
@@ -66,6 +71,8 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
       const result = await registerUser({
         email,
         password,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         roleIds: selectedRoles.length > 0 ? selectedRoles : undefined,
       });
 
@@ -87,6 +94,8 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
       }
 
       // Clear the form and close the modal so the parent can show a global success message
+      setFirstName('');
+      setLastName('');
       setEmail('');
       setPassword('');
       setSelectedRoles([]);
@@ -107,7 +116,7 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
           <h2 className="text-xl font-bold text-[#1A1D20]">Create New User</h2>
           <button
             onClick={onClose}
-            className="p-1 hover:bg-[#F9FAFB] rounded-lg transition-colors"
+            className="p-1 hover:bg-[#F5F3EC] rounded-lg transition-colors"
             disabled={isLoading}
           >
             <X className="w-5 h-5 text-[#6C7E8E]" />
@@ -129,6 +138,40 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
             </div>
           )}
 
+          {/* First Name & Last Name */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="firstName" className="text-[#1A1D20] font-medium text-sm">
+                First Name
+              </Label>
+              <Input
+                id="firstName"
+                type="text"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="Juan"
+                required
+                disabled={isLoading || success}
+                className="bg-[#F5F3EC] border-[#E2E7EC] text-[#1A1D20] placeholder:text-[#A0A8B0] focus:border-[#5BC4E7] focus:ring-[#5BC4E7] rounded-lg"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="lastName" className="text-[#1A1D20] font-medium text-sm">
+                Last Name
+              </Label>
+              <Input
+                id="lastName"
+                type="text"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Dela Cruz"
+                required
+                disabled={isLoading || success}
+                className="bg-[#F5F3EC] border-[#E2E7EC] text-[#1A1D20] placeholder:text-[#A0A8B0] focus:border-[#5BC4E7] focus:ring-[#5BC4E7] rounded-lg"
+              />
+            </div>
+          </div>
+
           {/* Email Field */}
           <div className="space-y-2">
             <Label htmlFor="email" className="text-[#1A1D20] font-medium text-sm">
@@ -142,7 +185,7 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
               placeholder="user@example.com"
               required
               disabled={isLoading || success}
-              className="bg-[#F9FAFB] border-[#E2E7EC] text-[#1A1D20] placeholder:text-[#A0A8B0] focus:border-[#5BC4E7] focus:ring-[#5BC4E7] rounded-lg"
+              className="bg-[#F5F3EC] border-[#E2E7EC] text-[#1A1D20] placeholder:text-[#A0A8B0] focus:border-[#5BC4E7] focus:ring-[#5BC4E7] rounded-lg"
             />
           </div>
 
@@ -159,7 +202,7 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
               placeholder="••••••••"
               required
               disabled={isLoading || success}
-              className="bg-[#F9FAFB] border-[#E2E7EC] text-[#1A1D20] placeholder:text-[#A0A8B0] focus:border-[#5BC4E7] focus:ring-[#5BC4E7] rounded-lg"
+              className="bg-[#F5F3EC] border-[#E2E7EC] text-[#1A1D20] placeholder:text-[#A0A8B0] focus:border-[#5BC4E7] focus:ring-[#5BC4E7] rounded-lg"
             />
             <p className="text-xs text-[#6C7E8E] mt-1">
               User can change this after first login
@@ -177,7 +220,7 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
                 roles.map((role) => (
                   <label
                     key={role.id}
-                    className="flex items-start gap-3 p-3 bg-[#F9FAFB] rounded-lg border border-[#E2E7EC] hover:border-[#5BC4E7] hover:bg-[#E2F4FA] cursor-pointer transition-colors"
+                    className="flex items-start gap-3 p-3 bg-[#F5F3EC] rounded-lg border border-[#E2E7EC] hover:border-[#5BC4E7] hover:bg-[#E2F4FA] cursor-pointer transition-colors"
                   >
                     <input
                       type="checkbox"
@@ -216,7 +259,7 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
               variant="outline"
               onClick={onClose}
               disabled={isLoading || success}
-              className="flex-1 border-[#E2E7EC] text-[#1A1D20] hover:bg-[#F9FAFB] rounded-lg"
+              className="flex-1 bg-white border-[#E2E7EC] text-[#1A1D20] hover:bg-[#F5F3EC] rounded-lg"
             >
               Cancel
             </Button>
@@ -242,3 +285,4 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
     </div>
   );
 }
+
