@@ -1,73 +1,82 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Card, CardTitle, CardDescription } from '@/components/ui/card';
 import { ArrowRight } from 'lucide-react';
+
+const heroCards = [
+  {
+    icon: '🏢',
+    bg: 'bg-chart-3',
+    title: 'Property Management',
+    description: 'Efficiently manage all your properties in one place',
+  },
+  {
+    icon: '👥',
+    bg: 'bg-chart-4',
+    title: 'User Management',
+    description: 'Role-based access control for teams',
+  },
+  {
+    icon: '📊',
+    bg: 'bg-chart-3',
+    title: 'Analytics & Reporting',
+    description: 'Detailed insights into your operations',
+  },
+];
 
 export function Hero() {
   return (
-    <section className="w-full bg-[#F5F3EC] py-20 sm:py-32">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="grid md:grid-cols-2 gap-16 items-center">
-          {/* Left Content */}
+    <section className="w-full bg-background py-20 sm:py-32">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid items-center gap-16 md:grid-cols-2">
           <div className="space-y-8">
             <div className="space-y-4">
-              <h1 className="text-5xl sm:text-6xl font-bold text-[#1A1D20] leading-tight">
+              <h1 className="text-5xl font-bold leading-tight text-foreground sm:text-6xl">
                 First Davao Millennium Property Ventures Inc.
               </h1>
-              <p className="text-xl text-[#6C7E8E] leading-relaxed">
+              <p className="text-xl leading-relaxed text-muted-foreground">
                 Empowering property management through innovative digital solutions. Streamline operations, manage resources, and grow your business.
               </p>
             </div>
 
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 pt-4">
-              <Link href="/login">
-                <Button className="bg-[#5BC4E7] text-white hover:bg-[#4AADE0] rounded-lg px-10 py-6 text-lg font-semibold">
+            <div className="flex flex-col gap-4 pt-4 sm:flex-row">
+              <Button
+                asChild
+                className="h-auto rounded-lg bg-primary px-10 py-6 text-lg font-semibold text-primary-foreground hover:bg-[#4AADE0]"
+              >
+                <Link href="/login">
                   Get Started
-                  <ArrowRight className="w-5 h-5 ml-2" />
-                </Button>
-              </Link>
-              
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
             </div>
           </div>
 
-          {/* Right Side - Feature Cards */}
           <div className="grid gap-4">
-            <div className="bg-white rounded-2xl p-6 border border-[#E2E7EC] shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-start space-x-4">
-                <div className="w-12 h-12 bg-[#E2F4FA] rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl">🏢</span>
+            {heroCards.map((card) => (
+              <Card
+                key={card.title}
+                className="rounded-2xl border-border bg-card p-6 shadow-sm transition-shadow hover:shadow-md"
+              >
+                <div className="flex items-start space-x-4">
+                  <div className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg ${card.bg}`}>
+                    <span className="text-2xl">{card.icon}</span>
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-semibold text-foreground">
+                      {card.title}
+                    </CardTitle>
+                    <CardDescription className="mt-1 text-sm text-muted-foreground">
+                      {card.description}
+                    </CardDescription>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-semibold text-[#1A1D20]">Property Management</h3>
-                  <p className="text-sm text-[#6C7E8E] mt-1">Efficiently manage all your properties in one place</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl p-6 border border-[#E2E7EC] shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-start space-x-4">
-                <div className="w-12 h-12 bg-[#FFF9E5] rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl">👥</span>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-[#1A1D20]">User Management</h3>
-                  <p className="text-sm text-[#6C7E8E] mt-1">Role-based access control for teams</p>
-                </div>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl p-6 border border-[#E2E7EC] shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-start space-x-4">
-                <div className="w-12 h-12 bg-[#E2F4FA] rounded-lg flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl">📊</span>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-[#1A1D20]">Analytics & Reporting</h3>
-                  <p className="text-sm text-[#6C7E8E] mt-1">Detailed insights into your operations</p>
-                </div>
-              </div>
-            </div>
+              </Card>
+            ))}
           </div>
         </div>
       </div>
     </section>
   );
 }
+

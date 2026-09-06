@@ -4,11 +4,11 @@ import { Navbar } from '@/components/landing/navbar';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-card">
       <Navbar />
       <Hero />
       <FeaturesSection />
-      <footer className="border-t border-[#E2E7EC] px-4 py-10 text-center text-sm text-[#6C7E8E]">
+      <footer className="border-t border-border px-4 py-10 text-center text-sm text-muted-foreground">
         First Davao Millennium Property Ventures Inc.
       </footer>
     </div>

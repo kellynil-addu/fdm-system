@@ -1,11 +1,17 @@
-import { Card } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Home, Briefcase, Target } from 'lucide-react';
 
 const features = [
   {
     icon: Home,
     title: 'Conflict Features',
-    description: 'LHandle overlapping client claims and conflicting records with built-in conflict detection.',
+    description: 'Handle overlapping client claims and conflicting records with built-in conflict detection.',
   },
   {
     icon: Briefcase,
@@ -21,30 +27,29 @@ const features = [
 
 export function FeaturesSection() {
   return (
-    <section id="features" className="w-full bg-white py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Feature Cards Grid */}
-        <div className="grid md:grid-cols-3 gap-8">
+    <section id="features" className="w-full bg-card py-16">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="grid gap-8 md:grid-cols-3">
           {features.map((feature) => {
             const Icon = feature.icon;
             return (
-              <Card key={feature.title} className="p-6 bg-white border-[#E2E7EC] rounded-xl hover:shadow-md transition-shadow">
-                <div className="space-y-4">
-                  {/* Icon Background */}
-                  <div className="w-12 h-12 bg-[#E2F4FA] rounded-full flex items-center justify-center">
-                    <Icon className="w-6 h-6 text-[#5BC4E7]" />
+              <Card
+                key={feature.title}
+                className="rounded-xl border-border bg-card p-6 shadow-none transition-shadow hover:shadow-md"
+              >
+                <CardHeader className="p-0">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-chart-3">
+                    <Icon className="h-6 w-6 text-primary" />
                   </div>
-
-                  {/* Content */}
-                  <div className="space-y-2">
-                    <h3 className="text-base font-semibold text-[#1A1D20]">
-                      {feature.title}
-                    </h3>
-                    <p className="text-sm text-[#6C7E8E] leading-relaxed">
-                      {feature.description}
-                    </p>
-                  </div>
-                </div>
+                  <CardTitle className="pt-4 text-base font-semibold text-foreground">
+                    {feature.title}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0 pt-2">
+                  <CardDescription className="text-sm leading-relaxed text-muted-foreground">
+                    {feature.description}
+                  </CardDescription>
+                </CardContent>
               </Card>
             );
           })}
@@ -53,3 +58,4 @@ export function FeaturesSection() {
     </section>
   );
 }
+
