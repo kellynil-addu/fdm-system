@@ -1,8 +1,7 @@
 "use server";
 
-import { hasPermission } from "@/lib/permissions";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthorizedCaller } from "@/lib/actions/auth-guard";
 
 export interface RbacRole {
   id: string;
@@ -13,28 +12,6 @@ export interface RbacRole {
 export type SetUserRolesResult =
   | { success: true }
   | { success: false; error: string };
-
-async function getAuthorizedCaller(): Promise<
-  { id: string } | { error: string }
-> {
-  const serverClient = await createClient();
-  const {
-    data: { user: caller },
-  } = await serverClient.auth.getUser();
-
-  if (!caller) {
-    return { error: "You must be logged in to perform this action." };
-  }
-
-  const allowed = await hasPermission("system.create", caller.id);
-  if (!allowed) {
-    return {
-      error: "Access denied. You do not have permission to manage roles.",
-    };
-  }
-
-  return { id: caller.id };
-}
 
 export async function getActiveRoles(): Promise<RbacRole[]> {
   const caller = await getAuthorizedCaller();

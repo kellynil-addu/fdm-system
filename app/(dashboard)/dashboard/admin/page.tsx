@@ -3,15 +3,12 @@ import { redirect } from 'next/navigation';
 import { UserManagementSection } from '@/components/dashboard/user-management-section';
 import { checkIsSystemAdmin } from '@/lib/actions/check-user';
 import { listUsers } from '@/lib/actions/admin-user';
-import { createClient } from '@/lib/supabase/server';
+import { getUserInfo } from '@/lib/user';
 
 
 async function AdminContent() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getUserInfo();
 
     if (!user) {
       redirect('/login');

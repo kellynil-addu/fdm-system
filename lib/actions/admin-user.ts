@@ -1,8 +1,7 @@
 "use server";
 
-import { hasPermission } from "@/lib/permissions";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthorizedCaller } from "@/lib/actions/auth-guard";
 import { AuthError } from "@supabase/supabase-js";
 import type { RbacRole } from "@/lib/actions/admin-roles";
 
@@ -31,28 +30,6 @@ export interface UserListItem {
 export type ListUsersResult =
   | { success: true; users: UserListItem[] }
   | { success: false; error: string };
-
-async function getAuthorizedCaller(): Promise<
-  { id: string } | { error: string }
-> {
-  const serverClient = await createClient();
-  const {
-    data: { user: caller },
-  } = await serverClient.auth.getUser();
-
-  if (!caller) {
-    return { error: "You must be logged in to perform this action." };
-  }
-
-  const allowed = await hasPermission("system.create", caller.id);
-  if (!allowed) {
-    return {
-      error: "Access denied. You do not have permission to manage users.",
-    };
-  }
-
-  return { id: caller.id };
-}
 
 export async function registerUser(
   params: RegisterUserParams
@@ -107,24 +84,24 @@ export async function toggleUser(userId: string, enable: boolean) {
 
   const adminClient = createAdminClient();
 
-  let error_main: AuthError | null = null;
+  let errorMain: AuthError | null = null;
 
   if (enable) {
-    let { error } = await adminClient.auth.admin.updateUserById(userId, {
-      // Workaround: to disable a user, ban them for a very long time.
-      ban_duration: '0h'
+    // Workaround: to re-enable a user, reset the ban duration to 0
+    const { error } = await adminClient.auth.admin.updateUserById(userId, {
+      ban_duration: "0h",
     });
-    error_main = error;
+    errorMain = error;
   } else {
-    let { error } = await adminClient.auth.admin.updateUserById(userId, {
-      ban_duration: '876000h'
+    const { error } = await adminClient.auth.admin.updateUserById(userId, {
+      ban_duration: "876000h",
     });
-    error_main = error;
+    errorMain = error;
   }
 
-  if (error_main) {
-    console.error("[toggleUser] error: ", error_main.message);
-    return { success: false, error: error_main.message };
+  if (errorMain) {
+    console.error("[toggleUser] error: ", errorMain.message);
+    return { success: false, error: errorMain.message };
   }
 
   return { success: true };
@@ -136,7 +113,6 @@ export async function listUsers(): Promise<ListUsersResult> {
 
   const adminClient = createAdminClient();
 
-  // Collect all auth users across pages
   const allAuthUsers: {
     id: string;
     email: string;
@@ -157,9 +133,9 @@ export async function listUsers(): Promise<ListUsersResult> {
     allAuthUsers.push(
       ...data.users.map((u) => ({
         id: u.id,
-        email: u.email ?? '',
-        first_name: (u.user_metadata as Record<string, string> | null)?.first_name ?? '',
-        last_name: (u.user_metadata as Record<string, string> | null)?.last_name ?? '',
+        email: u.email ?? "",
+        first_name: (u.user_metadata as Record<string, string> | null)?.first_name ?? "",
+        last_name: (u.user_metadata as Record<string, string> | null)?.last_name ?? "",
         banned_until: u.banned_until,
       }))
     );
@@ -168,7 +144,6 @@ export async function listUsers(): Promise<ListUsersResult> {
     page++;
   }
 
-  // Fetch all user→role mappings in one query
   const { data: userRoles, error: rolesError } = await adminClient
     .schema("rbac")
     .from("user_role")
@@ -180,7 +155,6 @@ export async function listUsers(): Promise<ListUsersResult> {
     return { success: false, error: rolesError.message };
   }
 
-  // Build a lookup: userId → roles[] (FK join returns a single object per row, not an array)
   const rolesByUser = (userRoles ?? []).reduce((map, row) => {
     if (row.role) map.set(row.user_id, [...(map.get(row.user_id) ?? []), row.role]);
     return map;
@@ -193,7 +167,6 @@ export async function listUsers(): Promise<ListUsersResult> {
     firstName: u.first_name,
     lastName: u.last_name,
     roles: rolesByUser.get(u.id) ?? [],
-    // A user is considered banned when banned_until is set and in the future
     isBanned: !!u.banned_until && new Date(u.banned_until) > now,
   }));
 
@@ -222,7 +195,6 @@ export async function deleteUser(userId: string): Promise<DeleteUserResult> {
     return { success: false, error: rolesError.message };
   }
 
-  // Permanently delete the auth user
   const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
 
   if (deleteError) {

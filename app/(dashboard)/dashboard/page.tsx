@@ -1,16 +1,13 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
 import { checkIsSystemAdmin } from '@/lib/actions/check-user';
-import { createClient } from '@/lib/supabase/server';
+import { getUserInfo } from '@/lib/user';
 import { QuickLinks } from '@/components/dashboard/quick-links';
 
 
 async function DashboardContent() {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    const user = await getUserInfo();
 
     if (!user) {
       return (
