@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,8 +10,9 @@ import { Card } from '@/components/ui/card';
 import { login } from '@/lib/auth';
 import { FdmLogo } from '@/components/fdm-logo';
 
-export default function LoginPage() {
+export default function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
@@ -24,7 +25,8 @@ export default function LoginPage() {
 
     try {
       await login({ email, password });
-      router.push('/dashboard');
+      const next = searchParams.get('next') || '/dashboard';
+      router.push(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to login. Please try again.');
     } finally {
