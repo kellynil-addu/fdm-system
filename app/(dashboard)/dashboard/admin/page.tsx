@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { UserManagementSection } from '@/components/dashboard/user-management-section';
 import { checkIsSystemAdmin } from '@/lib/actions/check-user';
-import { listUsers } from '@/lib/actions/admin-register';
+import { listUsers } from '@/lib/actions/admin-user';
 import { createClient } from '@/lib/supabase/server';
 
 export const dynamic = 'force-dynamic';

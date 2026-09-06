@@ -32,8 +32,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { CreateUserModal } from './create-user-modal';
-import { getActiveRoles, setUserRoles, toggleUser, deleteUser, updateUserProfile } from '@/lib/actions/admin-register';
-import type { RbacRole, UserListItem } from '@/lib/actions/admin-register';
+import { toggleUser, deleteUser, updateUserProfile } from '@/lib/actions/admin-user';
+import type { UserListItem } from '@/lib/actions/admin-user';
+import { getActiveRoles, setUserRoles } from '@/lib/actions/admin-roles';
+import type { RbacRole } from '@/lib/actions/admin-roles';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 

@@ -6,9 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { X, Loader2 } from 'lucide-react';
-import { registerUser, listUsers } from '@/lib/actions/admin-register';
-import type { UserListItem } from '@/lib/actions/admin-register';
-import { getActiveRoles } from '@/lib/actions/admin-register';
+import { registerUser, listUsers } from '@/lib/actions/admin-user';
+import type { UserListItem } from '@/lib/actions/admin-user';
+import { getActiveRoles } from '@/lib/actions/admin-roles';
 
 interface Role {
   id: string;

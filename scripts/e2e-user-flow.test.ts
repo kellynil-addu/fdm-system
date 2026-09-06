@@ -10,10 +10,12 @@
  *
  * End-to-end integration test for the user management lifecycle:
  *   1. Create a user       (via Admin API  — mirrors registerUser() in lib/actions/admin-register.ts)
+ *   1. Create a user       (via Admin API  — mirrors registerUser() in lib/actions/admin-user.ts)
  *   2. Log in as that user (via anon client — mirrors login() in lib/auth.ts)
  *   3. Update the user's password (via anon client — mirrors updatePassword() in lib/auth.ts)
  *   4. Log in again with the new password
  *   5. Assign roles to the user (via Admin API — mirrors setUserRoles() in lib/actions/admin-register.ts)
+ *   5. Assign roles to the user (via Admin API — mirrors setUserRoles() in lib/actions/roles.ts)
  *
  * Usage:
  *   npx tsx --env-file=.env.local scripts/e2e-user-flow.test.ts

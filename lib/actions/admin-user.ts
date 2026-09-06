@@ -1,22 +1,10 @@
-/**
- * lib/actions/admin-register.ts
- *
- * Server actions for registering / managing Supabase Auth users and RBAC roles.
- *
- * All functions require the caller to hold the `system.create` permission
- * (granted by the `system_admin` role), except `getActiveRoles`.
- */
-
 "use server";
 
 import { hasPermission } from "@/lib/permissions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { AuthError } from "@supabase/supabase-js";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
+import type { RbacRole } from "@/lib/actions/admin-roles";
 
 export interface RegisterUserParams {
   email: string;
@@ -30,12 +18,6 @@ export interface RegisterUserParams {
 export type RegisterUserResult =
   | { success: true; userId: string }
   | { success: false; error: string };
-
-export interface RbacRole {
-  id: string;
-  name: string;
-  description: string | null;
-}
 
 export interface UserListItem {
   id: string;
@@ -72,9 +54,6 @@ async function getAuthorizedCaller(): Promise<
   return { id: caller.id };
 }
 
-/**
- * Creates a new Supabase Auth user and optionally assigns multiple roles.
- */
 export async function registerUser(
   params: RegisterUserParams
 ): Promise<RegisterUserResult> {
@@ -122,41 +101,7 @@ export async function registerUser(
   return { success: true, userId: newUserId };
 }
 
-/**
- * Returns all active roles from rbac.role, ordered by name.
- * Called from Server Components to avoid an extra client round-trip.
- */
-export async function getActiveRoles(): Promise<RbacRole[]> {
-  const caller = await getAuthorizedCaller();
-  if ("error" in caller) {
-    console.error("[getActiveRoles] unauthorized:", caller.error);
-    return [];
-  }
-
-  const adminClient = createAdminClient();
-
-  const { data, error } = await adminClient
-    .schema("rbac")
-    .from("role")
-    .select("id, name, description")
-    .eq("active", true)
-    .order("name");
-
-  if (error) {
-    console.error("[getActiveRoles] error:", error.message);
-    return [];
-  }
-
-  return (data ?? []) as RbacRole[];
-}
-
-/*
-  Activates/deactives a user by their userId.
-  `true` is to activate.
-  `false is to deactivate.
-*/
 export async function toggleUser(userId: string, enable: boolean) {
-
   const caller = await getAuthorizedCaller();
   if ("error" in caller) return { success: false, error: caller.error };
 
@@ -185,54 +130,6 @@ export async function toggleUser(userId: string, enable: boolean) {
   return { success: true };
 }
 
-export type SetUserRolesResult =
-  | { success: true }
-  | { success: false; error: string };
-
-/**
- * Replaces all RBAC roles for a user with the provided set.
- * Requires `system.create` permission.
- */
-export async function setUserRoles(
-  userId: string,
-  roleIds: string[]
-): Promise<SetUserRolesResult> {
-  const caller = await getAuthorizedCaller();
-  if ("error" in caller) return { success: false, error: caller.error };
-
-  const adminClient = createAdminClient();
-
-  const { error: deleteError } = await adminClient
-    .schema("rbac")
-    .from("user_role")
-    .delete()
-    .eq("user_id", userId);
-
-  if (deleteError) {
-    console.error("[setUserRoles] delete error:", deleteError.message);
-    return { success: false, error: deleteError.message };
-  }
-
-  if (roleIds.length > 0) {
-    const rows = roleIds.map((roleId) => ({ user_id: userId, role_id: roleId }));
-    const { error: insertError } = await adminClient
-      .schema("rbac")
-      .from("user_role")
-      .insert(rows);
-
-    if (insertError) {
-      console.error("[setUserRoles] insert error:", insertError.message);
-      return { success: false, error: insertError.message };
-    }
-  }
-
-  return { success: true };
-}
-
-/**
- * Returns every Auth user with their email, assigned RBAC roles, and ban status.
- * Requires `system.create` permission.
- */
 export async function listUsers(): Promise<ListUsersResult> {
   const caller = await getAuthorizedCaller();
   if ("error" in caller) return { success: false, error: caller.error };
@@ -307,11 +204,6 @@ export type DeleteUserResult =
   | { success: true }
   | { success: false; error: string };
 
-/**
- * Permanently deletes a Supabase Auth user by their ID.
- * Also removes any associated RBAC user_role rows.
- * Requires `system.create` permission.
- */
 export async function deleteUser(userId: string): Promise<DeleteUserResult> {
   const caller = await getAuthorizedCaller();
   if ("error" in caller) return { success: false, error: caller.error };
@@ -345,10 +237,6 @@ export type UpdateUserProfileResult =
   | { success: true }
   | { success: false; error: string };
 
-/**
- * Updates a user's first and last name in their auth metadata.
- * Requires `system.create` permission.
- */
 export async function updateUserProfile(
   userId: string,
   firstName: string,
