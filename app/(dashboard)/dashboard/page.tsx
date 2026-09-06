@@ -4,7 +4,6 @@ import { checkIsSystemAdmin } from '@/lib/actions/check-user';
 import { createClient } from '@/lib/supabase/server';
 import { QuickLinks } from '@/components/dashboard/quick-links';
 
-export const dynamic = 'force-dynamic';
 
 async function DashboardContent() {
   try {

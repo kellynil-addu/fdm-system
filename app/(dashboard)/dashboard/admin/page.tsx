@@ -5,7 +5,6 @@ import { checkIsSystemAdmin } from '@/lib/actions/check-user';
 import { listUsers } from '@/lib/actions/admin-user';
 import { createClient } from '@/lib/supabase/server';
 
-export const dynamic = 'force-dynamic';
 
 async function AdminContent() {
   try {

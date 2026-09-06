@@ -4,7 +4,6 @@ import { FdmLogo } from '@/components/fdm-logo';
 import { getUserInfo } from '@/lib/user';
 import { getIsCurrentUserSystemAdmin, getCurrentUserRoleTabs } from '@/lib/actions/check-user';
 
-export const dynamic = 'force-dynamic';
 
 export default async function DashboardLayout({
   children,
