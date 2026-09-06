@@ -5,6 +5,7 @@ import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { logout as signOut } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
+import type { AuthUser } from '@supabase/supabase-js';
 import { ComingSoonModal } from './coming-soon-modal';
 import {
   DropdownMenu,
@@ -14,11 +15,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 interface DashboardTopBarProps {
-  userEmail?: string | null;
+  user?: AuthUser | null;
 }
 
-export function DashboardTopBar({ userEmail }: DashboardTopBarProps) {
-  const displayName = userEmail ? userEmail.split('@')[0] : 'Unknown';
+export function DashboardTopBar({ user }: DashboardTopBarProps) {
+  const displayName = [user?.user_metadata.first_name, user?.user_metadata.last_name]
+    .filter(Boolean)
+    .join(' ') || user?.email || 'Unknown';
   const avatarInitial = displayName[0]?.toUpperCase() ?? '?';
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);

@@ -17,10 +17,7 @@ export async function getUserInfo() {
     return null;
   }
 
-  return {
-    id: user.id,
-    email: user.email,
-  };
+  return user;
 }
 
 export async function isSystemAdmin(userId: string): Promise<boolean> {
