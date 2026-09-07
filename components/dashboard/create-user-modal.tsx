@@ -1,20 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
-import { X, Loader2 } from 'lucide-react';
-import { registerUser, listUsers } from '@/lib/actions/admin-user';
+import { FormField } from '@/components/ui/form-field';
+import { LoadingButton } from '@/components/ui/loading-button';
+import { RoleCheckboxList } from '@/components/dashboard/role-checkbox-list';
+import { Label } from '@/components/ui/label';
+import { X } from 'lucide-react';
+import { useCreateUser } from '@/lib/hooks/use-create-user';
 import type { UserListItem } from '@/lib/actions/admin-user';
-import { getActiveRoles } from '@/lib/actions/admin-roles';
-
-interface Role {
-  id: string;
-  name: string;
-  description: string | null;
-}
 
 interface CreateUserModalProps {
   isOpen: boolean;
@@ -23,89 +17,8 @@ interface CreateUserModalProps {
 }
 
 export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserModalProps) {
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      loadRoles();
-    }
-  }, [isOpen]);
-
-  const loadRoles = async () => {
-    try {
-      const activeRoles = await getActiveRoles();
-      setRoles(activeRoles || []);
-    } catch (err) {
-      console.error('Error loading roles:', err);
-      setError('Failed to load roles');
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError(null);
-    setSuccess(false);
-    setIsLoading(true);
-
-    try {
-      if (!firstName.trim() || !lastName.trim()) {
-        throw new Error('First name and last name are required');
-      }
-      if (!email || !password) {
-        throw new Error('Email and password are required');
-      }
-
-      if (selectedRoles.length === 0) {
-        throw new Error('Please select at least one role');
-      }
-
-      // Register the user with selected roles
-      const result = await registerUser({
-        email,
-        password,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        roleIds: selectedRoles.length > 0 ? selectedRoles : undefined,
-      });
-
-      if (!result?.success) {
-        throw new Error(result?.error || 'Failed to create user');
-      }
-
-      // Try to fetch the created user's full data and notify parent
-      try {
-        const listResult = await listUsers();
-        if (listResult.success) {
-          const created = listResult.users.find((u) => u.id === result.userId);
-          if (created && typeof onUserCreated === 'function') {
-            onUserCreated(created);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to refresh users after creation:', err);
-      }
-
-      // Clear the form and close the modal so the parent can show a global success message
-      setFirstName('');
-      setLastName('');
-      setEmail('');
-      setPassword('');
-      setSelectedRoles([]);
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create user');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const { fields, setters, roles, selectedRoles, handleRoleChange, isLoading, error, handleSubmit } =
+    useCreateUser({ isOpen, onClose, onUserCreated });
 
   if (!isOpen) return null;
 
@@ -114,175 +27,101 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
       <Card style={{ backgroundColor: '#ffffff', color: '#1A1D20' }} className="w-full max-w-md bg-white text-[#1A1D20] border-[#E2E7EC] rounded-2xl shadow-lg">
         <div className="p-6 border-b border-[#E2E7EC] flex items-center justify-between">
           <h2 className="text-xl font-bold text-[#1A1D20]">Create New User</h2>
-          <button
-            onClick={onClose}
-            className="p-1 hover:bg-[#F5F3EC] rounded-lg transition-colors"
-            disabled={isLoading}
-          >
+          <button onClick={onClose} className="p-1 hover:bg-[#F5F3EC] rounded-lg transition-colors" disabled={isLoading}>
             <X className="w-5 h-5 text-[#6C7E8E]" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {/* Success Message */}
-          {success && (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm text-green-800">User created successfully!</p>
-            </div>
-          )}
-
-          {/* Error Message */}
           {error && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-sm text-red-800">{error}</p>
             </div>
           )}
 
-          {/* First Name & Last Name */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="firstName" className="text-[#1A1D20] font-medium text-sm">
-                First Name
-              </Label>
-              <Input
-                id="firstName"
-                type="text"
-                value={firstName}
-                onChange={(e) => setFirstName(e.target.value)}
-                placeholder="Juan"
-                required
-                disabled={isLoading || success}
-                className="bg-[#F5F3EC] border-[#E2E7EC] text-[#1A1D20] placeholder:text-[#A0A8B0] focus:border-[#5BC4E7] focus:ring-[#5BC4E7] rounded-lg"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="lastName" className="text-[#1A1D20] font-medium text-sm">
-                Last Name
-              </Label>
-              <Input
-                id="lastName"
-                type="text"
-                value={lastName}
-                onChange={(e) => setLastName(e.target.value)}
-                placeholder="Dela Cruz"
-                required
-                disabled={isLoading || success}
-                className="bg-[#F5F3EC] border-[#E2E7EC] text-[#1A1D20] placeholder:text-[#A0A8B0] focus:border-[#5BC4E7] focus:ring-[#5BC4E7] rounded-lg"
-              />
-            </div>
-          </div>
-
-          {/* Email Field */}
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-[#1A1D20] font-medium text-sm">
-              Email Address
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="user@example.com"
+            <FormField
+              id="firstName"
+              label="First Name"
+              type="text"
+              value={fields.firstName}
+              onChange={(e) => setters.setFirstName(e.target.value)}
+              placeholder="Juan"
               required
-              disabled={isLoading || success}
-              className="bg-[#F5F3EC] border-[#E2E7EC] text-[#1A1D20] placeholder:text-[#A0A8B0] focus:border-[#5BC4E7] focus:ring-[#5BC4E7] rounded-lg"
+              disabled={isLoading}
+            />
+            <FormField
+              id="lastName"
+              label="Last Name"
+              type="text"
+              value={fields.lastName}
+              onChange={(e) => setters.setLastName(e.target.value)}
+              placeholder="Dela Cruz"
+              required
+              disabled={isLoading}
             />
           </div>
 
-          {/* Password Field */}
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-[#1A1D20] font-medium text-sm">
-              Temporary Password
-            </Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              disabled={isLoading || success}
-              className="bg-[#F5F3EC] border-[#E2E7EC] text-[#1A1D20] placeholder:text-[#A0A8B0] focus:border-[#5BC4E7] focus:ring-[#5BC4E7] rounded-lg"
-            />
-            <p className="text-xs text-[#6C7E8E] mt-1">
-              User can change this after first login
-            </p>
-          </div>
+          <FormField
+            id="email"
+            label="Email Address"
+            type="email"
+            value={fields.email}
+            onChange={(e) => setters.setEmail(e.target.value)}
+            placeholder="user@example.com"
+            required
+            disabled={isLoading}
+          />
 
-          {/* Role Selection */}
+          <FormField
+            id="password"
+            label="Temporary Password"
+            type="password"
+            value={fields.password}
+            onChange={(e) => setters.setPassword(e.target.value)}
+            placeholder="••••••••"
+            required
+            disabled={isLoading}
+            hint="User can change this after first login"
+          />
+
           <div className="space-y-3">
-            <Label className="text-[#1A1D20] font-medium text-sm">
-              Assign Roles
-            </Label>
+            <Label className="text-[#1A1D20] font-medium text-sm">Assign Roles</Label>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              
-              {roles.length > 0 ? (
-                roles.map((role) => (
-                  <label
-                    key={role.id}
-                    className="flex items-start gap-3 p-3 bg-[#F5F3EC] rounded-lg border border-[#E2E7EC] hover:border-[#5BC4E7] hover:bg-[#E2F4FA] cursor-pointer transition-colors"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedRoles.includes(role.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedRoles([...selectedRoles, role.id]);
-                        } else {
-                          setSelectedRoles(selectedRoles.filter((id) => id !== role.id));
-                        }
-                      }}
-                      disabled={isLoading || success}
-                      className="mt-1 w-4 h-4 rounded border-[#E2E7EC] text-[#5BC4E7] cursor-pointer"
-                    />
-                    <div className="flex-1">
-                      <p className="font-medium text-sm text-[#1A1D20]">{role.name}</p>
-                      {role.description && (
-                        <p className="text-xs text-[#6C7E8E] mt-1">{role.description}</p>
-                      )}
-                    </div>
-                  </label>
-                ))
-              ) : (
-                <p className="text-sm text-[#6C7E8E]">No roles available</p>
-              )}
+              <RoleCheckboxList
+                roles={roles}
+                selectedIds={selectedRoles}
+                onChange={handleRoleChange}
+                disabled={isLoading}
+              />
             </div>
             {selectedRoles.length === 0 && (
-              <p className="text-xs text-[#6C7E8E] mt-1">Select at least one role.</p>
+              <p className="text-xs text-[#6C7E8E]">Select at least one role.</p>
             )}
           </div>
 
-          {/* Action Buttons */}
           <div className="flex gap-3 pt-4">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={isLoading || success}
+              disabled={isLoading}
               className="flex-1 bg-white border-[#E2E7EC] text-[#1A1D20] hover:bg-[#F5F3EC] rounded-lg"
             >
               Cancel
             </Button>
-            <Button
+            <LoadingButton
               type="submit"
-              disabled={isLoading || success || selectedRoles.length === 0}
-              className="flex-1 bg-[#5BC4E7] text-white hover:bg-[#4AADE0] rounded-lg flex items-center justify-center gap-2"
+              isLoading={isLoading}
+              loadingText="Creating..."
+              disabled={selectedRoles.length === 0}
+              className="flex-1 bg-[#5BC4E7] text-white hover:bg-[#4AADE0] rounded-lg"
             >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Creating...
-                </>
-              ) : success ? (
-                'Created!'
-              ) : (
-                'Create User'
-              )}
-            </Button>
+              Create User
+            </LoadingButton>
           </div>
         </form>
       </Card>
     </div>
   );
 }
-

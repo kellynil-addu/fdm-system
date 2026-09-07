@@ -5,7 +5,10 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, Plus, Settings2, Trash2, X } from 'lucide-react';
+import { LoadingButton } from '@/components/ui/loading-button';
+import { FormField } from '@/components/ui/form-field';
+import { RoleCheckboxList } from '@/components/dashboard/role-checkbox-list';
+import { Plus, Settings2, Trash2, X } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,9 +39,6 @@ import { toggleUser, deleteUser, updateUserProfile } from '@/lib/actions/admin-u
 import type { UserListItem } from '@/lib/actions/admin-user';
 import { getActiveRoles, setUserRoles } from '@/lib/actions/admin-roles';
 import type { RbacRole } from '@/lib/actions/admin-roles';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -46,6 +46,7 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Props {
   users: UserListItem[];
@@ -90,8 +91,8 @@ function ToggleUserDialog({ user, open, onOpenChange, onToggle }: { user: UserLi
           </AlertDialogTitle>
           <AlertDialogDescription>
             {user.isBanned
-              ? <>This will restore access for <strong>{user.email}</strong>. They will be able to log in immediately.</>
-              : <>This will block access for <strong>{user.email}</strong>. They will be unable to log in until reactivated.</>}
+              ? <><span>This will restore access for </span><strong>{user.email}</strong><span>. They will be able to log in immediately.</span></>
+              : <><span>This will block access for </span><strong>{user.email}</strong><span>. They will be unable to log in until reactivated.</span></>}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -101,7 +102,7 @@ function ToggleUserDialog({ user, open, onOpenChange, onToggle }: { user: UserLi
             onClick={handleConfirm}
             className={user.isBanned ? 'bg-[#5BC4E7] hover:bg-[#4AADE0] text-white' : 'bg-destructive hover:bg-destructive/90 text-white'}
           >
-            {isToggling ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Saving...</> : user.isBanned ? 'Activate' : 'Deactivate'}
+            {isToggling ? 'Saving...' : user.isBanned ? 'Activate' : 'Deactivate'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -140,7 +141,7 @@ function DeleteUserDialog({ user, open, onOpenChange, onDeleted }: { user: UserL
             onClick={handleConfirm}
             className="bg-destructive hover:bg-destructive/90 text-white"
           >
-            {isDeleting ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Deleting...</> : 'Delete User'}
+            {isDeleting ? 'Deleting...' : 'Delete User'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -152,14 +153,12 @@ function UserRow({ user, isSelected, onClick, onUserUpdated }: { user: UserListI
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   function handleToggle() {
-    const updatedUser = { ...user, isBanned: !user.isBanned };
-    onUserUpdated?.(updatedUser);
+    onUserUpdated?.({ ...user, isBanned: !user.isBanned });
   }
 
   return (
     <>
       <TableRow
-        key={user.id}
         className={`group cursor-pointer transition-colors ${isSelected ? 'bg-[#F0F9FD]' : 'hover:bg-[#F9FAFB]'}`}
         onClick={onClick}
       >
@@ -223,10 +222,8 @@ function EditRolesDialog({ user, open, onOpenChange, onRolesUpdated }: { user: U
     selectedRoleIds.length !== initialRoleIds.length ||
     selectedRoleIds.some((id) => !initialRoleIds.includes(id));
 
-  function toggleRole(roleId: string) {
-    setSelectedRoleIds((prev) =>
-      prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]
-    );
+  function handleRoleChange(roleId: string, checked: boolean) {
+    setSelectedRoleIds((prev) => checked ? [...prev, roleId] : prev.filter((id) => id !== roleId));
   }
 
   async function handleSave() {
@@ -247,41 +244,25 @@ function EditRolesDialog({ user, open, onOpenChange, onRolesUpdated }: { user: U
         </DialogHeader>
         <p className="text-xs text-[#6C7E8E] break-all -mt-1">{user.email}</p>
         <div className="space-y-2 max-h-72 overflow-y-auto">
-          {allRoles.length === 0 ? (
-            <p className="text-sm text-[#6C7E8E]">No roles available.</p>
-          ) : (
-            allRoles.map((role) => (
-              <label
-                key={role.id}
-                className="flex items-start gap-3 p-3 bg-[#F5F3EC] rounded-lg border border-[#E2E7EC] hover:border-[#5BC4E7] hover:bg-[#E2F4FA] cursor-pointer transition-colors"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedRoleIds.includes(role.id)}
-                  onChange={() => toggleRole(role.id)}
-                  className="mt-0.5 w-4 h-4 rounded border-[#E2E7EC] text-[#5BC4E7] cursor-pointer"
-                />
-                <div className="flex-1">
-                  <p className="font-medium text-sm text-[#1A1D20]">{role.name}</p>
-                  {role.description && (
-                    <p className="text-xs text-[#6C7E8E] mt-0.5">{role.description}</p>
-                  )}
-                </div>
-              </label>
-            ))
-          )}
+          <RoleCheckboxList
+            roles={allRoles}
+            selectedIds={selectedRoleIds}
+            onChange={handleRoleChange}
+            disabled={isPending}
+          />
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>
-          <Button
-            disabled={!isDirty || isPending}
+          <LoadingButton
+            isLoading={isPending}
+            disabled={!isDirty}
             onClick={handleSave}
             className="bg-[#5BC4E7] text-white hover:bg-[#4AADE0]"
           >
-            {isPending ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Saving...</> : 'Save'}
-          </Button>
+            Save
+          </LoadingButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -295,11 +276,10 @@ function EditNameDialog({ user, open, onOpenChange, onNamesUpdated }: { user: Us
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open) {
-      setFirstName(user.firstName || '');
-      setLastName(user.lastName || '');
-      setError(null);
-    }
+    if (!open) return;
+    setFirstName(user.firstName || '');
+    setLastName(user.lastName || '');
+    setError(null);
   }, [open, user.id, user.firstName, user.lastName]);
 
   const isDirty = firstName !== (user.firstName || '') || lastName !== (user.lastName || '');
@@ -314,7 +294,6 @@ function EditNameDialog({ user, open, onOpenChange, onNamesUpdated }: { user: Us
     setError(null);
 
     const result = await updateUserProfile(user.id, firstName.trim(), lastName.trim());
-
     setIsPending(false);
 
     if (result.success) {
@@ -333,45 +312,36 @@ function EditNameDialog({ user, open, onOpenChange, onNamesUpdated }: { user: Us
         </DialogHeader>
         <p className="text-xs text-[#6C7E8E] break-all -mt-1">{user.email}</p>
         <div className="space-y-4">
-          <div>
-            <Label htmlFor="edit-firstName" className="text-xs text-[#6C7E8E] font-medium">
-              First Name
-            </Label>
-            <Input
-              id="edit-firstName"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              placeholder="Enter first name"
-              className="mt-1.5 bg-[#F5F3EC] border-[#E2E7EC] text-[#1A1D20] placeholder:text-[#A0A8B0] focus:border-[#5BC4E7] focus:ring-[#5BC4E7] rounded-lg"
-            />
-          </div>
-          <div>
-            <Label htmlFor="edit-lastName" className="text-xs text-[#6C7E8E] font-medium">
-              Last Name
-            </Label>
-            <Input
-              id="edit-lastName"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              placeholder="Enter last name"
-              className="mt-1.5 bg-[#F5F3EC] border-[#E2E7EC] text-[#1A1D20] placeholder:text-[#A0A8B0] focus:border-[#5BC4E7] focus:ring-[#5BC4E7] rounded-lg"
-            />
-          </div>
-          {error && (
-            <p className="text-xs text-red-600">{error}</p>
-          )}
+          <FormField
+            id="edit-firstName"
+            label="First Name"
+            labelClassName="text-xs text-[#6C7E8E]"
+            value={firstName}
+            onChange={(e) => setFirstName(e.target.value)}
+            placeholder="Enter first name"
+          />
+          <FormField
+            id="edit-lastName"
+            label="Last Name"
+            labelClassName="text-xs text-[#6C7E8E]"
+            value={lastName}
+            onChange={(e) => setLastName(e.target.value)}
+            placeholder="Enter last name"
+          />
+          {error && <p className="text-xs text-red-600">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
             Cancel
           </Button>
-          <Button
-            disabled={!isDirty || isPending || !firstName.trim() || !lastName.trim()}
+          <LoadingButton
+            isLoading={isPending}
+            disabled={!isDirty || !firstName.trim() || !lastName.trim()}
             onClick={handleSave}
             className="bg-[#5BC4E7] text-white hover:bg-[#4AADE0]"
           >
-            {isPending ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Saving...</> : 'Save'}
-          </Button>
+            Save
+          </LoadingButton>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -383,22 +353,6 @@ function UserDetailPane({ user, onClose, onUserUpdated, onUserDeleted }: { user:
   const [editNameOpen, setEditNameOpen] = useState(false);
   const [toggleOpen, setToggleOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
-
-  function handleRolesUpdated(updatedRoles: UserListItem['roles']) {
-    onUserUpdated?.({ ...user, roles: updatedRoles });
-  }
-
-  function handleNamesUpdated(firstName: string, lastName: string) {
-    onUserUpdated?.({ ...user, firstName, lastName });
-  }
-
-  function handleToggle() {
-    onUserUpdated?.({ ...user, isBanned: !user.isBanned });
-  }
-
-  function handleDeleted() {
-    onUserDeleted?.();
-  }
 
   return (
     <div className="flex flex-col w-72 shrink-0 border-l border-[#E2E7EC]">
@@ -473,10 +427,10 @@ function UserDetailPane({ user, onClose, onUserUpdated, onUserDeleted }: { user:
         </div>
       </CardContent>
 
-      <EditNameDialog user={user} open={editNameOpen} onOpenChange={setEditNameOpen} onNamesUpdated={handleNamesUpdated} />
-      <EditRolesDialog user={user} open={editRolesOpen} onOpenChange={setEditRolesOpen} onRolesUpdated={handleRolesUpdated} />
-      <ToggleUserDialog user={user} open={toggleOpen} onOpenChange={setToggleOpen} onToggle={handleToggle} />
-      <DeleteUserDialog user={user} open={deleteOpen} onOpenChange={setDeleteOpen} onDeleted={handleDeleted} />
+      <EditNameDialog user={user} open={editNameOpen} onOpenChange={setEditNameOpen} onNamesUpdated={(fn, ln) => onUserUpdated?.({ ...user, firstName: fn, lastName: ln })} />
+      <EditRolesDialog user={user} open={editRolesOpen} onOpenChange={setEditRolesOpen} onRolesUpdated={(roles) => onUserUpdated?.({ ...user, roles })} />
+      <ToggleUserDialog user={user} open={toggleOpen} onOpenChange={setToggleOpen} onToggle={() => onUserUpdated?.({ ...user, isBanned: !user.isBanned })} />
+      <DeleteUserDialog user={user} open={deleteOpen} onOpenChange={setDeleteOpen} onDeleted={onUserDeleted} />
     </div>
   );
 }
@@ -484,13 +438,16 @@ function UserDetailPane({ user, onClose, onUserUpdated, onUserDeleted }: { user:
 export function UserManagementSection({ users }: Props) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null);
+  const [userList, setUserList] = useState<UserListItem[]>(users);
 
   function handleRowClick(user: UserListItem) {
     setSelectedUser((prev) => (prev?.id === user.id ? null : user));
   }
-  const [userList, setUserList] = useState<UserListItem[]>(users);
-  const [successDialogOpen, setSuccessDialogOpen] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  function updateUser(updatedUser: UserListItem) {
+    setUserList((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+    if (selectedUser?.id === updatedUser.id) setSelectedUser(updatedUser);
+  }
 
   return (
     <>
@@ -510,7 +467,6 @@ export function UserManagementSection({ users }: Props) {
             Create User
           </Button>
         </CardHeader>
-        {/* Success dialog appears as a centered overlay; rendered from parent root */}
 
         <CardContent className="p-0 flex flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto min-w-0">
@@ -536,14 +492,7 @@ export function UserManagementSection({ users }: Props) {
                       user={user}
                       isSelected={selectedUser?.id === user.id}
                       onClick={() => handleRowClick(user)}
-                      onUserUpdated={(updatedUser) => {
-                        setUserList((prev) =>
-                          prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
-                        );
-                        if (selectedUser?.id === updatedUser.id) {
-                          setSelectedUser(updatedUser);
-                        }
-                      }}
+                      onUserUpdated={updateUser}
                     />
                   ))
                 )}
@@ -555,12 +504,7 @@ export function UserManagementSection({ users }: Props) {
             <UserDetailPane
               user={selectedUser}
               onClose={() => setSelectedUser(null)}
-              onUserUpdated={(updatedUser) => {
-                setUserList((prev) =>
-                  prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
-                );
-                setSelectedUser(updatedUser);
-              }}
+              onUserUpdated={updateUser}
               onUserDeleted={() => {
                 setUserList((prev) => prev.filter((u) => u.id !== selectedUser.id));
                 setSelectedUser(null);
@@ -575,22 +519,9 @@ export function UserManagementSection({ users }: Props) {
         onClose={() => setIsModalOpen(false)}
         onUserCreated={(u) => {
           setUserList((prev) => [u, ...prev.filter((p) => p.id !== u.id)]);
-          setSuccessMessage('User created successfully!');
-          setSuccessDialogOpen(true);
-          setTimeout(() => {
-            setSuccessDialogOpen(false);
-            setSuccessMessage(null);
-          }, 5000);
+          toast.success('User created successfully!');
         }}
       />
-
-      {successDialogOpen && (
-        <div className="fixed inset-x-0 top-6 z-50 flex items-start justify-center ">
-          <div className="w-full max-w-sm p-6 bg-green-100 rounded-2xl border border-green-200 shadow-lg">
-            <h3 className="bg-green text-bold text-green-700 border-transparent hover:bg-green-100">{successMessage}</h3>
-          </div>
-        </div>
-      )}
     </>
   );
 }

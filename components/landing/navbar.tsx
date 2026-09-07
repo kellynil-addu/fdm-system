@@ -7,6 +7,8 @@ export function Navbar() {
     <header className="sticky top-0 z-50 w-full border-b border-border bg-card">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
+            
+            {/* Logo and title at the left */}
           <Link href="/" className="group flex items-center space-x-3">
             <FdmLogo className="h-12 w-16 object-contain" />
             <div className="hidden sm:block">
@@ -16,6 +18,7 @@ export function Navbar() {
             </div>
           </Link>
 
+            {/* Log in button at the right */}
           <nav className="flex items-center space-x-3">
             <Button
               asChild
@@ -25,6 +28,7 @@ export function Navbar() {
               <Link href="/login">Log In</Link>
             </Button>
           </nav>
+
         </div>
       </div>
     </header>

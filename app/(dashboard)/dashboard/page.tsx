@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { checkIsSystemAdmin } from '@/lib/actions/check-user';
 import { getUserInfo } from '@/lib/user';
 import { QuickLinks } from '@/components/dashboard/quick-links';
+import { PageSpinner, PageError } from '@/components/dashboard/page-status';
 
 
 async function DashboardContent() {
@@ -10,11 +11,7 @@ async function DashboardContent() {
     const user = await getUserInfo();
 
     if (!user) {
-      return (
-        <div className="text-center py-12">
-          <p className="text-red-600 font-medium">Please log in to access the dashboard</p>
-        </div>
-      );
+      return <PageError message="Please log in to access the dashboard" />;
     }
 
     // Check if user has system.create permission (system admin)
@@ -98,28 +95,13 @@ async function DashboardContent() {
     );
   } catch (error) {
     console.error('Error loading dashboard:', error);
-    return (
-      <div className="text-center py-12">
-        <p className="text-red-600 font-medium">Failed to load dashboard. Please try again.</p>
-      </div>
-    );
+    return <PageError message="Failed to load dashboard. Please try again." />;
   }
 }
 
 export default function DashboardPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="inline-block animate-spin">
-              <div className="w-8 h-8 border-4 border-[#E2E7EC] border-t-[#5BC4E7] rounded-full" />
-            </div>
-            <p className="mt-4 text-[#6C7E8E]">Loading dashboard...</p>
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<PageSpinner label="Loading dashboard..." />}>
       <DashboardContent />
     </Suspense>
   );

@@ -4,6 +4,7 @@ import { UserManagementSection } from '@/components/dashboard/user-management-se
 import { checkIsSystemAdmin } from '@/lib/actions/check-user';
 import { listUsers } from '@/lib/actions/admin-user';
 import { getUserInfo } from '@/lib/user';
+import { PageSpinner, PageError } from '@/components/dashboard/page-status';
 
 
 async function AdminContent() {
@@ -31,28 +32,13 @@ async function AdminContent() {
     );
   } catch (error) {
     console.error('Error loading admin page:', error);
-    return (
-      <div className="text-center py-12">
-        <p className="text-red-600 font-medium">Failed to load admin page. Please try again.</p>
-      </div>
-    );
+    return <PageError message="Failed to load admin page. Please try again." />;
   }
 }
 
 export default function AdminPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="inline-block animate-spin">
-              <div className="w-8 h-8 border-4 border-[#E2E7EC] border-t-[#5BC4E7] rounded-full" />
-            </div>
-            <p className="mt-4 text-[#6C7E8E]">Loading...</p>
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<PageSpinner />}>
       <AdminContent />
     </Suspense>
   );

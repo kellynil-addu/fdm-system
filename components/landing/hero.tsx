@@ -29,7 +29,9 @@ export function Hero() {
     <section className="w-full bg-background py-20 sm:py-32">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid items-center gap-16 md:grid-cols-2">
+
           <div className="space-y-8">
+
             <div className="space-y-4">
               <h1 className="text-5xl font-bold leading-tight text-foreground sm:text-6xl">
                 First Davao Millennium Property Ventures Inc.
@@ -50,9 +52,20 @@ export function Hero() {
                 </Link>
               </Button>
             </div>
+
           </div>
 
-          <div className="grid gap-4">
+          <_HeroCards/>
+
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function _HeroCards() {
+    return (
+        <div className="grid gap-4">
             {heroCards.map((card) => (
               <Card
                 key={card.title}
@@ -74,9 +87,5 @@ export function Hero() {
               </Card>
             ))}
           </div>
-        </div>
-      </div>
-    </section>
-  );
+    )
 }
-
