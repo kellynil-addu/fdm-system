@@ -34,11 +34,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { CreateUserModal } from './create-user-modal';
-import { toggleUser, deleteUser, updateUserProfile } from '@/lib/actions/admin-user';
-import type { UserListItem } from '@/lib/actions/admin-user';
-import { getActiveRoles, setUserRoles } from '@/lib/actions/admin-roles';
-import type { RbacRole } from '@/lib/actions/admin-roles';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -46,11 +41,13 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal } from 'lucide-react';
+import { CreateUserModal } from './create-user-modal';
+import { toggleUser, deleteUser, updateUserProfile } from '@/lib/actions/admin-user';
+import type { UserListItem } from '@/lib/actions/admin-user';
+import { setUserRoles } from '@/lib/actions/admin-roles';
+import type { RbacRole } from '@/lib/actions/admin-roles';
+import { useAdminUsers } from '@/lib/hooks/use-admin-users';
 import { toast } from 'sonner';
-
-interface Props {
-  users: UserListItem[];
-}
 
 function RoleBadges({ roles }: { roles: UserListItem['roles'] }) {
   if (roles.length === 0) return <span className="text-[#6C7E8E]">—</span>;
@@ -205,17 +202,15 @@ function UserRow({ user, isSelected, onClick, onUserUpdated }: { user: UserListI
   );
 }
 
-function EditRolesDialog({ user, open, onOpenChange, onRolesUpdated }: { user: UserListItem; open: boolean; onOpenChange: (v: boolean) => void; onRolesUpdated?: (updatedRoles: UserListItem['roles']) => void }) {
+function EditRolesDialog({ user, open, onOpenChange, allRoles, onRolesUpdated }: { user: UserListItem; open: boolean; onOpenChange: (v: boolean) => void; allRoles: RbacRole[]; onRolesUpdated?: (updatedRoles: UserListItem['roles']) => void }) {
   const router = useRouter();
   const initialRoleIds = user.roles.map((r) => r.id);
-  const [allRoles, setAllRoles] = useState<RbacRole[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>(initialRoleIds);
   const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setSelectedRoleIds(user.roles.map((r) => r.id));
-    getActiveRoles().then(setAllRoles);
   }, [open, user.id]);
 
   const isDirty =
@@ -223,7 +218,7 @@ function EditRolesDialog({ user, open, onOpenChange, onRolesUpdated }: { user: U
     selectedRoleIds.some((id) => !initialRoleIds.includes(id));
 
   function handleRoleChange(roleId: string, checked: boolean) {
-    setSelectedRoleIds((prev) => checked ? [...prev, roleId] : prev.filter((id) => id !== roleId));
+    setSelectedRoleIds((prev) => (checked ? [...prev, roleId] : prev.filter((id) => id !== roleId)));
   }
 
   async function handleSave() {
@@ -348,7 +343,7 @@ function EditNameDialog({ user, open, onOpenChange, onNamesUpdated }: { user: Us
   );
 }
 
-function UserDetailPane({ user, onClose, onUserUpdated, onUserDeleted }: { user: UserListItem; onClose: () => void; onUserUpdated?: (updatedUser: UserListItem) => void; onUserDeleted?: () => void }) {
+function UserDetailPane({ user, roles, onClose, onUserUpdated, onUserDeleted }: { user: UserListItem; roles: RbacRole[]; onClose: () => void; onUserUpdated?: (updatedUser: UserListItem) => void; onUserDeleted?: () => void }) {
   const [editRolesOpen, setEditRolesOpen] = useState(false);
   const [editNameOpen, setEditNameOpen] = useState(false);
   const [toggleOpen, setToggleOpen] = useState(false);
@@ -428,25 +423,41 @@ function UserDetailPane({ user, onClose, onUserUpdated, onUserDeleted }: { user:
       </CardContent>
 
       <EditNameDialog user={user} open={editNameOpen} onOpenChange={setEditNameOpen} onNamesUpdated={(fn, ln) => onUserUpdated?.({ ...user, firstName: fn, lastName: ln })} />
-      <EditRolesDialog user={user} open={editRolesOpen} onOpenChange={setEditRolesOpen} onRolesUpdated={(roles) => onUserUpdated?.({ ...user, roles })} />
+      <EditRolesDialog user={user} open={editRolesOpen} onOpenChange={setEditRolesOpen} allRoles={roles} onRolesUpdated={(updatedRoles) => onUserUpdated?.({ ...user, roles: updatedRoles })} />
       <ToggleUserDialog user={user} open={toggleOpen} onOpenChange={setToggleOpen} onToggle={() => onUserUpdated?.({ ...user, isBanned: !user.isBanned })} />
       <DeleteUserDialog user={user} open={deleteOpen} onOpenChange={setDeleteOpen} onDeleted={onUserDeleted} />
     </div>
   );
 }
 
-export function UserManagementSection({ users }: Props) {
+export function UserManagementSection() {
+  const { users, roles, isLoading, error, addUser, updateUser, removeUser } = useAdminUsers();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null);
-  const [userList, setUserList] = useState<UserListItem[]>(users);
 
   function handleRowClick(user: UserListItem) {
     setSelectedUser((prev) => (prev?.id === user.id ? null : user));
   }
 
-  function updateUser(updatedUser: UserListItem) {
-    setUserList((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+  function handleUpdateUser(updatedUser: UserListItem) {
+    updateUser(updatedUser);
     if (selectedUser?.id === updatedUser.id) setSelectedUser(updatedUser);
+  }
+
+  if (isLoading) {
+    return (
+      <Card className="flex flex-col flex-1 overflow-hidden bg-white border-[#E2E7EC] items-center justify-center min-h-[300px]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#E2E7EC] border-t-[#5BC4E7]" />
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="flex flex-col flex-1 overflow-hidden bg-white border-[#E2E7EC] items-center justify-center min-h-[300px]">
+        <p className="text-sm text-red-600">{error}</p>
+      </Card>
+    );
   }
 
   return (
@@ -479,20 +490,20 @@ export function UserManagementSection({ users }: Props) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {userList.length === 0 ? (
+                {users.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={3} className="text-center py-10 text-[#6C7E8E]">
                       No users found.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  userList.map((user) => (
+                  users.map((user) => (
                     <UserRow
                       key={user.id}
                       user={user}
                       isSelected={selectedUser?.id === user.id}
                       onClick={() => handleRowClick(user)}
-                      onUserUpdated={updateUser}
+                      onUserUpdated={handleUpdateUser}
                     />
                   ))
                 )}
@@ -503,10 +514,11 @@ export function UserManagementSection({ users }: Props) {
           {selectedUser && (
             <UserDetailPane
               user={selectedUser}
+              roles={roles}
               onClose={() => setSelectedUser(null)}
-              onUserUpdated={updateUser}
+              onUserUpdated={handleUpdateUser}
               onUserDeleted={() => {
-                setUserList((prev) => prev.filter((u) => u.id !== selectedUser.id));
+                removeUser(selectedUser.id);
                 setSelectedUser(null);
               }}
             />
@@ -517,8 +529,9 @@ export function UserManagementSection({ users }: Props) {
       <CreateUserModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
+        roles={roles}
         onUserCreated={(u) => {
-          setUserList((prev) => [u, ...prev.filter((p) => p.id !== u.id)]);
+          addUser(u);
           toast.success('User created successfully!');
         }}
       />

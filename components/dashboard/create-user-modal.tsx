@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormField } from '@/components/ui/form-field';
@@ -7,20 +8,80 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import { RoleCheckboxList } from '@/components/dashboard/role-checkbox-list';
 import { Label } from '@/components/ui/label';
 import { X } from 'lucide-react';
-import { useCreateUser } from '@/lib/hooks/use-create-user';
+import { registerUser } from '@/lib/actions/admin-user';
 import type { UserListItem } from '@/lib/actions/admin-user';
+import type { RbacRole } from '@/lib/actions/admin-roles';
 
 interface CreateUserModalProps {
   isOpen: boolean;
   onClose: () => void;
+  roles: RbacRole[];
   onUserCreated?: (user: UserListItem) => void;
 }
 
-export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserModalProps) {
-  const { fields, setters, roles, selectedRoles, handleRoleChange, isLoading, error, handleSubmit } =
-    useCreateUser({ isOpen, onClose, onUserCreated });
+export function CreateUserModal({ isOpen, onClose, roles, onUserCreated }: CreateUserModalProps) {
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  function handleRoleChange(id: string, checked: boolean) {
+    setSelectedRoles((prev) => (checked ? [...prev, id] : prev.filter((r) => r !== id)));
+  }
+
+  function resetForm() {
+    setFirstName('');
+    setLastName('');
+    setEmail('');
+    setPassword('');
+    setSelectedRoles([]);
+    setError(null);
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setIsLoading(true);
+
+    try {
+      if (!firstName.trim() || !lastName.trim()) throw new Error('First name and last name are required');
+      if (!email || !password) throw new Error('Email and password are required');
+      if (selectedRoles.length === 0) throw new Error('Please select at least one role');
+
+      const result = await registerUser({
+        email,
+        password,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        roleIds: selectedRoles,
+      });
+
+      if (!result?.success) throw new Error(result?.error || 'Failed to create user');
+
+      // Build the item locally — avoids a redundant full-list refetch
+      const newUser: UserListItem = {
+        id: result.userId,
+        email,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        roles: roles.filter((r) => selectedRoles.includes(r.id)).map(({ id, name }) => ({ id, name })),
+        isBanned: false,
+      };
+
+      onUserCreated?.(newUser);
+      resetForm();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create user');
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50">
@@ -44,8 +105,8 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
               id="firstName"
               label="First Name"
               type="text"
-              value={fields.firstName}
-              onChange={(e) => setters.setFirstName(e.target.value)}
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
               placeholder="Juan"
               required
               disabled={isLoading}
@@ -54,8 +115,8 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
               id="lastName"
               label="Last Name"
               type="text"
-              value={fields.lastName}
-              onChange={(e) => setters.setLastName(e.target.value)}
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
               placeholder="Dela Cruz"
               required
               disabled={isLoading}
@@ -66,8 +127,8 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
             id="email"
             label="Email Address"
             type="email"
-            value={fields.email}
-            onChange={(e) => setters.setEmail(e.target.value)}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
             placeholder="user@example.com"
             required
             disabled={isLoading}
@@ -77,8 +138,8 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
             id="password"
             label="Temporary Password"
             type="password"
-            value={fields.password}
-            onChange={(e) => setters.setPassword(e.target.value)}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
             required
             disabled={isLoading}
@@ -88,16 +149,9 @@ export function CreateUserModal({ isOpen, onClose, onUserCreated }: CreateUserMo
           <div className="space-y-3">
             <Label className="text-[#1A1D20] font-medium text-sm">Assign Roles</Label>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              <RoleCheckboxList
-                roles={roles}
-                selectedIds={selectedRoles}
-                onChange={handleRoleChange}
-                disabled={isLoading}
-              />
+              <RoleCheckboxList roles={roles} selectedIds={selectedRoles} onChange={handleRoleChange} disabled={isLoading} />
             </div>
-            {selectedRoles.length === 0 && (
-              <p className="text-xs text-[#6C7E8E]">Select at least one role.</p>
-            )}
+            {selectedRoles.length === 0 && <p className="text-xs text-[#6C7E8E]">Select at least one role.</p>}
           </div>
 
           <div className="flex gap-3 pt-4">
