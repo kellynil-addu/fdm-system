@@ -45,15 +45,25 @@ import { useMutation } from '@/lib/hooks/use-mutation';
 import type { UserListItem } from '@/lib/actions/admin-user';
 import { toast } from 'sonner';
 
+const TINTS = {
+  activeBadge: 'bg-[color-mix(in_srgb,var(--success)_15%,white)]',
+  activateBtnHover: 'hover:bg-[color-mix(in_srgb,var(--success)_85%,black)] hover:border-[color-mix(in_srgb,var(--success)_85%,black)]',
+  deleteBtnHover: 'hover:bg-[color-mix(in_srgb,var(--destructive)_15%,white)] hover:border-[color-mix(in_srgb,var(--destructive)_30%,white)]',
+  rowHover: 'hover:bg-[color-mix(in_srgb,var(--muted)_10%,white)]',
+  actionBtnHover: 'hover:bg-[color-mix(in_srgb,var(--muted)_15%,white)]',
+  primaryBtnHover: 'hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]',
+  destructiveBtnHover: 'hover:bg-[color-mix(in_srgb,var(--destructive)_85%,black)]',
+};
+
 function RoleBadges({ roles }: { roles: UserListItem['roles'] }) {
-  if (roles.length === 0) return <span className="text-[#6C7E8E]">—</span>;
+  if (roles.length === 0) return <span className="text-muted-foreground">—</span>;
   return (
     <div className="flex flex-wrap gap-1.5">
       {roles.map((role) => (
         <Badge
           key={role.id}
           variant="secondary"
-          className="bg-[#E2F4FA] text-[#3AAFE0] border-transparent hover:bg-[#E2F4FA]"
+          className="bg-sidebar-accent text-sidebar-accent-foreground border-transparent hover:bg-sidebar-accent"
         >
           {role.name}
         </Badge>
@@ -86,13 +96,13 @@ function ToggleUserDialog({ user }: { user: UserListItem }) {
               : <><span>This will block access for </span><strong>{user.email}</strong><span>. They will be unable to log in until reactivated.</span></>}
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {state.status === 'error' && <p className="text-sm text-red-600 -mt-2">{state.error}</p>}
+        {state.status === 'error' && <p className="text-sm text-destructive -mt-2">{state.error}</p>}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={state.status === 'pending'}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             disabled={state.status === 'pending'}
             onClick={() => execute(user.id, user.isBanned)}
-            className={user.isBanned ? 'bg-[#5BC4E7] hover:bg-[#4AADE0] text-white' : 'bg-destructive hover:bg-destructive/90 text-white'}
+            className={user.isBanned ? `bg-primary ${TINTS.primaryBtnHover} text-primary-foreground` : `bg-destructive ${TINTS.destructiveBtnHover} text-white`}
           >
             {state.status === 'pending' ? 'Saving...' : user.isBanned ? 'Activate' : 'Deactivate'}
           </AlertDialogAction>
@@ -122,13 +132,13 @@ function DeleteUserDialog({ user }: { user: UserListItem }) {
             This will permanently remove <strong>{user.email}</strong> from the system. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        {state.status === 'error' && <p className="text-sm text-red-600 -mt-2">{state.error}</p>}
+        {state.status === 'error' && <p className="text-sm text-destructive -mt-2">{state.error}</p>}
         <AlertDialogFooter>
           <AlertDialogCancel disabled={state.status === 'pending'}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             disabled={state.status === 'pending'}
             onClick={() => execute(user.id)}
-            className="bg-destructive hover:bg-destructive/90 text-white"
+            className={`bg-destructive ${TINTS.destructiveBtnHover} text-white`}
           >
             {state.status === 'pending' ? 'Deleting...' : 'Delete User'}
           </AlertDialogAction>
@@ -144,10 +154,10 @@ function UserRow({ user }: { user: UserListItem }) {
 
   return (
     <TableRow
-      className={`group cursor-pointer transition-colors ${isSelected ? 'bg-[#F0F9FD]' : 'hover:bg-[#F9FAFB]'}`}
+      className={`group cursor-pointer transition-colors ${isSelected ? 'bg-sidebar-accent' : TINTS.rowHover}`}
       onClick={() => selectUser(isSelected ? null : user.id)}
     >
-      <TableCell className="font-medium text-[#1A1D20]">{user.email}</TableCell>
+      <TableCell className="font-medium text-foreground">{user.email}</TableCell>
       <TableCell><RoleBadges roles={user.roles} /></TableCell>
       <TableCell>
         <div className="flex items-center justify-between gap-2">
@@ -155,17 +165,17 @@ function UserRow({ user }: { user: UserListItem }) {
             {user.isBanned ? (
               <Badge variant="destructive" className="border-transparent">Inactive</Badge>
             ) : (
-              <Badge className="bg-green-100 text-green-700 border-transparent hover:bg-green-100">Active</Badge>
+              <Badge className={`${TINTS.activeBadge} text-success border-transparent`}>Active</Badge>
             )}
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 aria-label="Open user actions"
-                className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 rounded-md hover:bg-[#F3F4F6]"
+                className={`opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 rounded-md ${TINTS.actionBtnHover}`}
                 onClick={(e) => e.stopPropagation()}
               >
-                <MoreHorizontal className="h-4 w-4 text-[#6C7E8E]" />
+                <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[160px]">
@@ -207,7 +217,7 @@ function EditRolesDialog({ user }: { user: UserListItem }) {
         <DialogHeader>
           <DialogTitle>Edit Roles</DialogTitle>
         </DialogHeader>
-        <p className="text-xs text-[#6C7E8E] break-all -mt-1">{user.email}</p>
+        <p className="text-xs text-muted-foreground break-all -mt-1">{user.email}</p>
         <div className="space-y-2 max-h-72 overflow-y-auto">
           <RoleCheckboxList
             roles={roles}
@@ -216,7 +226,7 @@ function EditRolesDialog({ user }: { user: UserListItem }) {
             disabled={state.status === 'pending'}
           />
         </div>
-        {state.status === 'error' && <p className="text-xs text-red-600">{state.error}</p>}
+        {state.status === 'error' && <p className="text-xs text-destructive">{state.error}</p>}
         <DialogFooter>
           <Button variant="outline" onClick={closeDialog} disabled={state.status === 'pending'}>
             Cancel
@@ -225,7 +235,7 @@ function EditRolesDialog({ user }: { user: UserListItem }) {
             isLoading={state.status === 'pending'}
             disabled={!isDirty}
             onClick={() => execute(user.id, selectedRoleIds)}
-            className="bg-[#5BC4E7] text-white hover:bg-[#4AADE0]"
+            className={`bg-primary text-primary-foreground ${TINTS.primaryBtnHover}`}
           >
             Save
           </LoadingButton>
@@ -268,12 +278,12 @@ function EditNameDialog({ user }: { user: UserListItem }) {
         <DialogHeader>
           <DialogTitle>Edit Name</DialogTitle>
         </DialogHeader>
-        <p className="text-xs text-[#6C7E8E] break-all -mt-1">{user.email}</p>
+        <p className="text-xs text-muted-foreground break-all -mt-1">{user.email}</p>
         <div className="space-y-4">
           <FormField
             id="edit-firstName"
             label="First Name"
-            labelClassName="text-xs text-[#6C7E8E]"
+            labelClassName="text-xs text-muted-foreground"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
             placeholder="Enter first name"
@@ -281,12 +291,12 @@ function EditNameDialog({ user }: { user: UserListItem }) {
           <FormField
             id="edit-lastName"
             label="Last Name"
-            labelClassName="text-xs text-[#6C7E8E]"
+            labelClassName="text-xs text-muted-foreground"
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
             placeholder="Enter last name"
           />
-          {displayError && <p className="text-xs text-red-600">{displayError}</p>}
+          {displayError && <p className="text-xs text-destructive">{displayError}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={closeDialog} disabled={state.status === 'pending'}>
@@ -296,7 +306,7 @@ function EditNameDialog({ user }: { user: UserListItem }) {
             isLoading={state.status === 'pending'}
             disabled={!isDirty || !firstName.trim() || !lastName.trim()}
             onClick={handleSave}
-            className="bg-[#5BC4E7] text-white hover:bg-[#4AADE0]"
+            className={`bg-primary text-primary-foreground ${TINTS.primaryBtnHover}`}
           >
             Save
           </LoadingButton>
@@ -312,48 +322,48 @@ function UserDetailPane() {
   if (!selectedUser) return null;
 
   return (
-    <div className="flex flex-col w-72 shrink-0 border-l border-[#E2E7EC]">
-      <CardHeader className="flex-row items-center justify-between space-y-0 py-4 border-b border-[#E2E7EC]">
-        <CardTitle className="text-sm text-[#1A1D20]">User Details</CardTitle>
+    <div className="flex flex-col w-72 shrink-0 border-l border-border">
+      <CardHeader className="flex-row items-center justify-between space-y-0 py-4 border-b border-border">
+        <CardTitle className="text-sm text-foreground">User Details</CardTitle>
         <Button variant="ghost" size="icon" onClick={() => selectUser(null)} className="h-7 w-7">
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
       <CardContent className="pt-4 space-y-4">
         <div>
-          <p className="text-xs text-[#6C7E8E] font-medium uppercase tracking-wide mb-1">Email</p>
-          <p className="text-sm text-[#1A1D20] break-all">{selectedUser.email}</p>
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Email</p>
+          <p className="text-sm text-foreground break-all">{selectedUser.email}</p>
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-[#6C7E8E] font-medium uppercase tracking-wide">First Name</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">First Name</p>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => openDialog({ type: 'edit-name', user: selectedUser })}
-              className="h-6 px-2 text-xs text-[#5BC4E7] hover:text-[#3AAFE0] hover:bg-[#E2F4FA]"
+              className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-sidebar-accent"
             >
               <Settings2 className="w-3 h-3 mr-1" />
               Edit
             </Button>
           </div>
-          <p className="text-sm text-[#1A1D20]">{selectedUser.firstName || '—'}</p>
+          <p className="text-sm text-foreground">{selectedUser.firstName || '—'}</p>
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs text-[#6C7E8E] font-medium uppercase tracking-wide">Last Name</p>
-          <p className="text-sm text-[#1A1D20]">{selectedUser.lastName || '—'}</p>
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Last Name</p>
+          <p className="text-sm text-foreground">{selectedUser.lastName || '—'}</p>
         </div>
 
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-[#6C7E8E] font-medium uppercase tracking-wide">Roles</p>
+            <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Roles</p>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => openDialog({ type: 'edit-roles', user: selectedUser })}
-              className="h-6 px-2 text-xs text-[#5BC4E7] hover:text-[#3AAFE0] hover:bg-[#E2F4FA]"
+              className="h-6 px-2 text-xs text-primary hover:text-primary hover:bg-sidebar-accent"
             >
               <Settings2 className="w-3 h-3 mr-1" />
               Edit
@@ -363,12 +373,12 @@ function UserDetailPane() {
         </div>
 
         <div className="space-y-2">
-          <p className="text-xs text-[#6C7E8E] font-medium uppercase tracking-wide">Status</p>
+          <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">Status</p>
           <Button
             size="sm"
             variant={selectedUser.isBanned ? 'outline' : 'destructive'}
             onClick={() => openDialog({ type: 'toggle', user: selectedUser })}
-            className={selectedUser.isBanned ? 'w-full bg-[#22C55E] border-[#22C55E] text-white hover:bg-[#16A34A] hover:border-[#16A34A]' : 'w-full'}
+            className={selectedUser.isBanned ? `w-full bg-success border-success text-success-foreground ${TINTS.activateBtnHover}` : 'w-full'}
           >
             {selectedUser.isBanned ? 'Activate User' : 'Deactivate User'}
           </Button>
@@ -376,7 +386,7 @@ function UserDetailPane() {
             size="sm"
             variant="outline"
             onClick={() => openDialog({ type: 'delete', user: selectedUser })}
-            className="w-full bg-white border-[#E2E7EC] text-[#1A1D20] hover:bg-[#FEE2E2] hover:text-[#991B1B] hover:border-[#FCA5A5]"
+            className={`w-full bg-card border-border text-foreground ${TINTS.deleteBtnHover}`}
           >
             <Trash2 className="w-3.5 h-3.5 mr-1.5" />
             Delete User
@@ -392,33 +402,33 @@ function UserManagementContent() {
 
   if (isLoading) {
     return (
-      <Card className="flex flex-col flex-1 overflow-hidden bg-white border-[#E2E7EC] items-center justify-center min-h-[300px]">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#E2E7EC] border-t-[#5BC4E7]" />
+      <Card className="flex flex-col flex-1 overflow-hidden bg-card border-border items-center justify-center min-h-[300px]">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-border border-t-primary" />
       </Card>
     );
   }
 
   if (error) {
     return (
-      <Card className="flex flex-col flex-1 overflow-hidden bg-white border-[#E2E7EC] items-center justify-center min-h-[300px]">
-        <p className="text-sm text-red-600">{error}</p>
+      <Card className="flex flex-col flex-1 overflow-hidden bg-card border-border items-center justify-center min-h-[300px]">
+        <p className="text-sm text-destructive">{error}</p>
       </Card>
     );
   }
 
   return (
     <>
-      <Card className="flex flex-col flex-1 overflow-hidden bg-white border-[#E2E7EC]">
+      <Card className="flex flex-col flex-1 overflow-hidden bg-card border-border">
         <CardHeader className="flex-row items-center justify-between space-y-0 shrink-0">
           <div>
-            <CardTitle className="text-xl text-[#1A1D20]">User Management</CardTitle>
+            <CardTitle className="text-xl text-foreground">User Management</CardTitle>
             <CardDescription className="mt-1">
               Create and manage system users with role-based access control
             </CardDescription>
           </div>
           <Button
             onClick={() => openDialog({ type: 'create' })}
-            className="bg-[#5BC4E7] text-white hover:bg-[#4AADE0] rounded-lg flex items-center gap-2"
+            className={`bg-primary text-primary-foreground ${TINTS.primaryBtnHover} rounded-lg flex items-center gap-2`}
           >
             <Plus className="w-4 h-4" />
             Create User
@@ -429,16 +439,16 @@ function UserManagementContent() {
           <div className="flex-1 overflow-y-auto min-w-0">
             <Table>
               <TableHeader className="sticky top-0 z-10">
-                <TableRow className="bg-white border-t border-[#E2E7EC]">
-                  <TableHead className="text-[#6C7E8E] font-semibold">Email</TableHead>
-                  <TableHead className="text-[#6C7E8E] font-semibold">Roles</TableHead>
-                  <TableHead className="text-[#6C7E8E] font-semibold">Status</TableHead>
+                <TableRow className="bg-card border-t border-border">
+                  <TableHead className="text-muted-foreground font-semibold">Email</TableHead>
+                  <TableHead className="text-muted-foreground font-semibold">Roles</TableHead>
+                  <TableHead className="text-muted-foreground font-semibold">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {users.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={3} className="text-center py-10 text-[#6C7E8E]">
+                    <TableCell colSpan={3} className="text-center py-10 text-muted-foreground">
                       No users found.
                     </TableCell>
                   </TableRow>

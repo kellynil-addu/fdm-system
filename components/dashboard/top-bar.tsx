@@ -53,13 +53,13 @@ export function DashboardTopBar({ user }: DashboardTopBarProps) {
 
   return (
     <>
-      <div className="bg-white border-b border-[#E2E7EC] sticky top-0 z-40">
+      <div className="bg-card border-b border-border sticky top-0 z-40">
         <div className="h-16 px-8 flex items-center justify-end gap-6">
           {/* Notifications */}
           <Button
             variant="ghost"
             size="icon"
-            className="text-[#6C7E8E] hover:bg-[#F5F3EC] hover:text-[#1A1D20] relative"
+            className="text-muted-foreground hover:bg-accent hover:text-accent-foreground relative"
             onClick={() => handleComingSoon('Notifications')}
           >
             <Bell className="w-5 h-5" />
@@ -70,7 +70,7 @@ export function DashboardTopBar({ user }: DashboardTopBarProps) {
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="flex items-center space-x-2 text-[#1A1D20] hover:bg-[#F5F3EC]"
+                className="flex items-center space-x-2 text-foreground hover:bg-accent"
               >
                 <span className="text-sm font-medium">{displayName}</span>
                 <div className="w-8 h-8 bg-gradient-to-br from-yellow-300 to-yellow-400 rounded-full flex items-center justify-center text-white text-sm font-semibold">

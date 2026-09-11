@@ -80,8 +80,8 @@ export function SidebarNav({ isSystemAdmin = false, roleTabs = [] }: SidebarNavP
           const buttonClasses = cn(
             'w-full flex items-center space-x-3 px-4 py-2 rounded transition-colors text-sm font-medium',
             isActive
-              ? 'bg-[#E2F4FA] text-[#5BC4E7]'
-              : 'text-[#6C7E8E] hover:bg-[#F5F3EC] hover:text-[#1A1D20]',
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+              : 'text-muted-foreground hover:bg-background hover:text-foreground',
           );
 
           const content = (
@@ -111,8 +111,8 @@ export function SidebarNav({ isSystemAdmin = false, roleTabs = [] }: SidebarNavP
           const buttonClasses = cn(
             'w-full flex items-center space-x-3 px-4 py-2 rounded transition-colors text-sm font-medium',
             isActive
-              ? 'bg-[#E2F4FA] text-[#5BC4E7]'
-              : 'text-[#6C7E8E] hover:bg-[#F5F3EC] hover:text-[#1A1D20]',
+              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+              : 'text-muted-foreground hover:bg-background hover:text-foreground',
           );
 
           return (

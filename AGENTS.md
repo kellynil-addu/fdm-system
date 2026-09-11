@@ -78,6 +78,8 @@ Migration files live in `supabase/migrations/` and must follow the naming conven
 
 Never use hardcoded hex colors in `components/`. Use Tailwind semantic token classes (`bg-primary`, `text-foreground`, `border-border`, `bg-success`, etc.). For non-Tailwind contexts like Recharts SVG props, use CSS variable strings directly (e.g. `stroke="var(--border)"`).
 
+Avoid Tailwind slash-opacity modifiers (e.g. `bg-primary/90`, `bg-success/10`) because tokens in `globals.css` are hex values, causing invalid `rgb(#hex / alpha)` syntax in browsers. For tints and hover shades, use CSS `color-mix()` with complete, unbroken class literals (e.g. `bg-[color-mix(in_srgb,var(--success)_15%,white)]`). Never dynamically construct class names via interpolation (e.g. `bg-[${tint}]`), as Tailwind's static compiler will not detect them.
+
 ## `useMutation` Hook
 
 `lib/hooks/use-mutation.ts` wraps any async function and returns `{ state, execute, reset }`. `state` is a discriminated union: `idle | pending | success | error`. The wrapped function must throw on failure — do not return error objects. `execute` returns `Promise<boolean>` for imperative flow control when needed.

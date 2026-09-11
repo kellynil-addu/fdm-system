@@ -64,18 +64,18 @@ export function CreateUserModal() {
 
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50">
-      <Card style={{ backgroundColor: '#ffffff', color: '#1A1D20' }} className="w-full max-w-md bg-white text-[#1A1D20] border-[#E2E7EC] rounded-2xl shadow-lg">
-        <div className="p-6 border-b border-[#E2E7EC] flex items-center justify-between">
-          <h2 className="text-xl font-bold text-[#1A1D20]">Create New User</h2>
-          <button onClick={closeDialog} className="p-1 hover:bg-[#F5F3EC] rounded-lg transition-colors" disabled={isPending}>
-            <X className="w-5 h-5 text-[#6C7E8E]" />
+      <Card className="w-full max-w-md bg-card text-foreground border-border rounded-2xl shadow-lg">
+        <div className="p-6 border-b border-border flex items-center justify-between">
+          <h2 className="text-xl font-bold text-foreground">Create New User</h2>
+          <button onClick={closeDialog} className="p-1 hover:bg-background rounded-lg transition-colors" disabled={isPending}>
+            <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {displayError && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-800">{displayError}</p>
+            <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+              <p className="text-sm text-destructive">{displayError}</p>
             </div>
           )}
 
@@ -126,11 +126,11 @@ export function CreateUserModal() {
           />
 
           <div className="space-y-3">
-            <Label className="text-[#1A1D20] font-medium text-sm">Assign Roles</Label>
+            <Label className="text-foreground font-medium text-sm">Assign Roles</Label>
             <div className="space-y-2 max-h-48 overflow-y-auto">
               <RoleCheckboxList roles={roles} selectedIds={selectedRoles} onChange={handleRoleChange} disabled={isPending} />
             </div>
-            {selectedRoles.length === 0 && <p className="text-xs text-[#6C7E8E]">Select at least one role.</p>}
+            {selectedRoles.length === 0 && <p className="text-xs text-muted-foreground">Select at least one role.</p>}
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -139,7 +139,7 @@ export function CreateUserModal() {
               variant="outline"
               onClick={closeDialog}
               disabled={isPending}
-              className="flex-1 bg-white border-[#E2E7EC] text-[#1A1D20] hover:bg-[#F5F3EC] rounded-lg"
+              className="flex-1 bg-card border-border text-foreground hover:bg-background rounded-lg"
             >
               Cancel
             </Button>
@@ -148,7 +148,7 @@ export function CreateUserModal() {
               isLoading={isPending}
               loadingText="Creating..."
               disabled={selectedRoles.length === 0}
-              className="flex-1 bg-[#5BC4E7] text-white hover:bg-[#4AADE0] rounded-lg"
+              className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg"
             >
               Create User
             </LoadingButton>

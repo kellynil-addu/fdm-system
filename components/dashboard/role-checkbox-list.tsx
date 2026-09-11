@@ -9,7 +9,7 @@ interface RoleCheckboxListProps {
 
 export function RoleCheckboxList({ roles, selectedIds, onChange, disabled }: RoleCheckboxListProps) {
   if (roles.length === 0) {
-    return <p className="text-sm text-[#6C7E8E]">No roles available</p>;
+    return <p className="text-sm text-muted-foreground">No roles available</p>;
   }
 
   return (
@@ -17,19 +17,19 @@ export function RoleCheckboxList({ roles, selectedIds, onChange, disabled }: Rol
       {roles.map((role) => (
         <label
           key={role.id}
-          className="flex items-start gap-3 p-3 bg-[#F5F3EC] rounded-lg border border-[#E2E7EC] hover:border-[#5BC4E7] hover:bg-[#E2F4FA] cursor-pointer transition-colors"
+          className="flex items-start gap-3 p-3 bg-background rounded-lg border border-border hover:border-primary hover:bg-sidebar-accent cursor-pointer transition-colors"
         >
           <input
             type="checkbox"
             checked={selectedIds.includes(role.id)}
             onChange={(e) => onChange(role.id, e.target.checked)}
             disabled={disabled}
-            className="mt-0.5 w-4 h-4 rounded border-[#E2E7EC] text-[#5BC4E7] cursor-pointer"
+            className="mt-0.5 w-4 h-4 rounded border-border text-primary cursor-pointer"
           />
           <div className="flex-1">
-            <p className="font-medium text-sm text-[#1A1D20]">{role.name}</p>
+            <p className="font-medium text-sm text-foreground">{role.name}</p>
             {role.description && (
-              <p className="text-xs text-[#6C7E8E] mt-0.5">{role.description}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">{role.description}</p>
             )}
           </div>
         </label>

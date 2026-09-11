@@ -36,18 +36,18 @@ const projects: Project[] = [
 ];
 
 const statusConfig = {
-  active: { label: 'Active', bg: '#E2F4FA', text: '#5BC4E7' },
-  pending: { label: 'Pending', bg: '#FFF9E5', text: '#F5CE42' },
-  completed: { label: 'Completed', bg: '#E8F5E9', text: '#4CAF50' },
-  'on-hold': { label: 'On Hold', bg: '#FCE4EC', text: '#E91E63' },
+  active: { label: 'Active', className: 'bg-sidebar-accent text-primary border-primary/30' },
+  pending: { label: 'Pending', className: 'bg-chart-4 text-secondary border-secondary/30' },
+  completed: { label: 'Completed', className: 'bg-success/10 text-success border-success/30' },
+  'on-hold': { label: 'On Hold', className: 'bg-destructive/10 text-destructive border-destructive/30' },
 };
 
 export function ProjectCardGrid() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-[#1A1D20]">Project Listings</h3>
-        <a href="#" className="text-[#5BC4E7] text-sm hover:underline">
+        <h3 className="font-semibold text-foreground">Project Listings</h3>
+        <a href="#" className="text-primary text-sm hover:underline">
           View all
         </a>
       </div>
@@ -58,7 +58,7 @@ export function ProjectCardGrid() {
           return (
             <Card
               key={project.id}
-              className="overflow-hidden bg-white border-[#E2E7EC] hover:shadow-lg transition-shadow rounded-xl group cursor-pointer"
+              className="overflow-hidden bg-card border-border hover:shadow-lg transition-shadow rounded-xl group cursor-pointer"
             >
               {/* Image Placeholder */}
               <div className="w-full h-40 bg-gradient-to-br from-blue-300 to-blue-200 relative">
@@ -71,28 +71,21 @@ export function ProjectCardGrid() {
               <div className="p-4 space-y-3">
                 {/* Title */}
                 <div>
-                  <h4 className="font-semibold text-[#1A1D20] text-sm group-hover:text-[#5BC4E7] transition-colors">
+                  <h4 className="font-semibold text-foreground text-sm group-hover:text-primary transition-colors">
                     {project.name}
                   </h4>
-                  <p className="text-xs text-[#6C7E8E] mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     {project.type}
                   </p>
                 </div>
 
                 {/* Status Badge */}
-                <Badge
-                  className="w-fit rounded text-xs"
-                  style={{
-                    backgroundColor: status.bg,
-                    color: status.text,
-                    border: `1px solid ${status.text}`,
-                  }}
-                >
+                <Badge className={`w-fit rounded text-xs border ${status.className}`}>
                   {status.label}
                 </Badge>
 
                 {/* Units */}
-                <p className="text-xs text-[#6C7E8E]">
+                <p className="text-xs text-muted-foreground">
                   {project.units}
                 </p>
               </div>
@@ -101,12 +94,12 @@ export function ProjectCardGrid() {
         })}
         
         {/* Add New Project Card */}
-        <Card className="border-2 border-dashed border-[#E2E7EC] rounded-xl hover:border-[#5BC4E7] transition-colors bg-white flex items-center justify-center min-h-64">
+        <Card className="border-2 border-dashed border-border rounded-xl hover:border-primary transition-colors bg-card flex items-center justify-center min-h-64">
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 bg-[#E2F4FA] rounded-lg mx-auto flex items-center justify-center">
-              <span className="text-2xl text-[#5BC4E7]">+</span>
+            <div className="w-12 h-12 bg-sidebar-accent rounded-lg mx-auto flex items-center justify-center">
+              <span className="text-2xl text-primary">+</span>
             </div>
-            <p className="text-sm text-[#6C7E8E]">Available projects<br/>coming soon</p>
+            <p className="text-sm text-muted-foreground">Available projects<br/>coming soon</p>
           </div>
         </Card>
       </div>

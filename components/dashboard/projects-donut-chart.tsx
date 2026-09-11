@@ -9,11 +9,11 @@ const data = [
   { name: 'Less', value: 25 },
 ];
 
-const COLORS = ['#5BC4E7', '#F5CE42', '#E2F4FA'];
+const COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)'];
 
 export function ProjectsDonutChart() {
   return (
-    <Card className="p-6 bg-white border-[#E2E7EC] rounded-xl">
+    <Card className="p-6 bg-card border-border rounded-xl">
       <ResponsiveContainer width="100%" height={280}>
         <PieChart>
           <Pie
@@ -31,8 +31,8 @@ export function ProjectsDonutChart() {
           </Pie>
           <Tooltip
             contentStyle={{
-              backgroundColor: '#FFFFFF',
-              border: '1px solid #E2E7EC',
+              backgroundColor: 'var(--popover)',
+              border: '1px solid var(--border)',
               borderRadius: '8px',
             }}
           />
