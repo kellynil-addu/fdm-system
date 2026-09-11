@@ -100,6 +100,6 @@ export default {
       },
     },
   },
-  plugins: [tailwindcssAnimate],
+  plugins: [tailwindcssAnimate, colorMixPlugin],
 } satisfies Config;
 
