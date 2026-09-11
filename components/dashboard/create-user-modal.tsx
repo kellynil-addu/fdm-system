@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { FormField } from '@/components/ui/form-field';
@@ -8,95 +8,74 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import { RoleCheckboxList } from '@/components/dashboard/role-checkbox-list';
 import { Label } from '@/components/ui/label';
 import { X } from 'lucide-react';
-import { registerUser } from '@/lib/actions/admin-user';
-import type { UserListItem } from '@/lib/actions/admin-user';
-import type { RbacRole } from '@/lib/actions/admin-roles';
+import { useAdminUsers } from '@/lib/hooks/use-admin-users';
+import { useMutation } from '@/lib/hooks/use-mutation';
+import { toast } from 'sonner';
 
-interface CreateUserModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  roles: RbacRole[];
-  onUserCreated?: (user: UserListItem) => void;
-}
-
-export function CreateUserModal({ isOpen, onClose, roles, onUserCreated }: CreateUserModalProps) {
+export function CreateUserModal() {
+  const { roles, createUser, closeDialog } = useAdminUsers();
+  const { state, execute } = useMutation(createUser);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (state.status === 'success') {
+      closeDialog();
+      toast.success('User created successfully!');
+    }
+  }, [state.status, closeDialog]);
 
   function handleRoleChange(id: string, checked: boolean) {
     setSelectedRoles((prev) => (checked ? [...prev, id] : prev.filter((r) => r !== id)));
   }
 
-  function resetForm() {
-    setFirstName('');
-    setLastName('');
-    setEmail('');
-    setPassword('');
-    setSelectedRoles([]);
-    setError(null);
-  }
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
-    setIsLoading(true);
+    setValidationError(null);
 
-    try {
-      if (!firstName.trim() || !lastName.trim()) throw new Error('First name and last name are required');
-      if (!email || !password) throw new Error('Email and password are required');
-      if (selectedRoles.length === 0) throw new Error('Please select at least one role');
-
-      const result = await registerUser({
-        email,
-        password,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        roleIds: selectedRoles,
-      });
-
-      if (!result?.success) throw new Error(result?.error || 'Failed to create user');
-
-      // Build the item locally — avoids a redundant full-list refetch
-      const newUser: UserListItem = {
-        id: result.userId,
-        email,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        roles: roles.filter((r) => selectedRoles.includes(r.id)).map(({ id, name }) => ({ id, name })),
-        isBanned: false,
-      };
-
-      onUserCreated?.(newUser);
-      resetForm();
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create user');
-    } finally {
-      setIsLoading(false);
+    if (!firstName.trim() || !lastName.trim()) {
+      setValidationError('First name and last name are required');
+      return;
     }
+    if (!email || !password) {
+      setValidationError('Email and password are required');
+      return;
+    }
+    if (selectedRoles.length === 0) {
+      setValidationError('Please select at least one role');
+      return;
+    }
+
+    execute({
+      email,
+      password,
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      roleIds: selectedRoles,
+    });
   }
+
+  const isPending = state.status === 'pending';
+  const displayError = validationError || (state.status === 'error' ? state.error : null);
 
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50">
       <Card style={{ backgroundColor: '#ffffff', color: '#1A1D20' }} className="w-full max-w-md bg-white text-[#1A1D20] border-[#E2E7EC] rounded-2xl shadow-lg">
         <div className="p-6 border-b border-[#E2E7EC] flex items-center justify-between">
           <h2 className="text-xl font-bold text-[#1A1D20]">Create New User</h2>
-          <button onClick={onClose} className="p-1 hover:bg-[#F5F3EC] rounded-lg transition-colors" disabled={isLoading}>
+          <button onClick={closeDialog} className="p-1 hover:bg-[#F5F3EC] rounded-lg transition-colors" disabled={isPending}>
             <X className="w-5 h-5 text-[#6C7E8E]" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {error && (
+          {displayError && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-sm text-red-800">{error}</p>
+              <p className="text-sm text-red-800">{displayError}</p>
             </div>
           )}
 
@@ -109,7 +88,7 @@ export function CreateUserModal({ isOpen, onClose, roles, onUserCreated }: Creat
               onChange={(e) => setFirstName(e.target.value)}
               placeholder="Juan"
               required
-              disabled={isLoading}
+              disabled={isPending}
             />
             <FormField
               id="lastName"
@@ -119,7 +98,7 @@ export function CreateUserModal({ isOpen, onClose, roles, onUserCreated }: Creat
               onChange={(e) => setLastName(e.target.value)}
               placeholder="Dela Cruz"
               required
-              disabled={isLoading}
+              disabled={isPending}
             />
           </div>
 
@@ -131,7 +110,7 @@ export function CreateUserModal({ isOpen, onClose, roles, onUserCreated }: Creat
             onChange={(e) => setEmail(e.target.value)}
             placeholder="user@example.com"
             required
-            disabled={isLoading}
+            disabled={isPending}
           />
 
           <FormField
@@ -142,14 +121,14 @@ export function CreateUserModal({ isOpen, onClose, roles, onUserCreated }: Creat
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
             required
-            disabled={isLoading}
+            disabled={isPending}
             hint="User can change this after first login"
           />
 
           <div className="space-y-3">
             <Label className="text-[#1A1D20] font-medium text-sm">Assign Roles</Label>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              <RoleCheckboxList roles={roles} selectedIds={selectedRoles} onChange={handleRoleChange} disabled={isLoading} />
+              <RoleCheckboxList roles={roles} selectedIds={selectedRoles} onChange={handleRoleChange} disabled={isPending} />
             </div>
             {selectedRoles.length === 0 && <p className="text-xs text-[#6C7E8E]">Select at least one role.</p>}
           </div>
@@ -158,15 +137,15 @@ export function CreateUserModal({ isOpen, onClose, roles, onUserCreated }: Creat
             <Button
               type="button"
               variant="outline"
-              onClick={onClose}
-              disabled={isLoading}
+              onClick={closeDialog}
+              disabled={isPending}
               className="flex-1 bg-white border-[#E2E7EC] text-[#1A1D20] hover:bg-[#F5F3EC] rounded-lg"
             >
               Cancel
             </Button>
             <LoadingButton
               type="submit"
-              isLoading={isLoading}
+              isLoading={isPending}
               loadingText="Creating..."
               disabled={selectedRoles.length === 0}
               className="flex-1 bg-[#5BC4E7] text-white hover:bg-[#4AADE0] rounded-lg"

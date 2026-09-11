@@ -1,14 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { FormField } from '@/components/ui/form-field';
 import { RoleCheckboxList } from '@/components/dashboard/role-checkbox-list';
-import { Plus, Settings2, Trash2, X } from 'lucide-react';
+import { Plus, Settings2, Trash2, X, MoreHorizontal } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,13 +39,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal } from 'lucide-react';
 import { CreateUserModal } from './create-user-modal';
-import { toggleUser, deleteUser, updateUserProfile } from '@/lib/actions/admin-user';
+import { AdminUsersProvider, useAdminUsers } from '@/lib/hooks/use-admin-users';
+import { useMutation } from '@/lib/hooks/use-mutation';
 import type { UserListItem } from '@/lib/actions/admin-user';
-import { setUserRoles } from '@/lib/actions/admin-roles';
-import type { RbacRole } from '@/lib/actions/admin-roles';
-import { useAdminUsers } from '@/lib/hooks/use-admin-users';
 import { toast } from 'sonner';
 
 function RoleBadges({ roles }: { roles: UserListItem['roles'] }) {
@@ -66,21 +62,19 @@ function RoleBadges({ roles }: { roles: UserListItem['roles'] }) {
   );
 }
 
-function ToggleUserDialog({ user, open, onOpenChange, onToggle }: { user: UserListItem; open: boolean; onOpenChange: (v: boolean) => void; onToggle?: () => void }) {
-  const router = useRouter();
-  const [isToggling, setIsToggling] = useState(false);
+function ToggleUserDialog({ user }: { user: UserListItem }) {
+  const { toggleUserStatus, closeDialog } = useAdminUsers();
+  const { state, execute } = useMutation(toggleUserStatus);
 
-  async function handleConfirm() {
-    setIsToggling(true);
-    await toggleUser(user.id, user.isBanned);
-    setIsToggling(false);
-    onOpenChange(false);
-    onToggle?.();
-    router.refresh();
-  }
+  useEffect(() => {
+    if (state.status === 'success') {
+      closeDialog();
+      toast.success(user.isBanned ? 'User activated successfully' : 'User deactivated successfully');
+    }
+  }, [state.status, closeDialog, user.isBanned]);
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open onOpenChange={(v) => !v && closeDialog()}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
@@ -92,14 +86,15 @@ function ToggleUserDialog({ user, open, onOpenChange, onToggle }: { user: UserLi
               : <><span>This will block access for </span><strong>{user.email}</strong><span>. They will be unable to log in until reactivated.</span></>}
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {state.status === 'error' && <p className="text-sm text-red-600 -mt-2">{state.error}</p>}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isToggling}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={state.status === 'pending'}>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            disabled={isToggling}
-            onClick={handleConfirm}
+            disabled={state.status === 'pending'}
+            onClick={() => execute(user.id, user.isBanned)}
             className={user.isBanned ? 'bg-[#5BC4E7] hover:bg-[#4AADE0] text-white' : 'bg-destructive hover:bg-destructive/90 text-white'}
           >
-            {isToggling ? 'Saving...' : user.isBanned ? 'Activate' : 'Deactivate'}
+            {state.status === 'pending' ? 'Saving...' : user.isBanned ? 'Activate' : 'Deactivate'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -107,23 +102,19 @@ function ToggleUserDialog({ user, open, onOpenChange, onToggle }: { user: UserLi
   );
 }
 
-function DeleteUserDialog({ user, open, onOpenChange, onDeleted }: { user: UserListItem; open: boolean; onOpenChange: (v: boolean) => void; onDeleted?: () => void }) {
-  const router = useRouter();
-  const [isDeleting, setIsDeleting] = useState(false);
+function DeleteUserDialog({ user }: { user: UserListItem }) {
+  const { deleteUser, closeDialog } = useAdminUsers();
+  const { state, execute } = useMutation(deleteUser);
 
-  async function handleConfirm() {
-    setIsDeleting(true);
-    const result = await deleteUser(user.id);
-    setIsDeleting(false);
-    if (result.success) {
-      onOpenChange(false);
-      onDeleted?.();
-      router.refresh();
+  useEffect(() => {
+    if (state.status === 'success') {
+      closeDialog();
+      toast.success('User deleted successfully');
     }
-  }
+  }, [state.status, closeDialog]);
 
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog open onOpenChange={(v) => !v && closeDialog()}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete user?</AlertDialogTitle>
@@ -131,14 +122,15 @@ function DeleteUserDialog({ user, open, onOpenChange, onDeleted }: { user: UserL
             This will permanently remove <strong>{user.email}</strong> from the system. This action cannot be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {state.status === 'error' && <p className="text-sm text-red-600 -mt-2">{state.error}</p>}
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={state.status === 'pending'}>Cancel</AlertDialogCancel>
           <AlertDialogAction
-            disabled={isDeleting}
-            onClick={handleConfirm}
+            disabled={state.status === 'pending'}
+            onClick={() => execute(user.id)}
             className="bg-destructive hover:bg-destructive/90 text-white"
           >
-            {isDeleting ? 'Deleting...' : 'Delete User'}
+            {state.status === 'pending' ? 'Deleting...' : 'Delete User'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -146,72 +138,60 @@ function DeleteUserDialog({ user, open, onOpenChange, onDeleted }: { user: UserL
   );
 }
 
-function UserRow({ user, isSelected, onClick, onUserUpdated }: { user: UserListItem; isSelected: boolean; onClick: () => void; onUserUpdated?: (updatedUser: UserListItem) => void }) {
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
-  function handleToggle() {
-    onUserUpdated?.({ ...user, isBanned: !user.isBanned });
-  }
+function UserRow({ user }: { user: UserListItem }) {
+  const { selectedUserId, selectUser, openDialog } = useAdminUsers();
+  const isSelected = selectedUserId === user.id;
 
   return (
-    <>
-      <TableRow
-        className={`group cursor-pointer transition-colors ${isSelected ? 'bg-[#F0F9FD]' : 'hover:bg-[#F9FAFB]'}`}
-        onClick={onClick}
-      >
-        <TableCell className="font-medium text-[#1A1D20]">{user.email}</TableCell>
-        <TableCell><RoleBadges roles={user.roles} /></TableCell>
-        <TableCell>
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              {user.isBanned ? (
-                <Badge variant="destructive" className="border-transparent">Inactive</Badge>
-              ) : (
-                <Badge className="bg-green-100 text-green-700 border-transparent hover:bg-green-100">Active</Badge>
-              )}
-            </div>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  aria-label="Open user actions"
-                  className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 rounded-md hover:bg-[#F3F4F6]"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal className="h-4 w-4 text-[#6C7E8E]" />
-                </button>
-              </DropdownMenuTrigger>
-
-              <DropdownMenuContent align="end" className="w-[160px]">
-                <DropdownMenuItem
-                  onSelect={(e) => {
-                    e.preventDefault();
-                    setConfirmOpen(true);
-                  }}
-                >
-                  {user.isBanned ? 'Activate user' : 'Deactivate user'}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+    <TableRow
+      className={`group cursor-pointer transition-colors ${isSelected ? 'bg-[#F0F9FD]' : 'hover:bg-[#F9FAFB]'}`}
+      onClick={() => selectUser(isSelected ? null : user.id)}
+    >
+      <TableCell className="font-medium text-[#1A1D20]">{user.email}</TableCell>
+      <TableCell><RoleBadges roles={user.roles} /></TableCell>
+      <TableCell>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            {user.isBanned ? (
+              <Badge variant="destructive" className="border-transparent">Inactive</Badge>
+            ) : (
+              <Badge className="bg-green-100 text-green-700 border-transparent hover:bg-green-100">Active</Badge>
+            )}
           </div>
-        </TableCell>
-      </TableRow>
-
-      <ToggleUserDialog user={user} open={confirmOpen} onOpenChange={setConfirmOpen} onToggle={handleToggle} />
-    </>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                aria-label="Open user actions"
+                className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity p-1 rounded-md hover:bg-[#F3F4F6]"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal className="h-4 w-4 text-[#6C7E8E]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[160px]">
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); openDialog({ type: 'toggle', user }); }}>
+                {user.isBanned ? 'Activate user' : 'Deactivate user'}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }
 
-function EditRolesDialog({ user, open, onOpenChange, allRoles, onRolesUpdated }: { user: UserListItem; open: boolean; onOpenChange: (v: boolean) => void; allRoles: RbacRole[]; onRolesUpdated?: (updatedRoles: UserListItem['roles']) => void }) {
-  const router = useRouter();
+function EditRolesDialog({ user }: { user: UserListItem }) {
+  const { roles, updateUserRoles, closeDialog } = useAdminUsers();
+  const { state, execute } = useMutation(updateUserRoles);
   const initialRoleIds = user.roles.map((r) => r.id);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>(initialRoleIds);
-  const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
-    setSelectedRoleIds(user.roles.map((r) => r.id));
-  }, [open, user.id]);
+    if (state.status === 'success') {
+      closeDialog();
+      toast.success('Roles updated successfully');
+    }
+  }, [state.status, closeDialog]);
 
   const isDirty =
     selectedRoleIds.length !== initialRoleIds.length ||
@@ -221,18 +201,8 @@ function EditRolesDialog({ user, open, onOpenChange, allRoles, onRolesUpdated }:
     setSelectedRoleIds((prev) => (checked ? [...prev, roleId] : prev.filter((id) => id !== roleId)));
   }
 
-  async function handleSave() {
-    setIsPending(true);
-    await setUserRoles(user.id, selectedRoleIds);
-    setIsPending(false);
-    const updatedRoles = allRoles.filter((role) => selectedRoleIds.includes(role.id));
-    onRolesUpdated?.(updatedRoles);
-    onOpenChange(false);
-    router.refresh();
-  }
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open onOpenChange={(v) => !v && closeDialog()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Edit Roles</DialogTitle>
@@ -240,20 +210,21 @@ function EditRolesDialog({ user, open, onOpenChange, allRoles, onRolesUpdated }:
         <p className="text-xs text-[#6C7E8E] break-all -mt-1">{user.email}</p>
         <div className="space-y-2 max-h-72 overflow-y-auto">
           <RoleCheckboxList
-            roles={allRoles}
+            roles={roles}
             selectedIds={selectedRoleIds}
             onChange={handleRoleChange}
-            disabled={isPending}
+            disabled={state.status === 'pending'}
           />
         </div>
+        {state.status === 'error' && <p className="text-xs text-red-600">{state.error}</p>}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+          <Button variant="outline" onClick={closeDialog} disabled={state.status === 'pending'}>
             Cancel
           </Button>
           <LoadingButton
-            isLoading={isPending}
+            isLoading={state.status === 'pending'}
             disabled={!isDirty}
-            onClick={handleSave}
+            onClick={() => execute(user.id, selectedRoleIds)}
             className="bg-[#5BC4E7] text-white hover:bg-[#4AADE0]"
           >
             Save
@@ -264,43 +235,35 @@ function EditRolesDialog({ user, open, onOpenChange, allRoles, onRolesUpdated }:
   );
 }
 
-function EditNameDialog({ user, open, onOpenChange, onNamesUpdated }: { user: UserListItem; open: boolean; onOpenChange: (v: boolean) => void; onNamesUpdated?: (firstName: string, lastName: string) => void }) {
+function EditNameDialog({ user }: { user: UserListItem }) {
+  const { updateUserName, closeDialog } = useAdminUsers();
+  const { state, execute } = useMutation(updateUserName);
   const [firstName, setFirstName] = useState(user.firstName || '');
   const [lastName, setLastName] = useState(user.lastName || '');
-  const [isPending, setIsPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open) return;
-    setFirstName(user.firstName || '');
-    setLastName(user.lastName || '');
-    setError(null);
-  }, [open, user.id, user.firstName, user.lastName]);
+    if (state.status === 'success') {
+      closeDialog();
+      toast.success('Name updated successfully');
+    }
+  }, [state.status, closeDialog]);
 
   const isDirty = firstName !== (user.firstName || '') || lastName !== (user.lastName || '');
 
-  async function handleSave() {
+  function handleSave() {
     if (!firstName.trim() || !lastName.trim()) {
-      setError('First name and last name are required');
+      setValidationError('First name and last name are required');
       return;
     }
-
-    setIsPending(true);
-    setError(null);
-
-    const result = await updateUserProfile(user.id, firstName.trim(), lastName.trim());
-    setIsPending(false);
-
-    if (result.success) {
-      onNamesUpdated?.(firstName.trim(), lastName.trim());
-      onOpenChange(false);
-    } else {
-      setError(result.error || 'Failed to update names');
-    }
+    setValidationError(null);
+    execute(user.id, firstName.trim(), lastName.trim());
   }
 
+  const displayError = validationError || (state.status === 'error' ? state.error : null);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open onOpenChange={(v) => !v && closeDialog()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Edit Name</DialogTitle>
@@ -323,14 +286,14 @@ function EditNameDialog({ user, open, onOpenChange, onNamesUpdated }: { user: Us
             onChange={(e) => setLastName(e.target.value)}
             placeholder="Enter last name"
           />
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {displayError && <p className="text-xs text-red-600">{displayError}</p>}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isPending}>
+          <Button variant="outline" onClick={closeDialog} disabled={state.status === 'pending'}>
             Cancel
           </Button>
           <LoadingButton
-            isLoading={isPending}
+            isLoading={state.status === 'pending'}
             disabled={!isDirty || !firstName.trim() || !lastName.trim()}
             onClick={handleSave}
             className="bg-[#5BC4E7] text-white hover:bg-[#4AADE0]"
@@ -343,24 +306,23 @@ function EditNameDialog({ user, open, onOpenChange, onNamesUpdated }: { user: Us
   );
 }
 
-function UserDetailPane({ user, roles, onClose, onUserUpdated, onUserDeleted }: { user: UserListItem; roles: RbacRole[]; onClose: () => void; onUserUpdated?: (updatedUser: UserListItem) => void; onUserDeleted?: () => void }) {
-  const [editRolesOpen, setEditRolesOpen] = useState(false);
-  const [editNameOpen, setEditNameOpen] = useState(false);
-  const [toggleOpen, setToggleOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+function UserDetailPane() {
+  const { selectedUser, selectUser, openDialog } = useAdminUsers();
+
+  if (!selectedUser) return null;
 
   return (
     <div className="flex flex-col w-72 shrink-0 border-l border-[#E2E7EC]">
       <CardHeader className="flex-row items-center justify-between space-y-0 py-4 border-b border-[#E2E7EC]">
         <CardTitle className="text-sm text-[#1A1D20]">User Details</CardTitle>
-        <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7">
+        <Button variant="ghost" size="icon" onClick={() => selectUser(null)} className="h-7 w-7">
           <X className="h-4 w-4" />
         </Button>
       </CardHeader>
       <CardContent className="pt-4 space-y-4">
         <div>
           <p className="text-xs text-[#6C7E8E] font-medium uppercase tracking-wide mb-1">Email</p>
-          <p className="text-sm text-[#1A1D20] break-all">{user.email}</p>
+          <p className="text-sm text-[#1A1D20] break-all">{selectedUser.email}</p>
         </div>
 
         <div className="space-y-2">
@@ -369,19 +331,19 @@ function UserDetailPane({ user, roles, onClose, onUserUpdated, onUserDeleted }: 
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setEditNameOpen(true)}
+              onClick={() => openDialog({ type: 'edit-name', user: selectedUser })}
               className="h-6 px-2 text-xs text-[#5BC4E7] hover:text-[#3AAFE0] hover:bg-[#E2F4FA]"
             >
               <Settings2 className="w-3 h-3 mr-1" />
               Edit
             </Button>
           </div>
-          <p className="text-sm text-[#1A1D20]">{user.firstName || '—'}</p>
+          <p className="text-sm text-[#1A1D20]">{selectedUser.firstName || '—'}</p>
         </div>
 
         <div className="space-y-2">
           <p className="text-xs text-[#6C7E8E] font-medium uppercase tracking-wide">Last Name</p>
-          <p className="text-sm text-[#1A1D20]">{user.lastName || '—'}</p>
+          <p className="text-sm text-[#1A1D20]">{selectedUser.lastName || '—'}</p>
         </div>
 
         <div className="space-y-2">
@@ -390,30 +352,30 @@ function UserDetailPane({ user, roles, onClose, onUserUpdated, onUserDeleted }: 
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setEditRolesOpen(true)}
+              onClick={() => openDialog({ type: 'edit-roles', user: selectedUser })}
               className="h-6 px-2 text-xs text-[#5BC4E7] hover:text-[#3AAFE0] hover:bg-[#E2F4FA]"
             >
               <Settings2 className="w-3 h-3 mr-1" />
               Edit
             </Button>
           </div>
-          <RoleBadges roles={user.roles} />
+          <RoleBadges roles={selectedUser.roles} />
         </div>
 
         <div className="space-y-2">
           <p className="text-xs text-[#6C7E8E] font-medium uppercase tracking-wide">Status</p>
           <Button
             size="sm"
-            variant={user.isBanned ? 'outline' : 'destructive'}
-            onClick={() => setToggleOpen(true)}
-            className={user.isBanned ? 'w-full bg-[#22C55E] border-[#22C55E] text-white hover:bg-[#16A34A] hover:border-[#16A34A]' : 'w-full'}
+            variant={selectedUser.isBanned ? 'outline' : 'destructive'}
+            onClick={() => openDialog({ type: 'toggle', user: selectedUser })}
+            className={selectedUser.isBanned ? 'w-full bg-[#22C55E] border-[#22C55E] text-white hover:bg-[#16A34A] hover:border-[#16A34A]' : 'w-full'}
           >
-            {user.isBanned ? 'Activate User' : 'Deactivate User'}
+            {selectedUser.isBanned ? 'Activate User' : 'Deactivate User'}
           </Button>
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setDeleteOpen(true)}
+            onClick={() => openDialog({ type: 'delete', user: selectedUser })}
             className="w-full bg-white border-[#E2E7EC] text-[#1A1D20] hover:bg-[#FEE2E2] hover:text-[#991B1B] hover:border-[#FCA5A5]"
           >
             <Trash2 className="w-3.5 h-3.5 mr-1.5" />
@@ -421,28 +383,12 @@ function UserDetailPane({ user, roles, onClose, onUserUpdated, onUserDeleted }: 
           </Button>
         </div>
       </CardContent>
-
-      <EditNameDialog user={user} open={editNameOpen} onOpenChange={setEditNameOpen} onNamesUpdated={(fn, ln) => onUserUpdated?.({ ...user, firstName: fn, lastName: ln })} />
-      <EditRolesDialog user={user} open={editRolesOpen} onOpenChange={setEditRolesOpen} allRoles={roles} onRolesUpdated={(updatedRoles) => onUserUpdated?.({ ...user, roles: updatedRoles })} />
-      <ToggleUserDialog user={user} open={toggleOpen} onOpenChange={setToggleOpen} onToggle={() => onUserUpdated?.({ ...user, isBanned: !user.isBanned })} />
-      <DeleteUserDialog user={user} open={deleteOpen} onOpenChange={setDeleteOpen} onDeleted={onUserDeleted} />
     </div>
   );
 }
 
-export function UserManagementSection() {
-  const { users, roles, isLoading, error, addUser, updateUser, removeUser } = useAdminUsers();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null);
-
-  function handleRowClick(user: UserListItem) {
-    setSelectedUser((prev) => (prev?.id === user.id ? null : user));
-  }
-
-  function handleUpdateUser(updatedUser: UserListItem) {
-    updateUser(updatedUser);
-    if (selectedUser?.id === updatedUser.id) setSelectedUser(updatedUser);
-  }
+function UserManagementContent() {
+  const { users, isLoading, error, selectedUser, activeDialog, openDialog } = useAdminUsers();
 
   if (isLoading) {
     return (
@@ -471,7 +417,7 @@ export function UserManagementSection() {
             </CardDescription>
           </div>
           <Button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => openDialog({ type: 'create' })}
             className="bg-[#5BC4E7] text-white hover:bg-[#4AADE0] rounded-lg flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -497,44 +443,29 @@ export function UserManagementSection() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((user) => (
-                    <UserRow
-                      key={user.id}
-                      user={user}
-                      isSelected={selectedUser?.id === user.id}
-                      onClick={() => handleRowClick(user)}
-                      onUserUpdated={handleUpdateUser}
-                    />
-                  ))
+                  users.map((user) => <UserRow key={user.id} user={user} />)
                 )}
               </TableBody>
             </Table>
           </div>
 
-          {selectedUser && (
-            <UserDetailPane
-              user={selectedUser}
-              roles={roles}
-              onClose={() => setSelectedUser(null)}
-              onUserUpdated={handleUpdateUser}
-              onUserDeleted={() => {
-                removeUser(selectedUser.id);
-                setSelectedUser(null);
-              }}
-            />
-          )}
+          {selectedUser && <UserDetailPane />}
         </CardContent>
       </Card>
 
-      <CreateUserModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        roles={roles}
-        onUserCreated={(u) => {
-          addUser(u);
-          toast.success('User created successfully!');
-        }}
-      />
+      {activeDialog?.type === 'create' && <CreateUserModal />}
+      {activeDialog?.type === 'edit-name' && <EditNameDialog user={activeDialog.user} />}
+      {activeDialog?.type === 'edit-roles' && <EditRolesDialog user={activeDialog.user} />}
+      {activeDialog?.type === 'toggle' && <ToggleUserDialog user={activeDialog.user} />}
+      {activeDialog?.type === 'delete' && <DeleteUserDialog user={activeDialog.user} />}
     </>
+  );
+}
+
+export function UserManagementSection() {
+  return (
+    <AdminUsersProvider>
+      <UserManagementContent />
+    </AdminUsersProvider>
   );
 }
