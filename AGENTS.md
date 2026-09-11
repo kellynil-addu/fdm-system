@@ -73,3 +73,15 @@ Migration files live in `supabase/migrations/` and must follow the naming conven
 ## Middleware Route Guard
 
 `lib/supabase/proxy.ts` redirects unauthenticated users to `/login` only for paths starting with `/dashboard`. If you add a new protected route outside of `/dashboard/**`, update the path check in `proxy.ts` accordingly.
+
+## Design Tokens
+
+Never use hardcoded hex colors in `components/`. Use Tailwind semantic token classes (`bg-primary`, `text-foreground`, `border-border`, `bg-success`, etc.). For non-Tailwind contexts like Recharts SVG props, use CSS variable strings directly (e.g. `stroke="var(--border)"`).
+
+## `useMutation` Hook
+
+`lib/hooks/use-mutation.ts` wraps any async function and returns `{ state, execute, reset }`. `state` is a discriminated union: `idle | pending | success | error`. The wrapped function must throw on failure — do not return error objects. `execute` returns `Promise<boolean>` for imperative flow control when needed.
+
+## Admin Panel Data Layer
+
+`lib/hooks/use-admin-users.ts` is the sole file that imports server actions and calls `router.refresh()` for the admin panel. UI components under `components/dashboard/` must not import from `lib/actions/` directly — consume data and mutations through the `useAdminUsers()` context hook instead.
