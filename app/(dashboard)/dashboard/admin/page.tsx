@@ -1,35 +1,66 @@
 import { Suspense } from 'react';
-import { redirect } from 'next/navigation';
+import { redirect, unstable_rethrow } from 'next/navigation';
 import { UserManagementSection } from '@/components/dashboard/user-management-section';
 import { checkIsSystemAdmin } from '@/lib/actions/check-user';
 import { getUserInfo } from '@/lib/user';
 import { PageSpinner, PageError } from '@/components/dashboard/page-status';
 
 
-async function AdminContent() {
+type AdminAccess =
+  | { status: 'ok' }
+  | { status: 'unauthenticated' }
+  | { status: 'forbidden' }
+  | { status: 'error' };
+
+/**
+ * Resolves whether the caller may view the admin panel.
+ *
+ * Deliberately returns a status instead of redirecting: `redirect()` works by
+ * throwing a NEXT_REDIRECT error, so calling it inside this try block would let
+ * the catch swallow the redirect and render the generic error state instead.
+ * The caller performs the redirect outside of any try/catch.
+ */
+async function resolveAdminAccess(): Promise<AdminAccess> {
   try {
     const user = await getUserInfo();
 
     if (!user) {
-      redirect('/login');
+      return { status: 'unauthenticated' };
     }
 
     const isSystemAdmin = await checkIsSystemAdmin(user.id);
 
-    if (!isSystemAdmin) {
-      redirect('/dashboard');
-    }
-
-    return (
-      <div className="flex flex-col gap-6 flex-1">
-        <h1 className="text-2xl font-bold text-[#1A1D20]">Administration</h1>
-        <UserManagementSection />
-      </div>
-    );
+    return isSystemAdmin ? { status: 'ok' } : { status: 'forbidden' };
   } catch (error) {
+    // Re-throw framework-controlled errors (redirect, notFound, dynamic APIs)
+    // so Next.js can handle them rather than reporting a page load failure.
+    unstable_rethrow(error);
     console.error('Error loading admin page:', error);
+    return { status: 'error' };
+  }
+}
+
+async function AdminContent() {
+  const access = await resolveAdminAccess();
+
+  if (access.status === 'unauthenticated') {
+    redirect('/login');
+  }
+
+  if (access.status === 'forbidden') {
+    redirect('/dashboard');
+  }
+
+  if (access.status === 'error') {
     return <PageError message="Failed to load admin page. Please try again." />;
   }
+
+  return (
+    <div className="flex flex-col gap-6 flex-1">
+      <h1 className="text-2xl font-bold text-[#1A1D20]">Administration</h1>
+      <UserManagementSection />
+    </div>
+  );
 }
 
 export default function AdminPage() {

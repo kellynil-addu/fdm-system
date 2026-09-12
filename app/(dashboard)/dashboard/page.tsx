@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import Link from 'next/link';
+import { unstable_rethrow } from 'next/navigation';
 import { checkIsSystemAdmin } from '@/lib/actions/check-user';
 import { getUserInfo } from '@/lib/user';
 import { QuickLinks } from '@/components/dashboard/quick-links';
@@ -94,6 +95,9 @@ async function DashboardContent() {
       </div>
     );
   } catch (error) {
+    // Re-throw framework-controlled errors (redirect, notFound, dynamic APIs)
+    // so Next.js can handle them rather than reporting a page load failure.
+    unstable_rethrow(error);
     console.error('Error loading dashboard:', error);
     return <PageError message="Failed to load dashboard. Please try again." />;
   }

@@ -1,0 +1,14 @@
+{
+  // @types/react 19 removed the global JSX namespace. With "jsx": "react-jsx",
+  // TypeScript finds JSX.IntrinsicElements by resolving the `react/jsx-runtime`
+  // module, which is reachable only through that package's "exports" map.
+  // Exports-map resolution needs TypeScript >= 5.0 with moduleResolution
+  // "bundler"/"node16"/"nodenext". VS Code's bundled TypeScript can be older,
+  // which makes the editor report "JSX element implicitly has type 'any'
+  // because no interface 'JSX.IntrinsicElements' exists" (ts7026) on every
+  // element, even though `tsc` on the command line passes cleanly.
+  //
+  // Pin the editor to the workspace TypeScript so it matches `npm run build`.
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true
+}
