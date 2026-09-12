@@ -9,14 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { login } from '@/lib/auth';
 
-/**
- * Interactive part of the login page.
- *
- * Reads the `next` query param via `useSearchParams`, which opts this subtree
- * out of prerendering — it must stay inside a <Suspense> boundary so the rest
- * of the page can still be prerendered. See app/(auth)/login/page.tsx.
- */
-export function LoginForm() {
+export function useLoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
@@ -35,12 +28,42 @@ export function LoginForm() {
       router.push(next);
       // Without this the router can serve a cached RSC payload rendered before
       // the auth cookie existed, so the proxy bounces straight back to /login.
+      // Refresh router so newly set auth cookies take effect in RSC payload.
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to login. Please try again.');
       setIsLoading(false);
     }
   };
+
+  return {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    isLoading,
+    error,
+    handleSubmit,
+  };
+}
+
+/**
+ * Interactive part of the login page.
+ *
+ * Reads the `next` query param via `useSearchParams`, which opts this subtree
+ * out of prerendering — it must stay inside a <Suspense> boundary so the rest
+ * of the page can still be prerendered. See app/(auth)/login/page.tsx.
+ */
+export function LoginForm() {
+  const {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    isLoading,
+    error,
+    handleSubmit,
+  } = useLoginForm();
 
   return (
     <>

@@ -19,21 +19,10 @@ interface DashboardTopBarProps {
   user?: AuthUser | null;
 }
 
-export function DashboardTopBar({ user }: DashboardTopBarProps) {
-  const displayName = [user?.user_metadata.first_name, user?.user_metadata.last_name]
-    .filter(Boolean)
-    .join(' ') || user?.email || 'Unknown';
-  const avatarInitial = displayName[0]?.toUpperCase() ?? '?';
+export function useTopBar() {
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
-  const [modalState, setModalState] = useState<{
-    isOpen: boolean;
-    title: string;
-  }>({
-    isOpen: false,
-    title: 'Coming Soon!'
-  });
 
   const handleLogout = async () => {
     setIsLoggingOut(true);
@@ -47,6 +36,23 @@ export function DashboardTopBar({ user }: DashboardTopBarProps) {
       setIsLoggingOut(false);
     }
   };
+
+  return { isLoggingOut, logoutError, handleLogout };
+}
+
+export function DashboardTopBar({ user }: DashboardTopBarProps) {
+  const { isLoggingOut, logoutError, handleLogout } = useTopBar();
+  const displayName = [user?.user_metadata.first_name, user?.user_metadata.last_name]
+    .filter(Boolean)
+    .join(' ') || user?.email || 'Unknown';
+  const avatarInitial = displayName[0]?.toUpperCase() ?? '?';
+  const [modalState, setModalState] = useState<{
+    isOpen: boolean;
+    title: string;
+  }>({
+    isOpen: false,
+    title: 'Coming Soon!'
+  });
 
   const handleComingSoon = (title: string) => {
     setModalState({ isOpen: true, title });

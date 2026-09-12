@@ -41,7 +41,7 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { CreateUserModal } from './create-user-modal';
-import { AdminUsersProvider, useAdminUsers } from '@/lib/hooks/use-admin-users';
+import { AdminUsersProvider, useAdminUsers, type StatusFilter } from '@/lib/hooks/use-admin-users';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import type { UserListItem } from '@/lib/actions/admin-user';
 import { roleLabel } from '@/lib/role-labels';
@@ -60,8 +60,6 @@ const TINTS = {
   destructiveBtnHover: 'hover:bg-[color-mix(in_srgb,var(--destructive)_85%,black)]',
 };
 
-type StatusFilter = 'all' | 'active' | 'inactive';
-
 function RoleBadges({ roles }: { roles: UserListItem['roles'] }) {
   if (roles.length === 0) return <span className="text-muted-foreground">—</span>;
   return (
@@ -77,15 +75,6 @@ function RoleBadges({ roles }: { roles: UserListItem['roles'] }) {
       ))}
     </div>
   );
-}
-
-/** Matches a user against the free-text search box. */
-function matchesSearch(user: UserListItem, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return [user.email, user.firstName, user.lastName, ...user.roles.map((r) => roleLabel(r.name))]
-    .filter(Boolean)
-    .some((field) => field.toLowerCase().includes(q));
 }
 
 function ToggleUserDialog({ user }: { user: UserListItem }) {
@@ -560,10 +549,21 @@ function UserFilters({
 }
 
 function UserManagementContent() {
-  const { users, isLoading, error, selectedUser, activeDialog, openDialog } = useAdminUsers();
-  const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const {
+    users,
+    visibleUsers,
+    isLoading,
+    error,
+    selectedUser,
+    activeDialog,
+    openDialog,
+    search,
+    setSearch,
+    roleFilter,
+    setRoleFilter,
+    statusFilter,
+    setStatusFilter,
+  } = useAdminUsers();
 
   if (isLoading) {
     return (
@@ -580,14 +580,6 @@ function UserManagementContent() {
       </Card>
     );
   }
-
-  const visibleUsers = users.filter((user) => {
-    if (!matchesSearch(user, search)) return false;
-    if (roleFilter && !user.roles.some((r) => r.id === roleFilter)) return false;
-    if (statusFilter === 'active' && user.isBanned) return false;
-    if (statusFilter === 'inactive' && !user.isBanned) return false;
-    return true;
-  });
 
   const isFiltered = search.trim() !== '' || roleFilter !== null || statusFilter !== 'all';
 

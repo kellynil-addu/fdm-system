@@ -12,7 +12,7 @@ import { useAdminUsers } from '@/lib/hooks/use-admin-users';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
 
-export function CreateUserModal() {
+export function useCreateUserForm() {
   const { roles, createUser, closeDialog } = useAdminUsers();
   const { state, execute } = useMutation(createUser);
   const [firstName, setFirstName] = useState('');
@@ -61,6 +61,44 @@ export function CreateUserModal() {
 
   const isPending = state.status === 'pending';
   const displayError = validationError || (state.status === 'error' ? state.error : null);
+
+  return {
+    roles,
+    firstName,
+    setFirstName,
+    lastName,
+    setLastName,
+    email,
+    setEmail,
+    password,
+    setPassword,
+    selectedRoles,
+    handleRoleChange,
+    handleSubmit,
+    closeDialog,
+    isPending,
+    displayError,
+  };
+}
+
+export function CreateUserModal() {
+  const {
+    roles,
+    firstName,
+    setFirstName,
+    lastName,
+    setLastName,
+    email,
+    setEmail,
+    password,
+    setPassword,
+    selectedRoles,
+    handleRoleChange,
+    handleSubmit,
+    closeDialog,
+    isPending,
+    displayError,
+  } = useCreateUserForm();
 
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50">

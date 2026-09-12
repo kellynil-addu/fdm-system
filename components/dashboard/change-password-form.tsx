@@ -9,25 +9,61 @@ import { changePassword, MIN_PASSWORD_LENGTH } from '@/lib/auth';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
 
-export function ChangePasswordForm() {
+export function useChangePasswordForm() {
   const { state, execute, reset } = useMutation(changePassword);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
   const isPending = state.status === 'pending';
+  const error = state.status === 'error' ? state.error : null;
+  const isComplete = Boolean(currentPassword && newPassword && confirmPassword);
+
+  const resetForm = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    reset();
+  };
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const ok = await execute({ currentPassword, newPassword, confirmPassword });
     if (ok) {
       toast.success('Password updated. Use it the next time you sign in.');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      reset();
+      resetForm();
     }
   }
+
+  return {
+    currentPassword,
+    setCurrentPassword,
+    newPassword,
+    setNewPassword,
+    confirmPassword,
+    setConfirmPassword,
+    isPending,
+    error,
+    isComplete,
+    resetForm,
+    handleSubmit,
+  };
+}
+
+export function ChangePasswordForm() {
+  const {
+    currentPassword,
+    setCurrentPassword,
+    newPassword,
+    setNewPassword,
+    confirmPassword,
+    setConfirmPassword,
+    isPending,
+    error,
+    isComplete,
+    resetForm,
+    handleSubmit,
+  } = useChangePasswordForm();
 
   return (
     <Card className="bg-card border-border">
@@ -74,9 +110,9 @@ export function ChangePasswordForm() {
             disabled={isPending}
           />
 
-          {state.status === 'error' && (
+          {error && (
             <p className="text-sm text-destructive" role="alert">
-              {state.error}
+              {error}
             </p>
           )}
 
@@ -85,7 +121,7 @@ export function ChangePasswordForm() {
               type="submit"
               isLoading={isPending}
               loadingText="Updating..."
-              disabled={!currentPassword || !newPassword || !confirmPassword}
+              disabled={!isComplete}
             >
               Update Password
             </LoadingButton>
@@ -93,12 +129,7 @@ export function ChangePasswordForm() {
               type="button"
               variant="outline"
               disabled={isPending}
-              onClick={() => {
-                setCurrentPassword('');
-                setNewPassword('');
-                setConfirmPassword('');
-                reset();
-              }}
+              onClick={resetForm}
             >
               Cancel
             </Button>
