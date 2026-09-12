@@ -1,13 +1,22 @@
 import "server-only";
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 /**
- * Especially important if using Fluid compute: Don't put this client in a
- * global variable. Always create a new client within each function when using
- * it.
+ * Request-scoped Supabase server client.
+ *
+ * Wrapped in React `cache()` so every call site within one request shares a
+ * single client. Independent clients each carry their own session state and
+ * will each try to refresh an expired access token; with refresh-token
+ * rotation enabled the losers of that race get "refresh token already used",
+ * which ends the session and signs the user out mid-navigation.
+ *
+ * `cache()` is scoped to a single request, not global, so this still honours
+ * the "never store a client in a global variable" rule — sessions cannot leak
+ * between requests, including under Fluid compute.
  */
-export async function createClient() {
+export const createClient = cache(async () => {
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -32,4 +41,4 @@ export async function createClient() {
       },
     },
   );
-}
+});

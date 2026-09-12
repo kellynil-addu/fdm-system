@@ -10,9 +10,14 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await getUserInfo();
-  const isSystemAdmin = await getIsCurrentUserSystemAdmin();
-  const roleTabs = await getCurrentUserRoleTabs();
+  // Independent of one another — awaiting them in sequence made the shell wait
+  // on three consecutive Supabase round trips before rendering.
+  const [user, isSystemAdmin, roleTabs] = await Promise.all([
+    getUserInfo(),
+    getIsCurrentUserSystemAdmin(),
+    getCurrentUserRoleTabs(),
+  ]);
+
   return (
     <div className="min-h-screen bg-[#F5F3EC]">
       {/* Sidebar */}

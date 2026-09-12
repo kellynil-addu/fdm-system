@@ -1,5 +1,6 @@
 "use server";
 
+import { cache } from "react";
 import { hasPermission } from "@/lib/permissions";
 import { getUserInfo } from "@/lib/user";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -31,18 +32,16 @@ const ROLE_TAB_MAP: Record<string, RoleTab> = {
 };
 
 /**
- * Returns the list of role-based tabs the current user should see in the sidebar.
+ * Deduped per request. Only exported members of a "use server" module have to
+ * be async functions, so the cached helper stays module-private.
  */
-export async function getCurrentUserRoleTabs(): Promise<RoleTab[]> {
-  const user = await getUserInfo();
-  if (!user) return [];
-
+const fetchRoleTabs = cache(async (userId: string): Promise<RoleTab[]> => {
   const adminClient = createAdminClient();
   const { data: userRoles, error } = await adminClient
     .schema("rbac")
     .from("user_role")
     .select("role:role_id(name)")
-    .eq("user_id", user.id)
+    .eq("user_id", userId)
     .returns<{ role: { name: string } | null }[]>();
 
   if (error || !userRoles) return [];
@@ -57,4 +56,14 @@ export async function getCurrentUserRoleTabs(): Promise<RoleTab[]> {
     .map((name) => ROLE_TAB_MAP[name])
     // de-duplicate in case of duplicate role assignments
     .filter((tab, idx, arr) => arr.findIndex((t) => t.href === tab.href) === idx);
+});
+
+/**
+ * Returns the list of role-based tabs the current user should see in the sidebar.
+ */
+export async function getCurrentUserRoleTabs(): Promise<RoleTab[]> {
+  const user = await getUserInfo();
+  if (!user) return [];
+
+  return fetchRoleTabs(user.id);
 }
