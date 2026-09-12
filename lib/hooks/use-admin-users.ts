@@ -61,11 +61,19 @@ export function useAdminUsers() {
 }
 
 function matchesSearch(user: UserListItem, query: string): boolean {
-  const q = query.trim().toLowerCase();
-  if (!q) return true;
-  return [user.email, user.firstName, user.lastName, ...user.roles.map((r) => roleLabel(r.name))]
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+
+  const fields = [
+    user.email,
+    user.firstName,
+    user.lastName,
+    ...user.roles.map((r) => roleLabel(r.name)),
+  ]
     .filter(Boolean)
-    .some((field) => field.toLowerCase().includes(q));
+    .map((field) => field.toLowerCase());
+
+  return words.every((word) => fields.some((field) => field.includes(word)));
 }
 
 export function AdminUsersProvider({
