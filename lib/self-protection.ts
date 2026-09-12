@@ -32,12 +32,12 @@ export function checkSelfDeactivate(
   enable: boolean,
 ): string | null {
   // Re-activating yourself is harmless; only deactivation locks you out.
-  if (!enable && callerId === targetUserId) return SELF_DEACTIVATE_ERROR;
+  if (!enable && callerId.toLowerCase() === targetUserId.toLowerCase()) return SELF_DEACTIVATE_ERROR;
   return null;
 }
 
 export function checkSelfDelete(callerId: string, targetUserId: string): string | null {
-  if (callerId === targetUserId) return SELF_DELETE_ERROR;
+  if (callerId.toLowerCase() === targetUserId.toLowerCase()) return SELF_DELETE_ERROR;
   return null;
 }
 
@@ -54,7 +54,7 @@ export function checkSelfDemote(
   systemAdminRoleId: string | null,
   nextRoleIds: string[],
 ): string | null {
-  if (callerId !== targetUserId) return null;
+  if (callerId.toLowerCase() !== targetUserId.toLowerCase()) return null;
   if (!systemAdminRoleId) return null;
   if (nextRoleIds.includes(systemAdminRoleId)) return null;
   return SELF_DEMOTE_ERROR;

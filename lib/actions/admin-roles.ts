@@ -49,7 +49,7 @@ export async function setUserRoles(
 
   // Stop an admin from stripping their own system_admin role, which would
   // leave them unable to reach the admin panel to undo it.
-  if (userId === caller.id) {
+  if (userId.toLowerCase() === caller.id.toLowerCase()) {
     const { data: adminRole, error: roleLookupError } = await adminClient
       .schema("rbac")
       .from("role")
