@@ -33,9 +33,11 @@ export function LoginForm() {
       await login({ email, password });
       const next = searchParams.get('next') || '/dashboard';
       router.push(next);
+      // Without this the router can serve a cached RSC payload rendered before
+      // the auth cookie existed, so the proxy bounces straight back to /login.
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to login. Please try again.');
-    } finally {
       setIsLoading(false);
     }
   };

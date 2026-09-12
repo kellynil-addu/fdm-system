@@ -7,7 +7,7 @@ import { PageSpinner, PageError } from '@/components/dashboard/page-status';
 
 
 type AdminAccess =
-  | { status: 'ok' }
+  | { status: 'ok'; userId: string }
   | { status: 'unauthenticated' }
   | { status: 'forbidden' }
   | { status: 'error' };
@@ -30,7 +30,7 @@ async function resolveAdminAccess(): Promise<AdminAccess> {
 
     const isSystemAdmin = await checkIsSystemAdmin(user.id);
 
-    return isSystemAdmin ? { status: 'ok' } : { status: 'forbidden' };
+    return isSystemAdmin ? { status: 'ok', userId: user.id } : { status: 'forbidden' };
   } catch (error) {
     // Re-throw framework-controlled errors (redirect, notFound, dynamic APIs)
     // so Next.js can handle them rather than reporting a page load failure.
@@ -57,8 +57,8 @@ async function AdminContent() {
 
   return (
     <div className="flex flex-col gap-6 flex-1">
-      <h1 className="text-2xl font-bold text-[#1A1D20]">Administration</h1>
-      <UserManagementSection />
+      <h1 className="text-2xl font-bold text-foreground">Administration</h1>
+      <UserManagementSection currentUserId={access.userId} />
     </div>
   );
 }

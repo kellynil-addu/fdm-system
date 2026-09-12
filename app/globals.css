@@ -15,7 +15,10 @@
     --primary-foreground: #FFFFFF;
     --secondary: #F5CE42;
     --secondary-foreground: #1A1D20;
-    --muted: #6C7E8E;
+    /* --muted is a surface, --muted-foreground is text drawn on it. They were
+       previously the same hex, so `bg-muted text-muted-foreground` rendered
+       grey text on identical grey and was unreadable. */
+    --muted: #EDF0F3;
     --muted-foreground: #6C7E8E;
     --accent: #5BC4E7;
     --accent-foreground: #FFFFFF;
@@ -40,6 +43,11 @@
     --sidebar-accent-foreground: #5BC4E7;
     --sidebar-border: #E2E7EC;
     --sidebar-ring: #5BC4E7;
+    /* Scrollbars. Derived from the palette so they recede instead of showing
+       the browser's default grey. */
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: #C7D0D8;
+    --scrollbar-thumb-hover: #A7B4BF;
   }
 
   .dark {
@@ -54,7 +62,7 @@
     --primary-foreground: #1A1D20;
     --secondary: #F5CE42;
     --secondary-foreground: #1A1D20;
-    --muted: #8C95A5;
+    --muted: #33383D;
     --muted-foreground: #8C95A5;
     --accent: #5BC4E7;
     --accent-foreground: #1A1D20;
@@ -80,6 +88,9 @@
     --sidebar-accent-foreground: #5BC4E7;
     --sidebar-border: #3A3D40;
     --sidebar-ring: #5BC4E7;
+    --scrollbar-track: transparent;
+    --scrollbar-thumb: #4A5157;
+    --scrollbar-thumb-hover: #626A71;
   }
 
   * {
@@ -88,5 +99,42 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Themed scrollbars.
+     `scrollbar-width` / `scrollbar-color` are inherited properties, so setting
+     them on :root covers the page and every nested scroll container (the
+     sidebar nav, the user table, dialog bodies) in Firefox and Chrome 121+.
+     The ::-webkit-scrollbar rules are unprefixed so they apply to all scroll
+     containers too, covering older WebKit/Blink. */
+  :root {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 9999px;
+    /* Transparent border + background-clip insets the thumb so it reads as a
+       rounded pill with breathing room rather than filling the gutter. */
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
   }
 }

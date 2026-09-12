@@ -4,6 +4,7 @@ import { cache } from "react";
 import { hasPermission } from "@/lib/permissions";
 import { getUserInfo } from "@/lib/user";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { SYSTEM_ADMIN_ROLE } from "@/lib/self-protection";
 
 // TODO: refactor
 export async function checkIsSystemAdmin(userId: string): Promise<boolean> {
@@ -15,7 +16,7 @@ export async function getIsCurrentUserSystemAdmin(): Promise<boolean> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Role → Sidebar tab mapping
+// Role → Sidebar section mapping
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface RoleTab {
@@ -24,18 +25,52 @@ export interface RoleTab {
   comingSoon: true;
 }
 
-const ROLE_TAB_MAP: Record<string, RoleTab> = {
-  billing_staff:    { title: "Invoicing & Billing", href: "/dashboard/billing",    comingSoon: true },
-  accounting_staff: { title: "Accounts Payable",    href: "/dashboard/accounting", comingSoon: true },
-  legal_staff:      { title: "Contract Management", href: "/dashboard/legal",       comingSoon: true },
-  admin_staff:      { title: "Operations Log",      href: "/dashboard/operations", comingSoon: true },
-};
+export interface RoleSection {
+  /** Heading the tabs are grouped under in the sidebar. */
+  category: string;
+  tabs: RoleTab[];
+}
 
 /**
- * Deduped per request. Only exported members of a "use server" module have to
+ * Declared as an ordered list so the sidebar renders categories in a stable
+ * order regardless of the order roles come back from the database.
+ */
+const ROLE_SECTIONS: { role: string; section: RoleSection }[] = [
+  {
+    role: "admin_staff",
+    section: {
+      category: "Administration",
+      tabs: [{ title: "Operations Log", href: "/dashboard/operations", comingSoon: true }],
+    },
+  },
+  {
+    role: "billing_staff",
+    section: {
+      category: "Billing",
+      tabs: [{ title: "Invoicing & Billing", href: "/dashboard/billing", comingSoon: true }],
+    },
+  },
+  {
+    role: "accounting_staff",
+    section: {
+      category: "Accounting",
+      tabs: [{ title: "Accounts Payable", href: "/dashboard/accounting", comingSoon: true }],
+    },
+  },
+  {
+    role: "legal_staff",
+    section: {
+      category: "Legal",
+      tabs: [{ title: "Contract Management", href: "/dashboard/legal", comingSoon: true }],
+    },
+  },
+];
+
+/**
+ * Memoized per request. Only exported members of a "use server" module have to
  * be async functions, so the cached helper stays module-private.
  */
-const fetchRoleTabs = cache(async (userId: string): Promise<RoleTab[]> => {
+const fetchRoleNames = cache(async (userId: string): Promise<string[]> => {
   const adminClient = createAdminClient();
   const { data: userRoles, error } = await adminClient
     .schema("rbac")
@@ -46,24 +81,37 @@ const fetchRoleTabs = cache(async (userId: string): Promise<RoleTab[]> => {
 
   if (error || !userRoles) return [];
 
-  const roleNames = userRoles
-    .map((row) => row.role?.name)
-    .filter((name): name is string => !!name);
-
-  return roleNames
-    // Only include operational staff roles — never include system_admin here
-    .filter((name) => name in ROLE_TAB_MAP && name !== "system_admin")
-    .map((name) => ROLE_TAB_MAP[name])
-    // de-duplicate in case of duplicate role assignments
-    .filter((tab, idx, arr) => arr.findIndex((t) => t.href === tab.href) === idx);
+  return [
+    ...new Set(
+      userRoles
+        .map((row) => row.role?.name)
+        .filter((name): name is string => !!name)
+    ),
+  ];
 });
 
-/**
- * Returns the list of role-based tabs the current user should see in the sidebar.
- */
-export async function getCurrentUserRoleTabs(): Promise<RoleTab[]> {
+/** Raw rbac role slugs assigned to the current user. */
+export async function getCurrentUserRoleNames(): Promise<string[]> {
   const user = await getUserInfo();
   if (!user) return [];
+  return fetchRoleNames(user.id);
+}
 
-  return fetchRoleTabs(user.id);
+/**
+ * Sidebar sections the current user should see.
+ *
+ * A system administrator oversees every department, so they get all sections
+ * rather than only those matching a role they happen to also hold.
+ */
+export async function getCurrentUserRoleSections(): Promise<RoleSection[]> {
+  const roleNames = await getCurrentUserRoleNames();
+  if (roleNames.length === 0) return [];
+
+  if (roleNames.includes(SYSTEM_ADMIN_ROLE)) {
+    return ROLE_SECTIONS.map((entry) => entry.section);
+  }
+
+  return ROLE_SECTIONS.filter((entry) => roleNames.includes(entry.role)).map(
+    (entry) => entry.section
+  );
 }

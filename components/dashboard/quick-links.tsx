@@ -39,25 +39,25 @@ export function QuickLinks({
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <button
             onClick={() => handleComingSoon(labels.viewProperties || 'View Properties')}
-            className="p-4 bg-sidebar-accent hover:bg-primary/20 rounded-lg text-primary font-medium transition-colors"
+            className="p-4 bg-sidebar-accent hover:bg-[color-mix(in_srgb,var(--primary)_20%,white)] rounded-lg text-primary font-medium transition-colors"
           >
             {labels.viewProperties}
           </button>
           <button
             onClick={() => handleComingSoon(labels.viewReports || 'View Reports')}
-            className="p-4 bg-chart-4 hover:bg-secondary/20 rounded-lg text-secondary font-medium transition-colors"
+            className="p-4 bg-chart-4 hover:bg-[color-mix(in_srgb,var(--secondary)_20%,white)] rounded-lg text-secondary font-medium transition-colors"
           >
             {labels.viewReports}
           </button>
           <button
             onClick={() => handleComingSoon(labels.settings || 'Settings')}
-            className="p-4 bg-muted/20 hover:bg-muted/30 rounded-lg text-muted-foreground font-medium transition-colors"
+            className="p-4 bg-muted hover:bg-border rounded-lg text-muted-foreground font-medium transition-colors"
           >
             {labels.settings}
           </button>
           <button
             onClick={() => handleComingSoon(labels.helpAndSupport || 'Help & Support')}
-            className="p-4 bg-muted/20 hover:bg-muted/30 rounded-lg text-muted-foreground font-medium transition-colors"
+            className="p-4 bg-muted hover:bg-border rounded-lg text-muted-foreground font-medium transition-colors"
           >
             {labels.helpAndSupport}
           </button>

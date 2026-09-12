@@ -96,3 +96,57 @@ export async function updatePassword({ password }: UpdatePasswordParams) {
   if (error) throw error;
   return data;
 }
+
+/** Minimum accepted password length. Mirrors Supabase's minimum_password_length. */
+export const MIN_PASSWORD_LENGTH = 6;
+
+export interface ChangePasswordParams {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
+/**
+ * Changes the signed-in user's password after verifying the current one.
+ *
+ * Supabase's `updateUser` does not check the existing password, so the current
+ * one is verified by re-authenticating first. That re-auth is for the same
+ * account, so it simply refreshes the active session.
+ */
+export async function changePassword({
+  currentPassword,
+  newPassword,
+  confirmPassword,
+}: ChangePasswordParams) {
+  if (newPassword !== confirmPassword) {
+    throw new Error("New passwords do not match.");
+  }
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    throw new Error(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+  }
+  if (newPassword === currentPassword) {
+    throw new Error("New password must be different from your current password.");
+  }
+
+  const supabase = createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user?.email) {
+    throw new Error("You must be signed in to change your password.");
+  }
+
+  const { error: verifyError } = await supabase.auth.signInWithPassword({
+    email: user.email,
+    password: currentPassword,
+  });
+
+  if (verifyError) {
+    throw new Error("Your current password is incorrect.");
+  }
+
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
+}

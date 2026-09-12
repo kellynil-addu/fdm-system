@@ -12,15 +12,15 @@ import {
   CreditCard,
   FileCheck,
   ClipboardList,
+  UserCog,
 } from 'lucide-react';
 import { ComingSoonModal } from './coming-soon-modal';
 
 interface SidebarNavProps {
   isSystemAdmin?: boolean;
-  roleTabs?: {
-    title: string;
-    href: string;
-    comingSoon?: true;
+  roleSections?: {
+    category: string;
+    tabs: { title: string; href: string; comingSoon?: true }[];
   }[];
 }
 
@@ -39,8 +39,13 @@ const allNavigationItems = [
   {
     title: 'Admin',
     href: '/dashboard/admin',
-    icon: Settings,
+    icon: UserCog,
     systemAdminOnly: true,
+  },
+  {
+    title: 'Account Settings',
+    href: '/dashboard/settings',
+    icon: Settings,
   },
 ];
 
@@ -52,7 +57,25 @@ const ROLE_TAB_ICONS: Record<string, React.ComponentType<{ className?: string }>
   'Operations Log':     ClipboardList,
 };
 
-export function SidebarNav({ isSystemAdmin = false, roleTabs = [] }: SidebarNavProps) {
+/**
+ * `text-left` matters: a <button> defaults to text-align:center, so a label
+ * long enough to wrap (e.g. "Contract Management") renders its second line
+ * centred while every shorter label looks fine.
+ *
+ * `items-start` keeps the icon on the first line of a wrapped label instead of
+ * floating to the vertical centre of the whole block. The icon is h-5 (20px)
+ * and text-sm's line-height is also 20px, so single-line items are unaffected.
+ */
+function navItemClasses(isActive: boolean): string {
+  return cn(
+    'w-full flex items-start text-left space-x-3 px-4 py-2 rounded transition-colors text-sm font-medium',
+    isActive
+      ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+      : 'text-muted-foreground hover:bg-background hover:text-foreground',
+  );
+}
+
+export function SidebarNav({ isSystemAdmin = false, roleSections = [] }: SidebarNavProps) {
   const pathname = usePathname();
   const [modalState, setModalState] = useState<{
     isOpen: boolean;
@@ -71,22 +94,19 @@ export function SidebarNav({ isSystemAdmin = false, roleTabs = [] }: SidebarNavP
   );
 
   return (
-    <div className="flex flex-col h-full">
+    // flex-1 + min-h-0 lets this shrink inside the sidebar's flex column;
+    // without min-h-0 a flex child refuses to shrink below its content and
+    // the nav overflows the viewport instead of scrolling.
+    <div className="flex flex-col flex-1 min-h-0">
       {/* Navigation Items */}
-      <nav className="flex-1 space-y-1 py-6 px-3">
+      <nav className="flex-1 min-h-0 overflow-y-auto space-y-1 py-6 px-3">
         {navigationItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
-          const buttonClasses = cn(
-            'w-full flex items-center space-x-3 px-4 py-2 rounded transition-colors text-sm font-medium',
-            isActive
-              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-              : 'text-muted-foreground hover:bg-background hover:text-foreground',
-          );
 
           const content = (
-            <button className={buttonClasses}>
-              <Icon className={cn('w-5 h-5', isActive && 'text-yellow-500')} />
+            <button className={navItemClasses(isActive)}>
+              <Icon className={cn('w-5 h-5 shrink-0', isActive && 'text-yellow-500')} />
               <span>{item.title}</span>
             </button>
           );
@@ -104,28 +124,31 @@ export function SidebarNav({ isSystemAdmin = false, roleTabs = [] }: SidebarNavP
           );
         })}
 
-        {/* Role-based tabs */}
-        {roleTabs.map((tab) => {
-          const Icon = ROLE_TAB_ICONS[tab.title] ?? FileText;
-          const isActive = pathname === tab.href;
-          const buttonClasses = cn(
-            'w-full flex items-center space-x-3 px-4 py-2 rounded transition-colors text-sm font-medium',
-            isActive
-              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-              : 'text-muted-foreground hover:bg-background hover:text-foreground',
-          );
+        {/* Role-based tabs, grouped under their department heading. */}
+        {roleSections.map((section) => (
+          <div key={section.category} className="pt-4 first:pt-2">
+            <p className="px-4 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {section.category}
+            </p>
+            {section.tabs.map((tab) => {
+              const Icon = ROLE_TAB_ICONS[tab.title] ?? FileText;
+              const isActive = pathname === tab.href;
 
-          return (
-            <div key={tab.href}>
-              <div onClick={() => handleComingSoon(tab.title)} className="cursor-pointer">
-                <button className={buttonClasses}>
-                  <Icon className="w-5 h-5" />
-                  <span>{tab.title}</span>
-                </button>
-              </div>
-            </div>
-          );
-        })}
+              return (
+                <div
+                  key={tab.href}
+                  onClick={() => handleComingSoon(tab.title)}
+                  className="cursor-pointer"
+                >
+                  <button className={navItemClasses(isActive)}>
+                    <Icon className="w-5 h-5 shrink-0" />
+                    <span>{tab.title}</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       <ComingSoonModal

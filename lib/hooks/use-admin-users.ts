@@ -27,6 +27,8 @@ interface AdminUsersContextValue {
   roles: RbacRole[];
   isLoading: boolean;
   error: string | null;
+  /** The signed-in admin, so the UI can disable actions against their own account. */
+  currentUserId: string;
   selectedUserId: string | null;
   selectedUser: UserListItem | null;
   activeDialog: AdminDialog;
@@ -48,7 +50,13 @@ export function useAdminUsers() {
   return ctx;
 }
 
-export function AdminUsersProvider({ children }: { children: ReactNode }) {
+export function AdminUsersProvider({
+  children,
+  currentUserId,
+}: {
+  children: ReactNode;
+  currentUserId: string;
+}) {
   const router = useRouter();
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [roles, setRoles] = useState<RbacRole[]>([]);
@@ -136,6 +144,7 @@ export function AdminUsersProvider({ children }: { children: ReactNode }) {
     roles,
     isLoading,
     error,
+    currentUserId,
     selectedUserId,
     selectedUser,
     activeDialog,

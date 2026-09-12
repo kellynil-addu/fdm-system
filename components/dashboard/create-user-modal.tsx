@@ -74,7 +74,7 @@ export function CreateUserModal() {
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {displayError && (
-            <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+            <div className="p-4 bg-[color-mix(in_srgb,var(--destructive)_10%,white)] border border-[color-mix(in_srgb,var(--destructive)_30%,white)] rounded-lg">
               <p className="text-sm text-destructive">{displayError}</p>
             </div>
           )}
@@ -148,7 +148,7 @@ export function CreateUserModal() {
               isLoading={isPending}
               loadingText="Creating..."
               disabled={selectedRoles.length === 0}
-              className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg"
+              className="flex-1 bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_90%,black)] rounded-lg"
             >
               Create User
             </LoadingButton>

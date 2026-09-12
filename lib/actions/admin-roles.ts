@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthorizedCaller } from "@/lib/actions/auth-guard";
+import { checkSelfDemote, SYSTEM_ADMIN_ROLE } from "@/lib/self-protection";
 
 export interface RbacRole {
   id: string;
@@ -45,6 +46,32 @@ export async function setUserRoles(
   if ("error" in caller) return { success: false, error: caller.error };
 
   const adminClient = createAdminClient();
+
+  // Stop an admin from stripping their own system_admin role, which would
+  // leave them unable to reach the admin panel to undo it.
+  if (userId === caller.id) {
+    const { data: adminRole, error: roleLookupError } = await adminClient
+      .schema("rbac")
+      .from("role")
+      .select("id")
+      .eq("name", SYSTEM_ADMIN_ROLE)
+      .maybeSingle<{ id: string }>();
+
+    if (roleLookupError) {
+      console.error("[setUserRoles] role lookup error:", roleLookupError.message);
+      return { success: false, error: roleLookupError.message };
+    }
+
+    const demoteError = checkSelfDemote(
+      caller.id,
+      userId,
+      adminRole?.id ?? null,
+      roleIds,
+    );
+    if (demoteError) {
+      return { success: false, error: demoteError };
+    }
+  }
 
   const { error: deleteError } = await adminClient
     .schema("rbac")

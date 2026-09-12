@@ -35,11 +35,26 @@ const projects: Project[] = [
   },
 ];
 
+// Complete, unbroken class literals so Tailwind's static compiler detects them.
 const statusConfig = {
-  active: { label: 'Active', className: 'bg-sidebar-accent text-primary border-primary/30' },
-  pending: { label: 'Pending', className: 'bg-chart-4 text-secondary border-secondary/30' },
-  completed: { label: 'Completed', className: 'bg-success/10 text-success border-success/30' },
-  'on-hold': { label: 'On Hold', className: 'bg-destructive/10 text-destructive border-destructive/30' },
+  active: {
+    label: 'Active',
+    className: 'bg-sidebar-accent text-primary border-[color-mix(in_srgb,var(--primary)_30%,white)]',
+  },
+  pending: {
+    label: 'Pending',
+    className: 'bg-chart-4 text-secondary border-[color-mix(in_srgb,var(--secondary)_30%,white)]',
+  },
+  completed: {
+    label: 'Completed',
+    className:
+      'bg-[color-mix(in_srgb,var(--success)_10%,white)] text-success border-[color-mix(in_srgb,var(--success)_30%,white)]',
+  },
+  'on-hold': {
+    label: 'On Hold',
+    className:
+      'bg-[color-mix(in_srgb,var(--destructive)_10%,white)] text-destructive border-[color-mix(in_srgb,var(--destructive)_30%,white)]',
+  },
 };
 
 export function ProjectCardGrid() {
