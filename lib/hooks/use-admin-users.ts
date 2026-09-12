@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, createElement, useContext, useState, useEffect } from 'react';
+import { createContext, createElement, useContext, useState, useEffect, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -13,6 +13,9 @@ import {
 import type { UserListItem, RegisterUserParams } from '@/lib/actions/admin-user';
 import { getActiveRoles, setUserRoles as setUserRolesAction } from '@/lib/actions/admin-roles';
 import type { RbacRole } from '@/lib/actions/admin-roles';
+import { roleLabel } from '@/lib/role-labels';
+
+export type StatusFilter = 'all' | 'active' | 'inactive';
 
 export type AdminDialog =
   | { type: 'create' }
@@ -27,9 +30,18 @@ interface AdminUsersContextValue {
   roles: RbacRole[];
   isLoading: boolean;
   error: string | null;
+  /** The signed-in admin, so the UI can disable actions against their own account. */
+  currentUserId: string;
   selectedUserId: string | null;
   selectedUser: UserListItem | null;
   activeDialog: AdminDialog;
+  search: string;
+  setSearch: (query: string) => void;
+  roleFilter: string | null;
+  setRoleFilter: (roleId: string | null) => void;
+  statusFilter: StatusFilter;
+  setStatusFilter: (status: StatusFilter) => void;
+  visibleUsers: UserListItem[];
   selectUser: (id: string | null) => void;
   openDialog: (dialog: AdminDialog) => void;
   closeDialog: () => void;
@@ -48,7 +60,29 @@ export function useAdminUsers() {
   return ctx;
 }
 
-export function AdminUsersProvider({ children }: { children: ReactNode }) {
+function matchesSearch(user: UserListItem, query: string): boolean {
+  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+
+  const fields = [
+    user.email,
+    user.firstName,
+    user.lastName,
+    ...user.roles.map((r) => roleLabel(r.name)),
+  ]
+    .filter(Boolean)
+    .map((field) => field.toLowerCase());
+
+  return words.every((word) => fields.some((field) => field.includes(word)));
+}
+
+export function AdminUsersProvider({
+  children,
+  currentUserId,
+}: {
+  children: ReactNode;
+  currentUserId: string;
+}) {
   const router = useRouter();
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [roles, setRoles] = useState<RbacRole[]>([]);
@@ -56,8 +90,21 @@ export function AdminUsersProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [activeDialog, setActiveDialog] = useState<AdminDialog>(null);
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const selectedUser = users.find((u) => u.id === selectedUserId) ?? null;
+
+  const visibleUsers = useMemo(() => {
+    return users.filter((user) => {
+      if (!matchesSearch(user, search)) return false;
+      if (roleFilter && !user.roles.some((r) => r.id === roleFilter)) return false;
+      if (statusFilter === 'active' && user.isBanned) return false;
+      if (statusFilter === 'inactive' && !user.isBanned) return false;
+      return true;
+    });
+  }, [users, search, roleFilter, statusFilter]);
 
   useEffect(() => {
     Promise.all([listUsers(), getActiveRoles()])
@@ -136,9 +183,17 @@ export function AdminUsersProvider({ children }: { children: ReactNode }) {
     roles,
     isLoading,
     error,
+    currentUserId,
     selectedUserId,
     selectedUser,
     activeDialog,
+    search,
+    setSearch,
+    roleFilter,
+    setRoleFilter,
+    statusFilter,
+    setStatusFilter,
+    visibleUsers,
     selectUser,
     openDialog,
     closeDialog,

@@ -2,6 +2,7 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthorizedCaller } from "@/lib/actions/auth-guard";
+import { checkSelfDemote, SYSTEM_ADMIN_ROLE } from "@/lib/self-protection";
 
 export interface RbacRole {
   id: string;
@@ -45,29 +46,43 @@ export async function setUserRoles(
   if ("error" in caller) return { success: false, error: caller.error };
 
   const adminClient = createAdminClient();
+  const uniqueRoleIds = Array.from(new Set(roleIds));
 
-  const { error: deleteError } = await adminClient
-    .schema("rbac")
-    .from("user_role")
-    .delete()
-    .eq("user_id", userId);
+  // Stop an admin from stripping their own system_admin role
+  if (userId.toLowerCase() === caller.id.toLowerCase()) {
+    const { data: adminRole, error: roleLookupError } = await adminClient
+      .schema("rbac")
+      .from("role")
+      .select("id")
+      .eq("name", SYSTEM_ADMIN_ROLE)
+      .maybeSingle<{ id: string }>();
 
-  if (deleteError) {
-    console.error("[setUserRoles] delete error:", deleteError.message);
-    return { success: false, error: deleteError.message };
+    if (roleLookupError) {
+      console.error("[setUserRoles] role lookup error:", roleLookupError.message);
+      return { success: false, error: roleLookupError.message };
+    }
+
+    const demoteError = checkSelfDemote(
+      caller.id,
+      userId,
+      adminRole?.id ?? null,
+      uniqueRoleIds,
+    );
+    if (demoteError) {
+      return { success: false, error: demoteError };
+    }
   }
 
-  if (roleIds.length > 0) {
-    const rows = roleIds.map((roleId) => ({ user_id: userId, role_id: roleId }));
-    const { error: insertError } = await adminClient
-      .schema("rbac")
-      .from("user_role")
-      .insert(rows);
+  const { error: rpcError } = await adminClient
+    .schema("rbac")
+    .rpc("set_user_roles", {
+      p_user_id: userId,
+      p_role_ids: uniqueRoleIds,
+    });
 
-    if (insertError) {
-      console.error("[setUserRoles] insert error:", insertError.message);
-      return { success: false, error: insertError.message };
-    }
+  if (rpcError) {
+    console.error("[setUserRoles] error:", rpcError.message);
+    return { success: false, error: rpcError.message };
   }
 
   return { success: true };

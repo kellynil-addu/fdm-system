@@ -6,8 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { FormField } from '@/components/ui/form-field';
+import { Input } from '@/components/ui/input';
 import { RoleCheckboxList } from '@/components/dashboard/role-checkbox-list';
-import { Plus, Settings2, Trash2, X, MoreHorizontal } from 'lucide-react';
+import { Plus, Settings2, Trash2, X, MoreHorizontal, Search, ListFilter, Check } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -40,17 +41,21 @@ import {
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu';
 import { CreateUserModal } from './create-user-modal';
-import { AdminUsersProvider, useAdminUsers } from '@/lib/hooks/use-admin-users';
+import { AdminUsersProvider, useAdminUsers, type StatusFilter } from '@/lib/hooks/use-admin-users';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import type { UserListItem } from '@/lib/actions/admin-user';
+import { roleLabel } from '@/lib/role-labels';
+import { SELF_DEMOTE_ERROR, SYSTEM_ADMIN_ROLE } from '@/lib/self-protection';
 import { toast } from 'sonner';
 
 const TINTS = {
   activeBadge: 'bg-[color-mix(in_srgb,var(--success)_15%,white)]',
   activateBtnHover: 'hover:bg-[color-mix(in_srgb,var(--success)_85%,black)] hover:border-[color-mix(in_srgb,var(--success)_85%,black)]',
   deleteBtnHover: 'hover:bg-[color-mix(in_srgb,var(--destructive)_15%,white)] hover:border-[color-mix(in_srgb,var(--destructive)_30%,white)]',
-  rowHover: 'hover:bg-[color-mix(in_srgb,var(--muted)_10%,white)]',
-  actionBtnHover: 'hover:bg-[color-mix(in_srgb,var(--muted)_15%,white)]',
+  // --muted is a light surface token, so it works directly in both themes —
+  // a color-mix against white would only have been correct in light mode.
+  rowHover: 'hover:bg-muted',
+  actionBtnHover: 'hover:bg-muted',
   primaryBtnHover: 'hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]',
   destructiveBtnHover: 'hover:bg-[color-mix(in_srgb,var(--destructive)_85%,black)]',
 };
@@ -65,7 +70,7 @@ function RoleBadges({ roles }: { roles: UserListItem['roles'] }) {
           variant="secondary"
           className="bg-sidebar-accent text-sidebar-accent-foreground border-transparent hover:bg-sidebar-accent"
         >
-          {role.name}
+          {roleLabel(role.name)}
         </Badge>
       ))}
     </div>
@@ -149,15 +154,28 @@ function DeleteUserDialog({ user }: { user: UserListItem }) {
 }
 
 function UserRow({ user }: { user: UserListItem }) {
-  const { selectedUserId, selectUser, openDialog } = useAdminUsers();
+  const { selectedUserId, selectUser, openDialog, currentUserId } = useAdminUsers();
   const isSelected = selectedUserId === user.id;
+  const isSelf = user.id === currentUserId;
 
   return (
     <TableRow
       className={`group cursor-pointer transition-colors ${isSelected ? 'bg-sidebar-accent' : TINTS.rowHover}`}
       onClick={() => selectUser(isSelected ? null : user.id)}
     >
-      <TableCell className="font-medium text-foreground">{user.email}</TableCell>
+      <TableCell className="font-medium text-foreground">
+        <div className="flex items-center gap-2">
+          <span>{user.email}</span>
+          {isSelf && (
+            <Badge
+              variant="outline"
+              className="bg-card border-border text-muted-foreground font-normal hover:bg-card"
+            >
+              You
+            </Badge>
+          )}
+        </div>
+      </TableCell>
       <TableCell><RoleBadges roles={user.roles} /></TableCell>
       <TableCell>
         <div className="flex items-center justify-between gap-2">
@@ -178,10 +196,18 @@ function UserRow({ user }: { user: UserListItem }) {
                 <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-[160px]">
-              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); openDialog({ type: 'toggle', user }); }}>
+            <DropdownMenuContent align="end" className="w-[200px]">
+              <DropdownMenuItem
+                disabled={isSelf && !user.isBanned}
+                onSelect={(e) => { e.preventDefault(); openDialog({ type: 'toggle', user }); }}
+              >
                 {user.isBanned ? 'Activate user' : 'Deactivate user'}
               </DropdownMenuItem>
+              {isSelf && !user.isBanned && (
+                <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                  You cannot deactivate your own account.
+                </p>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -191,10 +217,18 @@ function UserRow({ user }: { user: UserListItem }) {
 }
 
 function EditRolesDialog({ user }: { user: UserListItem }) {
-  const { roles, updateUserRoles, closeDialog } = useAdminUsers();
+  const { roles, updateUserRoles, closeDialog, currentUserId } = useAdminUsers();
   const { state, execute } = useMutation(updateUserRoles);
   const initialRoleIds = user.roles.map((r) => r.id);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>(initialRoleIds);
+
+  // An admin editing their own roles must keep system_admin, otherwise they
+  // lose access to this page and cannot undo the change.
+  const isSelf = user.id === currentUserId;
+  const ownSystemAdminRoleId = isSelf
+    ? roles.find((r) => r.name === SYSTEM_ADMIN_ROLE && initialRoleIds.includes(r.id))?.id
+    : undefined;
+  const lockedIds = ownSystemAdminRoleId ? [ownSystemAdminRoleId] : [];
 
   useEffect(() => {
     if (state.status === 'success') {
@@ -224,6 +258,8 @@ function EditRolesDialog({ user }: { user: UserListItem }) {
             selectedIds={selectedRoleIds}
             onChange={handleRoleChange}
             disabled={state.status === 'pending'}
+            lockedIds={lockedIds}
+            lockedHint={SELF_DEMOTE_ERROR}
           />
         </div>
         {state.status === 'error' && <p className="text-xs text-destructive">{state.error}</p>}
@@ -317,9 +353,11 @@ function EditNameDialog({ user }: { user: UserListItem }) {
 }
 
 function UserDetailPane() {
-  const { selectedUser, selectUser, openDialog } = useAdminUsers();
+  const { selectedUser, selectUser, openDialog, currentUserId } = useAdminUsers();
 
   if (!selectedUser) return null;
+
+  const isSelf = selectedUser.id === currentUserId;
 
   return (
     <div className="flex flex-col w-72 shrink-0 border-l border-border">
@@ -377,6 +415,7 @@ function UserDetailPane() {
           <Button
             size="sm"
             variant={selectedUser.isBanned ? 'outline' : 'destructive'}
+            disabled={isSelf && !selectedUser.isBanned}
             onClick={() => openDialog({ type: 'toggle', user: selectedUser })}
             className={selectedUser.isBanned ? `w-full bg-success border-success text-success-foreground ${TINTS.activateBtnHover}` : 'w-full'}
           >
@@ -385,20 +424,146 @@ function UserDetailPane() {
           <Button
             size="sm"
             variant="outline"
+            disabled={isSelf}
             onClick={() => openDialog({ type: 'delete', user: selectedUser })}
             className={`w-full bg-card border-border text-foreground ${TINTS.deleteBtnHover}`}
           >
             <Trash2 className="w-3.5 h-3.5 mr-1.5" />
             Delete User
           </Button>
+          {isSelf && (
+            <p className="text-xs text-muted-foreground">
+              This is your own account. Ask another system administrator to
+              deactivate or delete it.
+            </p>
+          )}
         </div>
       </CardContent>
     </div>
   );
 }
 
+/** Search box plus role and status filters. */
+function UserFilters({
+  search,
+  onSearchChange,
+  roleFilter,
+  onRoleFilterChange,
+  statusFilter,
+  onStatusFilterChange,
+}: {
+  search: string;
+  onSearchChange: (v: string) => void;
+  roleFilter: string | null;
+  onRoleFilterChange: (v: string | null) => void;
+  statusFilter: StatusFilter;
+  onStatusFilterChange: (v: StatusFilter) => void;
+}) {
+  const { roles } = useAdminUsers();
+  const activeRole = roles.find((r) => r.id === roleFilter);
+  const filterCount = (roleFilter ? 1 : 0) + (statusFilter !== 'all' ? 1 : 0);
+
+  const statusOptions: { value: StatusFilter; label: string }[] = [
+    { value: 'all', label: 'All statuses' },
+    { value: 'active', label: 'Active' },
+    { value: 'inactive', label: 'Inactive' },
+  ];
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          type="search"
+          value={search}
+          onChange={(e) => onSearchChange(e.target.value)}
+          placeholder="Search name, email or role"
+          aria-label="Search users"
+          className="pl-8 w-full sm:w-64"
+        />
+      </div>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" className="gap-2">
+            <ListFilter className="h-4 w-4" />
+            Filter
+            {filterCount > 0 && (
+              <Badge className="bg-primary text-primary-foreground border-transparent px-1.5">
+                {filterCount}
+              </Badge>
+            )}
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-[220px]">
+          <p className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Status
+          </p>
+          {statusOptions.map((opt) => (
+            <DropdownMenuItem
+              key={opt.value}
+              onSelect={(e) => { e.preventDefault(); onStatusFilterChange(opt.value); }}
+              className="justify-between"
+            >
+              {opt.label}
+              {statusFilter === opt.value && <Check className="h-4 w-4" />}
+            </DropdownMenuItem>
+          ))}
+
+          <p className="px-2 pt-3 pb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+            Role
+          </p>
+          <DropdownMenuItem
+            onSelect={(e) => { e.preventDefault(); onRoleFilterChange(null); }}
+            className="justify-between"
+          >
+            All roles
+            {roleFilter === null && <Check className="h-4 w-4" />}
+          </DropdownMenuItem>
+          {roles.map((role) => (
+            <DropdownMenuItem
+              key={role.id}
+              onSelect={(e) => { e.preventDefault(); onRoleFilterChange(role.id); }}
+              className="justify-between"
+            >
+              {roleLabel(role.name)}
+              {roleFilter === role.id && <Check className="h-4 w-4" />}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {filterCount > 0 && (
+        <Button
+          variant="ghost"
+          onClick={() => { onRoleFilterChange(null); onStatusFilterChange('all'); }}
+          className="text-muted-foreground gap-1"
+        >
+          <X className="h-3.5 w-3.5" />
+          Clear
+          {activeRole && <span className="sr-only">{roleLabel(activeRole.name)}</span>}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function UserManagementContent() {
-  const { users, isLoading, error, selectedUser, activeDialog, openDialog } = useAdminUsers();
+  const {
+    users,
+    visibleUsers,
+    isLoading,
+    error,
+    selectedUser,
+    activeDialog,
+    openDialog,
+    search,
+    setSearch,
+    roleFilter,
+    setRoleFilter,
+    statusFilter,
+    setStatusFilter,
+  } = useAdminUsers();
 
   if (isLoading) {
     return (
@@ -416,23 +581,43 @@ function UserManagementContent() {
     );
   }
 
+  const isFiltered = search.trim() !== '' || roleFilter !== null || statusFilter !== 'all';
+
   return (
     <>
       <Card className="flex flex-col flex-1 overflow-hidden bg-card border-border">
-        <CardHeader className="flex-row items-center justify-between space-y-0 shrink-0">
-          <div>
-            <CardTitle className="text-xl text-foreground">User Management</CardTitle>
-            <CardDescription className="mt-1">
-              Create and manage system users with role-based access control
-            </CardDescription>
+        <CardHeader className="space-y-4 shrink-0">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle className="text-xl text-foreground">User Management</CardTitle>
+              <CardDescription className="mt-1">
+                Create and manage system users with role-based access control
+              </CardDescription>
+            </div>
+            <Button
+              onClick={() => openDialog({ type: 'create' })}
+              className={`bg-primary text-primary-foreground ${TINTS.primaryBtnHover} rounded-lg flex items-center gap-2`}
+            >
+              <Plus className="w-4 h-4" />
+              Create User
+            </Button>
           </div>
-          <Button
-            onClick={() => openDialog({ type: 'create' })}
-            className={`bg-primary text-primary-foreground ${TINTS.primaryBtnHover} rounded-lg flex items-center gap-2`}
-          >
-            <Plus className="w-4 h-4" />
-            Create User
-          </Button>
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <UserFilters
+              search={search}
+              onSearchChange={setSearch}
+              roleFilter={roleFilter}
+              onRoleFilterChange={setRoleFilter}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+            />
+            <p className="text-xs text-muted-foreground" aria-live="polite">
+              {isFiltered
+                ? `${visibleUsers.length} of ${users.length} user${users.length === 1 ? '' : 's'}`
+                : `${users.length} user${users.length === 1 ? '' : 's'}`}
+            </p>
+          </div>
         </CardHeader>
 
         <CardContent className="p-0 flex flex-1 min-h-0">
@@ -446,14 +631,16 @@ function UserManagementContent() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.length === 0 ? (
+                {visibleUsers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={3} className="text-center py-10 text-muted-foreground">
-                      No users found.
+                      {isFiltered
+                        ? 'No users match the current search and filters.'
+                        : 'No users found.'}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((user) => <UserRow key={user.id} user={user} />)
+                  visibleUsers.map((user) => <UserRow key={user.id} user={user} />)
                 )}
               </TableBody>
             </Table>
@@ -472,9 +659,9 @@ function UserManagementContent() {
   );
 }
 
-export function UserManagementSection() {
+export function UserManagementSection({ currentUserId }: { currentUserId: string }) {
   return (
-    <AdminUsersProvider>
+    <AdminUsersProvider currentUserId={currentUserId}>
       <UserManagementContent />
     </AdminUsersProvider>
   );

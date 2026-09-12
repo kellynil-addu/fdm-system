@@ -12,7 +12,7 @@ import { useAdminUsers } from '@/lib/hooks/use-admin-users';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
 
-export function CreateUserModal() {
+export function useCreateUserForm() {
   const { roles, createUser, closeDialog } = useAdminUsers();
   const { state, execute } = useMutation(createUser);
   const [firstName, setFirstName] = useState('');
@@ -62,6 +62,44 @@ export function CreateUserModal() {
   const isPending = state.status === 'pending';
   const displayError = validationError || (state.status === 'error' ? state.error : null);
 
+  return {
+    roles,
+    firstName,
+    setFirstName,
+    lastName,
+    setLastName,
+    email,
+    setEmail,
+    password,
+    setPassword,
+    selectedRoles,
+    handleRoleChange,
+    handleSubmit,
+    closeDialog,
+    isPending,
+    displayError,
+  };
+}
+
+export function CreateUserModal() {
+  const {
+    roles,
+    firstName,
+    setFirstName,
+    lastName,
+    setLastName,
+    email,
+    setEmail,
+    password,
+    setPassword,
+    selectedRoles,
+    handleRoleChange,
+    handleSubmit,
+    closeDialog,
+    isPending,
+    displayError,
+  } = useCreateUserForm();
+
   return (
     <div className="fixed inset-0 bg-black/20 flex items-center justify-center p-4 z-50">
       <Card className="w-full max-w-md bg-card text-foreground border-border rounded-2xl shadow-lg">
@@ -74,7 +112,7 @@ export function CreateUserModal() {
 
         <form onSubmit={handleSubmit} className="p-6 space-y-5">
           {displayError && (
-            <div className="p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+            <div className="p-4 bg-[color-mix(in_srgb,var(--destructive)_10%,white)] border border-[color-mix(in_srgb,var(--destructive)_30%,white)] rounded-lg">
               <p className="text-sm text-destructive">{displayError}</p>
             </div>
           )}
@@ -148,7 +186,7 @@ export function CreateUserModal() {
               isLoading={isPending}
               loadingText="Creating..."
               disabled={selectedRoles.length === 0}
-              className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90 rounded-lg"
+              className="flex-1 bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_90%,black)] rounded-lg"
             >
               Create User
             </LoadingButton>

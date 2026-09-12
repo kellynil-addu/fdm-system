@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getAuthorizedCaller } from "@/lib/actions/auth-guard";
 import { AuthError } from "@supabase/supabase-js";
 import type { RbacRole } from "@/lib/actions/admin-roles";
+import { checkSelfDeactivate, checkSelfDelete } from "@/lib/self-protection";
 
 export interface RegisterUserParams {
   email: string;
@@ -31,6 +32,31 @@ export type ListUsersResult =
   | { success: true; users: UserListItem[] }
   | { success: false; error: string };
 
+/**
+ * Turns Supabase's raw auth errors into something an admin can act on.
+ *
+ * Testers hit the duplicate-email case repeatedly and only saw the raw message,
+ * which read like a system fault rather than "this account already exists".
+ */
+function describeCreateUserError(error: AuthError): string {
+  const code = (error as AuthError & { code?: string }).code;
+  const message = error.message.toLowerCase();
+
+  if (code === "email_exists" || message.includes("already been registered") || message.includes("already exists")) {
+    return "An account with this email address already exists. Search for it in the user list instead of creating a new one.";
+  }
+
+  if (code === "weak_password" || message.includes("password")) {
+    return `Password rejected: ${error.message}`;
+  }
+
+  if (message.includes("invalid") && message.includes("email")) {
+    return "That email address is not valid. Check it and try again.";
+  }
+
+  return error.message;
+}
+
 export async function registerUser(
   params: RegisterUserParams
 ): Promise<RegisterUserResult> {
@@ -54,7 +80,7 @@ export async function registerUser(
 
   if (createError) {
     console.error("[registerUser] createUser error:", createError.message);
-    return { success: false, error: createError.message };
+    return { success: false, error: describeCreateUserError(createError) };
   }
 
   const newUserId = createData.user.id;
@@ -81,6 +107,13 @@ export async function registerUser(
 export async function toggleUser(userId: string, enable: boolean) {
   const caller = await getAuthorizedCaller();
   if ("error" in caller) return { success: false, error: caller.error };
+
+  // Guard against an admin locking themselves out. Enforced here rather than
+  // only in the UI so it still holds if the action is called directly.
+  const deactivateError = checkSelfDeactivate(caller.id, userId, enable);
+  if (deactivateError) {
+    return { success: false, error: deactivateError };
+  }
 
   const adminClient = createAdminClient();
 
@@ -180,6 +213,11 @@ export type DeleteUserResult =
 export async function deleteUser(userId: string): Promise<DeleteUserResult> {
   const caller = await getAuthorizedCaller();
   if ("error" in caller) return { success: false, error: caller.error };
+
+  const selfDeleteError = checkSelfDelete(caller.id, userId);
+  if (selfDeleteError) {
+    return { success: false, error: selfDeleteError };
+  }
 
   const adminClient = createAdminClient();
 
