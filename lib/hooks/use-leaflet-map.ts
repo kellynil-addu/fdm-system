@@ -29,6 +29,9 @@ export function useLeafletMap(
       const L = (await import('leaflet')).default;
       if (!isMounted || !containerRef.current) return;
 
+      const { registerSmoothWheelZoom } = await import('@/lib/leaflet-smooth-wheel');
+      registerSmoothWheelZoom(L);
+
       // Clean up previous Leaflet DOM marker if remounting in strict mode
       const container = containerRef.current as HTMLElement & { _leaflet_id?: number | null };
       if (container._leaflet_id) {
@@ -38,7 +41,7 @@ export function useLeafletMap(
       const {
         center = [7.0531, 125.67006],
         zoom = 12,
-        scrollWheelZoom = true,
+        scrollWheelZoom = false,
         zoomControl = false,
         fadeAnimation = false,
         ...rest
@@ -49,10 +52,13 @@ export function useLeafletMap(
         zoom,
         scrollWheelZoom,
         zoomControl,
+        smoothWheelZoom: true,
+        smoothSensitivity: 1,
+        zoomSnap: 0,
+        zoomDelta: 0.5,
         fadeAnimation,
-        wheelPxPerZoomLevel: 120,
         ...rest,
-      });
+      } as unknown as import('leaflet').MapOptions);
 
       mapRef.current = map;
       setMapInstance(map);
