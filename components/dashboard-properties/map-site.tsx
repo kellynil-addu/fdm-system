@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { MapSiteLeaflet } from './map-site-leaflet';
-import { MapSiteOpenLayers } from './map-site-openlayers';
+import { MapSiteMapLibre } from './map-site-maplibre';
 import type { SiteWithLots } from '@/lib/types/property';
 import { cn } from '@/lib/utils';
 import { Layers } from 'lucide-react';
 
-export type MapEngine = 'leaflet' | 'openlayers';
+export type MapEngine = 'leaflet' | 'maplibre';
 
 export interface SiteMapProps {
   site: SiteWithLots;
@@ -30,7 +30,7 @@ export function SiteMap({
   className,
   initialCenter = [7.1053089, 125.668114],
   initialZoom = 15,
-  defaultEngine = 'openlayers',
+  defaultEngine = 'maplibre',
 }: SiteMapProps) {
   const [engine, setEngine] = useState<MapEngine>(defaultEngine);
 
@@ -38,13 +38,13 @@ export function SiteMap({
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlEngine = params.get('engine') as MapEngine | null;
-    if (urlEngine === 'leaflet' || urlEngine === 'openlayers') {
+    if (urlEngine === 'leaflet' || urlEngine === 'maplibre') {
       setEngine(urlEngine);
       return;
     }
 
     const saved = localStorage.getItem(STORAGE_KEY) as MapEngine | null;
-    if (saved === 'leaflet' || saved === 'openlayers') {
+    if (saved === 'leaflet' || saved === 'maplibre') {
       setEngine(saved);
     }
   }, []);
@@ -61,15 +61,15 @@ export function SiteMap({
         <Layers className="ml-1.5 h-3.5 w-3.5 text-muted-foreground hidden sm:inline-block" />
         <button
           type="button"
-          onClick={() => switchEngine('openlayers')}
+          onClick={() => switchEngine('maplibre')}
           className={cn(
             'cursor-pointer rounded-lg px-2.5 py-1 text-xs font-semibold transition-all',
-            engine === 'openlayers'
+            engine === 'maplibre'
               ? 'bg-primary text-primary-foreground shadow-xs'
               : 'text-muted-foreground hover:text-foreground'
           )}
         >
-          OpenLayers
+          MapLibre GL (GPU)
         </button>
         <button
           type="button"
@@ -86,9 +86,9 @@ export function SiteMap({
       </div>
 
       {/* Render selected map engine */}
-      {engine === 'openlayers' ? (
-        <MapSiteOpenLayers
-          key="engine-openlayers"
+      {engine === 'maplibre' ? (
+        <MapSiteMapLibre
+          key="engine-maplibre"
           site={site}
           selectedLotId={selectedLotId}
           onSelectLot={onSelectLot}
