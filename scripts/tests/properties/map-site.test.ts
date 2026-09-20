@@ -1,19 +1,19 @@
 import { describe, it, expect } from "vitest";
 import { SiteMap } from "@/components/dashboard-properties/map-site";
 import { MapSiteLeaflet } from "@/components/dashboard-properties/map-site-leaflet";
-import { MapSiteOpenLayers } from "@/components/dashboard-properties/map-site-openlayers";
+import { MapSiteMapLibre } from "@/components/dashboard-properties/map-site-maplibre";
 import { useLeafletMap } from "@/lib/hooks/use-leaflet-map";
-import { useOpenLayersMap } from "@/lib/hooks/use-openlayers-map";
+import { useMapLibreMap } from "@/lib/hooks/use-maplibre-map";
 import { SAMAL_SUBDIVISION } from "@/lib/samal-subdivision";
 import { getArcGISApplicationToken } from "@/lib/arcgis";
 
 describe("Map Frontends & Samal Subdivision Integration", () => {
-  it("exports both Leaflet and OpenLayers map components and hooks", () => {
+  it("exports both Leaflet and MapLibre GL map components and hooks", () => {
     expect(typeof SiteMap).toBe("function");
     expect(typeof MapSiteLeaflet).toBe("function");
-    expect(typeof MapSiteOpenLayers).toBe("function");
+    expect(typeof MapSiteMapLibre).toBe("function");
     expect(typeof useLeafletMap).toBe("function");
-    expect(typeof useOpenLayersMap).toBe("function");
+    expect(typeof useMapLibreMap).toBe("function");
   });
 
   describe("Samal Island Subdivision Geometry", () => {
