@@ -26,7 +26,7 @@ export function SiteMapUnifiedView({ sites, site }: SiteMapUnifiedViewProps) {
     <div className="relative flex flex-1 h-full min-h-0 w-full flex-col overflow-hidden">
       {/* Background: Edge-to-edge interactive canvas */}
       <div className="absolute inset-0 h-full w-full flex flex-col">
-        <SiteMap key={site.site_id} site={site} />
+        <SiteMap key={site.site_id} site={site} isSidebarOpen={isSidebarOpen} />
       </div>
 
       {/* Floating Collapsible Card on Left */}
