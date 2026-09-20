@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, useTransition, useMemo } from 'react';
+import { useEffect, useRef, useState, useTransition, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { ZoomIn, ZoomOut, Loader2, AlertCircle } from 'lucide-react';
+import { ZoomIn, ZoomOut, Loader2, AlertCircle, LocateFixed } from 'lucide-react';
 import { getArcGISToken } from '@/lib/actions/arcgis';
 import { useMapLibreMap } from '@/lib/hooks/use-maplibre-map';
 import { SAMAL_SUBDIVISION } from '@/lib/samal-subdivision';
@@ -29,7 +29,7 @@ export function MapSiteMapLibre({
   isSidebarOpen = true,
   className,
   initialCenter = [7.1053089, 125.668114],
-  initialZoom = 15,
+  initialZoom = 17,
 }: MapSiteMapLibreProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -58,6 +58,16 @@ export function MapSiteMapLibre({
       setActiveLotId(selectedLotId);
     }
   }, [selectedLotId]);
+
+  // Re-center on the Samal Island subdivision
+  const focusSubdivision = useCallback(() => {
+    if (!map) return;
+    map.flyTo({
+      center: centerLngLat,
+      zoom: 17.5,
+      duration: 1000,
+    });
+  }, [map, centerLngLat]);
 
   const fetchToken = () => {
     startTransition(async () => {
@@ -188,7 +198,7 @@ export function MapSiteMapLibre({
         maxzoom: 17,
         paint: {
           'fill-color': '#0284c7',
-          'fill-opacity': 0.25,
+          'fill-opacity': 0.35,
         },
       });
 
@@ -200,8 +210,8 @@ export function MapSiteMapLibre({
         maxzoom: 17,
         paint: {
           'line-color': '#38bdf8',
-          'line-width': 2,
-          'line-dasharray': [3, 2],
+          'line-width': 2.5,
+          'line-dasharray': [4, 2],
         },
       });
 
@@ -215,15 +225,15 @@ export function MapSiteMapLibre({
         paint: {
           'fill-color': [
             'case',
-            ['==', ['get', 'id'], activeLotId ?? ''],
+            ['==', ['get', 'id'], selectedLotId ?? ''],
             '#ef4444',
             '#22c55e',
           ],
           'fill-opacity': [
             'case',
-            ['==', ['get', 'id'], activeLotId ?? ''],
-            0.8,
-            0.45,
+            ['==', ['get', 'id'], selectedLotId ?? ''],
+            0.85,
+            0.5,
           ],
         },
       });
@@ -237,13 +247,13 @@ export function MapSiteMapLibre({
         paint: {
           'line-color': [
             'case',
-            ['==', ['get', 'id'], activeLotId ?? ''],
+            ['==', ['get', 'id'], selectedLotId ?? ''],
             '#dc2626',
             '#16a34a',
           ],
           'line-width': [
             'case',
-            ['==', ['get', 'id'], activeLotId ?? ''],
+            ['==', ['get', 'id'], selectedLotId ?? ''],
             3,
             1.5,
           ],
@@ -265,7 +275,7 @@ export function MapSiteMapLibre({
         if (map.getSource('arcgis-imagery')) map.removeSource('arcgis-imagery');
       }
     };
-  }, [map, isReady, token, geojsonData, activeLotId]);
+  }, [map, isReady, token, geojsonData]);
 
   // Update dynamic paint expressions when activeLotId changes
   useEffect(() => {
@@ -300,11 +310,17 @@ export function MapSiteMapLibre({
     ]);
   }, [map, activeLotId]);
 
-  // Pointer hover cursor and click selection on house lots
+  // Pointer hover cursor and click selection on house lots and subdivision boundary
   useEffect(() => {
     if (!map || !isReady) return;
 
     let popupInstance: import('maplibre-gl').Popup | null = null;
+    let handleMouseEnter: (e: import('maplibre-gl').MapLayerMouseEvent) => void;
+    let handleMouseLeave: () => void;
+    let handleClick: (e: import('maplibre-gl').MapLayerMouseEvent) => void;
+    let handleBoundaryEnter: (e: import('maplibre-gl').MapLayerMouseEvent) => void;
+    let handleBoundaryLeave: () => void;
+    let handleBoundaryClick: () => void;
 
     async function setupInteractions() {
       const { Popup } = await import('maplibre-gl');
@@ -316,7 +332,7 @@ export function MapSiteMapLibre({
         className: 'maplibre-lot-tooltip',
       });
 
-      const handleMouseEnter = (e: import('maplibre-gl').MapLayerMouseEvent) => {
+      handleMouseEnter = (e: import('maplibre-gl').MapLayerMouseEvent) => {
         map.getCanvas().style.cursor = 'pointer';
         const feature = e.features?.[0];
         if (!feature) return;
@@ -332,12 +348,12 @@ export function MapSiteMapLibre({
           .addTo(map);
       };
 
-      const handleMouseLeave = () => {
+      handleMouseLeave = () => {
         map.getCanvas().style.cursor = '';
         popupInstance?.remove();
       };
 
-      const handleClick = (e: import('maplibre-gl').MapLayerMouseEvent) => {
+      handleClick = (e: import('maplibre-gl').MapLayerMouseEvent) => {
         const feature = e.features?.[0];
         if (!feature) return;
         const lotId = feature.properties.id;
@@ -346,9 +362,37 @@ export function MapSiteMapLibre({
         onSelectLot?.(nextId);
       };
 
+      handleBoundaryEnter = (e: import('maplibre-gl').MapLayerMouseEvent) => {
+        map.getCanvas().style.cursor = 'pointer';
+        popupInstance
+          ?.setLngLat(e.lngLat)
+          .setHTML(
+            `<div class="px-2 py-1 text-xs font-sans"><strong>${SAMAL_SUBDIVISION.name}</strong><br/><span class="text-muted-foreground">Click to zoom into house lots</span></div>`
+          )
+          .addTo(map);
+      };
+
+      handleBoundaryLeave = () => {
+        map.getCanvas().style.cursor = '';
+        popupInstance?.remove();
+      };
+
+      handleBoundaryClick = () => {
+        popupInstance?.remove();
+        map.flyTo({
+          center: centerLngLat,
+          zoom: 17.5,
+          duration: 800,
+        });
+      };
+
       map.on('mouseenter', 'house-lots-fill', handleMouseEnter);
       map.on('mouseleave', 'house-lots-fill', handleMouseLeave);
       map.on('click', 'house-lots-fill', handleClick);
+
+      map.on('mouseenter', 'subdivision-boundary-fill', handleBoundaryEnter);
+      map.on('mouseleave', 'subdivision-boundary-fill', handleBoundaryLeave);
+      map.on('click', 'subdivision-boundary-fill', handleBoundaryClick);
     }
 
     setupInteractions();
@@ -356,12 +400,15 @@ export function MapSiteMapLibre({
     return () => {
       if (popupInstance) popupInstance.remove();
       if (map) {
-        map.off('mouseenter', 'house-lots-fill', () => {});
-        map.off('mouseleave', 'house-lots-fill', () => {});
-        map.off('click', 'house-lots-fill', () => {});
+        if (handleMouseEnter) map.off('mouseenter', 'house-lots-fill', handleMouseEnter);
+        if (handleMouseLeave) map.off('mouseleave', 'house-lots-fill', handleMouseLeave);
+        if (handleClick) map.off('click', 'house-lots-fill', handleClick);
+        if (handleBoundaryEnter) map.off('mouseenter', 'subdivision-boundary-fill', handleBoundaryEnter);
+        if (handleBoundaryLeave) map.off('mouseleave', 'subdivision-boundary-fill', handleBoundaryLeave);
+        if (handleBoundaryClick) map.off('click', 'subdivision-boundary-fill', handleBoundaryClick);
       }
     };
-  }, [map, isReady, activeLotId, onSelectLot]);
+  }, [map, isReady, activeLotId, onSelectLot, centerLngLat]);
 
   return (
     <div
@@ -377,6 +424,17 @@ export function MapSiteMapLibre({
 
       {/* Floating zoom controls (top-right) */}
       <div className="absolute top-4 right-4 z-10 flex flex-col gap-1.5 shadow-md">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={focusSubdivision}
+          disabled={!isReady}
+          aria-label="Focus Samal subdivision"
+          title="Focus Samal subdivision"
+          className="h-9 w-9 rounded-xl border-border bg-card text-foreground hover:bg-row-hover shadow-sm"
+        >
+          <LocateFixed className="h-4 w-4" />
+        </Button>
         <Button
           variant="outline"
           size="icon"

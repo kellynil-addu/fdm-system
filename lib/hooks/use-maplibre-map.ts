@@ -39,7 +39,7 @@ export function useMapLibreMap(
 
       const {
         center = [125.668114, 7.1053089],
-        zoom = 15,
+        zoom = 17,
         padding = {},
       } = optionsRef.current;
 

@@ -29,7 +29,7 @@ export function SiteMap({
   isSidebarOpen = true,
   className,
   initialCenter = [7.1053089, 125.668114],
-  initialZoom = 15,
+  initialZoom = 17,
   defaultEngine = 'maplibre',
 }: SiteMapProps) {
   const [engine, setEngine] = useState<MapEngine>(defaultEngine);

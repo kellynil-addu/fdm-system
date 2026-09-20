@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
-import { ZoomIn, ZoomOut, Loader2, AlertCircle } from 'lucide-react';
+import { ZoomIn, ZoomOut, Loader2, AlertCircle, LocateFixed } from 'lucide-react';
 import { getArcGISToken } from '@/lib/actions/arcgis';
 import { useLeafletMap } from '@/lib/hooks/use-leaflet-map';
 import { SAMAL_SUBDIVISION } from '@/lib/samal-subdivision';
@@ -29,9 +29,10 @@ export function MapSiteLeaflet({
   isSidebarOpen = true,
   className,
   initialCenter = [7.1053089, 125.668114],
-  initialZoom = 15,
+  initialZoom = 17,
 }: MapSiteLeafletProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const prevSidebarOpenRef = useRef(isSidebarOpen);
   const [token, setToken] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
   const [currentZoom, setCurrentZoom] = useState<number>(initialZoom);
@@ -83,14 +84,29 @@ export function MapSiteLeaflet({
     };
   }, [map]);
 
-  // Recalculate size when sidebar expands or collapses
+  // Smoothly pan camera when sidebar expands or collapses
   useEffect(() => {
     if (!map) return;
+    if (prevSidebarOpenRef.current === isSidebarOpen) return;
+
+    prevSidebarOpenRef.current = isSidebarOpen;
+    const isDesktop = typeof window !== 'undefined' && window.innerWidth > 768;
+    if (!isDesktop) return;
+
+    const offset = isSidebarOpen ? -SIDEBAR_WIDTH / 2 : SIDEBAR_WIDTH / 2;
+    map.panBy([offset, 0], { animate: true, duration: 0.35 });
+
     const timer = setTimeout(() => {
       map.invalidateSize();
-    }, 320);
+    }, 360);
     return () => clearTimeout(timer);
   }, [map, isSidebarOpen]);
+
+  // Re-center on the Samal Island subdivision
+  const focusSubdivision = useCallback(() => {
+    if (!map) return;
+    map.flyTo(SAMAL_SUBDIVISION.center, 17.5, { duration: 0.8 });
+  }, [map]);
 
   // Zoom centered on visible screen space (compensating for floating sidebar)
   const zoomAtVisualCenter = useCallback(
@@ -187,9 +203,13 @@ export function MapSiteLeaflet({
         });
 
         boundaryPolygon.bindTooltip(
-          `<strong>${SAMAL_SUBDIVISION.name}</strong><br/><span class="text-xs">Zoom in to view house lots</span>`,
+          `<strong>${SAMAL_SUBDIVISION.name}</strong><br/><span class="text-xs">Click to zoom into house lots</span>`,
           { sticky: true }
         );
+
+        boundaryPolygon.on('click', () => {
+          map.flyTo(SAMAL_SUBDIVISION.center, 17.5, { duration: 0.8 });
+        });
 
         boundaryPolygon.addTo(layerGroup);
         return;
@@ -248,6 +268,17 @@ export function MapSiteLeaflet({
 
       {/* Floating zoom controls (top-right) */}
       <div className="absolute top-4 right-4 z-10 flex flex-col gap-1.5 shadow-md">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={focusSubdivision}
+          disabled={!isReady}
+          aria-label="Focus Samal subdivision"
+          title="Focus Samal subdivision"
+          className="h-9 w-9 rounded-xl border-border bg-card text-foreground hover:bg-row-hover shadow-sm"
+        >
+          <LocateFixed className="h-4 w-4" />
+        </Button>
         <Button
           variant="outline"
           size="icon"
