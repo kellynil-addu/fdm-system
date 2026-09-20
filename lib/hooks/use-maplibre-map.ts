@@ -34,7 +34,8 @@ export function useMapLibreMap(
 
     async function initMap() {
       // Dynamically load MapLibre GL on client to prevent SSR window reference errors
-      const { Map } = await import('maplibre-gl');
+      const { Map, setWorkerUrl } = await import('maplibre-gl');
+      setWorkerUrl('/maplibre/maplibre-gl-worker.mjs');
       if (!isMounted || !containerRef.current) return;
 
       const {
@@ -55,7 +56,13 @@ export function useMapLibreMap(
         style: {
           version: 8,
           sources: {},
-          layers: [],
+          layers: [
+            {
+              id: 'background',
+              type: 'background',
+              paint: { 'background-color': '#0b1120' },
+            },
+          ],
         },
         center,
         zoom,
