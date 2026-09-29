@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
 import { LoadingButton } from '@/components/ui/loading-button';
@@ -26,26 +25,7 @@ import { usePropertyLots } from '@/lib/hooks/use-property-lots';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
 import type { Site } from '@/lib/types/property';
-
-const createPropertyLotSchema = z.object({
-  site_id: z.string().min(1, 'Please select a site'),
-  block_number: z
-    .number({ error: 'Block number is required' })
-    .int('Must be a whole number')
-    .positive('Must be greater than 0'),
-  lot_number: z
-    .number({ error: 'Lot number is required' })
-    .int('Must be a whole number')
-    .positive('Must be greater than 0'),
-  area_size: z
-    .number({ error: 'Area is required' })
-    .positive('Must be greater than 0'),
-  price_per_sqm: z
-    .number({ error: 'Price is required' })
-    .positive('Must be greater than 0'),
-});
-
-type CreatePropertyLotFormData = z.infer<typeof createPropertyLotSchema>;
+import { createPropertyLotSchema, type CreatePropertyLotFormData } from '@/lib/validations/property';
 
 const PESO = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -67,7 +47,6 @@ export interface CreatePropertyLotModalProps {
 
 export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePropertyLotModalProps) {
   const { createLot, closeDialog } = usePropertyLots();
-  const { state, execute } = useMutation(createLot);
 
   const form = useForm<CreatePropertyLotFormData>({
     resolver: zodResolver(createPropertyLotSchema),
@@ -77,6 +56,14 @@ export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePro
       lot_number: initialValues?.lot_number ?? undefined,
       area_size: initialValues?.area_size ?? undefined,
       price_per_sqm: initialValues?.price_per_sqm ?? undefined,
+    },
+  });
+
+  const { state, execute } = useMutation(createLot, {
+    setError: form.setError,
+    onSuccess: () => {
+      closeDialog();
+      toast.success('Property lot created successfully');
     },
   });
 
@@ -94,13 +81,6 @@ export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePro
   }, [open, initialValues, form]);
 
   const { register, watch, formState: { errors } } = form;
-
-  useEffect(() => {
-    if (state.status === 'success') {
-      closeDialog();
-      toast.success('Property lot created successfully');
-    }
-  }, [state.status, closeDialog]);
 
   const onSubmit = form.handleSubmit((data) => {
     const site = sites.find((s) => s.site_id === data.site_id);

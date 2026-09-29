@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { FormField } from '@/components/ui/form-field';
 import { LoadingButton } from '@/components/ui/loading-button';
@@ -26,22 +25,7 @@ import { useClients } from '@/lib/hooks/use-clients-page';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
 import type { ClientListItem } from '@/lib/types/client';
-
-const clientSchema = z.object({
-  full_name: z.string().trim().min(1, 'Full name is required'),
-  address: z.string().trim().optional(),
-  tin_number: z
-    .string()
-    .trim()
-    .refine(
-      (val) => !val || /^\d{3}-\d{3}-\d{3}$/.test(val),
-      'TIN must follow the format XXX-XXX-XXX with numbers only'
-    )
-    .optional(),
-  status: z.enum(['Active', 'Inactive']),
-});
-
-type ClientFormData = z.infer<typeof clientSchema>;
+import { clientSchema, type ClientFormData } from '@/lib/validations/client';
 
 export function EditClientModal({
   client,
@@ -51,7 +35,6 @@ export function EditClientModal({
   open: boolean;
 }) {
   const { updateClient, closeDialog } = useClients();
-  const { state, execute } = useMutation(updateClient);
 
   const form = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
@@ -65,6 +48,14 @@ export function EditClientModal({
 
   const { register, control, handleSubmit, reset, formState: { errors } } = form;
 
+  const { state, execute } = useMutation(updateClient, {
+    setError: form.setError,
+    onSuccess: () => {
+      closeDialog();
+      toast.success('Client updated successfully');
+    },
+  });
+
   useEffect(() => {
     if (open) {
       reset({
@@ -75,15 +66,6 @@ export function EditClientModal({
       });
     }
   }, [open, client, reset]);
-
-  useEffect(() => {
-    if (state.status === 'success') {
-      closeDialog();
-      toast.success('Client updated successfully');
-    } else if (state.status === 'error') {
-      toast.error(state.error);
-    }
-  }, [state, closeDialog]);
 
   const onSubmit = handleSubmit(async (data) => {
     await execute(client.client_id, {

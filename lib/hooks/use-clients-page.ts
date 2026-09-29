@@ -2,7 +2,8 @@
 
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useStatusFilter } from '@/lib/hooks/use-status-filter';
 import {
   getClients,
   getClientById,
@@ -31,6 +32,7 @@ import {
 } from '@/lib/actions/search-index';
 import type { DocumentSearchHit } from '@/lib/types/search';
 import type { PropertyLot, PropertyLotWithClient } from '@/lib/types/property';
+import type { ActionResult } from '@/lib/actions/action-result';
 import type {
   ClientListItem,
   ClientWithDetails,
@@ -44,7 +46,7 @@ import type {
   CreateClientLogInput,
 } from '@/lib/types/client';
 
-export type ClientStatusFilter = 'all' | 'Active' | 'Inactive' | 'Archived';
+export type ClientStatusFilter = 'all-records' | 'all' | 'Active' | 'Inactive' | 'Archived';
 
 /** Status that takes a client out of the working list. Set by `archiveClient`. */
 export const ARCHIVED_STATUS = 'Archived';
@@ -69,11 +71,11 @@ interface ClientsContextValue {
   activeDialog: ClientDialog;
   openDialog: (dialog: ClientDialog) => void;
   closeDialog: () => void;
-  createClient: (input: CreateClientInput) => Promise<void>;
-  updateClient: (clientId: string, input: UpdateClientInput) => Promise<void>;
-  deleteClient: (clientId: string) => Promise<void>;
-  archiveClient: (clientId: string) => Promise<void>;
-  restoreClient: (clientId: string) => Promise<void>;
+  createClient: (input: CreateClientInput) => Promise<ActionResult<ClientListItem>>;
+  updateClient: (clientId: string, input: UpdateClientInput) => Promise<ActionResult<ClientListItem>>;
+  deleteClient: (clientId: string) => Promise<ActionResult<void>>;
+  archiveClient: (clientId: string) => Promise<ActionResult<ClientListItem>>;
+  restoreClient: (clientId: string) => Promise<ActionResult<ClientListItem>>;
   getClientDetails: (clientId: string) => Promise<ClientWithDetails>;
   addContact: (clientId: string, input: CreateContactInfoInput) => Promise<ContactInfo>;
   deleteContact: (clientId: string, contactId: string) => Promise<void>;
@@ -89,7 +91,7 @@ interface ClientsContextValue {
   missingDocumentAlerts: ClientDocumentNotification[];
   refreshMissingDocumentAlerts: () => Promise<void>;
   listUnassignedLots: () => Promise<PropertyLotWithClient[]>;
-  assignLot: (propertyId: string, clientId: string) => Promise<PropertyLot>;
+  assignLot: (propertyId: string, clientId: string) => Promise<PropertyLotWithClient>;
   unassignLot: (propertyId: string) => Promise<void>;
   refreshClients: () => Promise<void>;
 }
@@ -125,21 +127,35 @@ export function ClientsProvider({
   initialClients?: ClientListItem[];
 }) {
   const router = useRouter();
+  const requestedClient = useSearchParams().get('client');
   const [clients, setClients] = useState<ClientListItem[]>(initialClients);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeDialog, setActiveDialog] = useState<ClientDialog>(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<ClientStatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useStatusFilter<ClientStatusFilter>(['all', 'all-records', 'Active', 'Inactive', 'Archived'], 'all');
   const [missingDocumentAlerts, setMissingDocumentAlerts] = useState<ClientDocumentNotification[]>([]);
 
+  // Dashboard follow-ups can open any permitted record, even outside the first list page.
+  useEffect(() => {
+    if (!requestedClient) return;
+    let cancelled = false;
+    getClientById(requestedClient).then(client => {
+      if (!cancelled) setActiveDialog({ type: 'details', client: { ...client, latest_activity: null } });
+    }).catch(error => {
+      if (!cancelled) setError(error instanceof Error ? error.message : 'Could not open client record');
+    });
+    return () => { cancelled = true; };
+  }, [requestedClient]);
+
+
   /**
-   * Archived clients are held in the same list but shown only under their own
-   * tab. Every other tab, "All" included, hides them, so archiving takes a
-   * client out of the working view without hiding the record from the page.
+   * The working tabs exclude archived clients. The explicit All records tab
+   * includes them so the dashboard total opens the matching set of records.
    */
   const visibleClients = useMemo(() => {
     return clients.filter((client) => {
+      if (statusFilter === 'all-records') return matchesSearch(client, search);
       const isArchived = client.status === ARCHIVED_STATUS;
 
       if (statusFilter === 'Archived') {
@@ -156,7 +172,14 @@ export function ClientsProvider({
   }, [clients, search, statusFilter]);
 
   const openDialog = useCallback((dialog: ClientDialog) => setActiveDialog(dialog), []);
-  const closeDialog = useCallback(() => setActiveDialog(null), []);
+  const closeDialog = useCallback(() => {
+    setActiveDialog(null);
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('client')) {
+      url.searchParams.delete('client');
+      window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+    }
+  }, []);
 
   const refreshClients = useCallback(async () => {
     setIsLoading(true);
@@ -178,8 +201,12 @@ export function ClientsProvider({
     }
   }, []);
 
-  const createClient = useCallback(async (input: CreateClientInput) => {
-    const created = await createClientAction(input);
+  const createClient = useCallback(async (input: CreateClientInput): Promise<ActionResult<ClientListItem>> => {
+    const result = await createClientAction(input);
+    if (!result.success) {
+      return result;
+    }
+    const created = result.data;
     const newListItem: ClientListItem = {
       ...created,
       contact_info: [],
@@ -187,20 +214,37 @@ export function ClientsProvider({
     };
     setClients((prev) => [newListItem, ...prev]);
     router.refresh();
+    return { success: true, data: newListItem };
   }, [router]);
 
-  const updateClient = useCallback(async (clientId: string, input: UpdateClientInput) => {
-    const updated = await updateClientAction(clientId, input);
+  const updateClient = useCallback(async (clientId: string, input: UpdateClientInput): Promise<ActionResult<ClientListItem>> => {
+    const result = await updateClientAction(clientId, input);
+    if (!result.success) {
+      return result;
+    }
+    const updated = result.data;
+    let updatedClientListItem: ClientListItem | undefined;
     setClients((prev) =>
-      prev.map((c) => (c.client_id === clientId ? { ...c, ...updated } : c))
+      prev.map((c) => {
+        if (c.client_id === clientId) {
+          updatedClientListItem = { ...c, ...updated };
+          return updatedClientListItem;
+        }
+        return c;
+      })
     );
     router.refresh();
+    return { success: true, data: updatedClientListItem ?? { ...updated, contact_info: [], latest_activity: null } };
   }, [router]);
 
-  const deleteClient = useCallback(async (clientId: string) => {
-    await deleteClientAction(clientId);
+  const deleteClient = useCallback(async (clientId: string): Promise<ActionResult<void>> => {
+    const result = await deleteClientAction(clientId);
+    if (!result.success) {
+      return result;
+    }
     setClients((prev) => prev.filter((c) => c.client_id !== clientId));
     router.refresh();
+    return result;
   }, [router]);
 
   /**
@@ -208,20 +252,44 @@ export function ClientsProvider({
    * state and changes which tab it belongs to. Dropping it from the list
    * instead would leave the Archived tab empty until a refetch.
    */
-  const archiveClient = useCallback(async (clientId: string) => {
-    const updated = await archiveClientAction(clientId);
+  const archiveClient = useCallback(async (clientId: string): Promise<ActionResult<ClientListItem>> => {
+    const result = await archiveClientAction(clientId);
+    if (!result.success) {
+      return result;
+    }
+    const updated = result.data;
+    let updatedClientListItem: ClientListItem | undefined;
     setClients((prev) =>
-      prev.map((c) => (c.client_id === clientId ? { ...c, ...updated } : c))
+      prev.map((c) => {
+        if (c.client_id === clientId) {
+          updatedClientListItem = { ...c, ...updated };
+          return updatedClientListItem;
+        }
+        return c;
+      })
     );
     router.refresh();
+    return { success: true, data: updatedClientListItem ?? { ...updated, contact_info: [], latest_activity: null } };
   }, [router]);
 
-  const restoreClient = useCallback(async (clientId: string) => {
-    const updated = await unarchiveClientAction(clientId);
+  const restoreClient = useCallback(async (clientId: string): Promise<ActionResult<ClientListItem>> => {
+    const result = await unarchiveClientAction(clientId);
+    if (!result.success) {
+      return result;
+    }
+    const updated = result.data;
+    let updatedClientListItem: ClientListItem | undefined;
     setClients((prev) =>
-      prev.map((c) => (c.client_id === clientId ? { ...c, ...updated } : c))
+      prev.map((c) => {
+        if (c.client_id === clientId) {
+          updatedClientListItem = { ...c, ...updated };
+          return updatedClientListItem;
+        }
+        return c;
+      })
     );
     router.refresh();
+    return { success: true, data: updatedClientListItem ?? { ...updated, contact_info: [], latest_activity: null } };
   }, [router]);
 
   const getClientDetails = useCallback(async (clientId: string) => {
@@ -229,7 +297,9 @@ export function ClientsProvider({
   }, []);
 
   const addContact = useCallback(async (clientId: string, input: CreateContactInfoInput) => {
-    const created = await addContactInfoAction(clientId, input);
+    const result = await addContactInfoAction(clientId, input);
+    if (!result.success) throw new Error(result.error);
+    const created = result.data;
     setClients((prev) =>
       prev.map((c) => {
         if (c.client_id !== clientId) return c;
@@ -243,7 +313,8 @@ export function ClientsProvider({
   }, []);
 
   const deleteContact = useCallback(async (clientId: string, contactId: string) => {
-    await deleteContactInfoAction(contactId);
+    const result = await deleteContactInfoAction(contactId);
+    if (!result.success) throw new Error(result.error);
     setClients((prev) =>
       prev.map((c) => {
         if (c.client_id !== clientId) return c;
@@ -256,7 +327,8 @@ export function ClientsProvider({
   }, []);
 
   const setPrimaryContact = useCallback(async (clientId: string, contactId: string) => {
-    await updateContactInfoAction(contactId, { is_primary: true });
+    const result = await updateContactInfoAction(contactId, { is_primary: true });
+    if (!result.success) throw new Error(result.error);
     setClients((prev) =>
       prev.map((c) => {
         if (c.client_id !== clientId) return c;
@@ -295,11 +367,14 @@ export function ClientsProvider({
    * it from what these return.
    */
   const uploadDocument = useCallback(async (clientId: string, formData: FormData) => {
-    return await uploadClientDocumentAction(clientId, formData);
+    const result = await uploadClientDocumentAction(clientId, formData);
+    if (!result.success) throw new Error(result.error);
+    return result.data;
   }, []);
 
   const deleteDocument = useCallback(async (documentId: string) => {
-    await deleteClientDocumentAction(documentId);
+    const result = await deleteClientDocumentAction(documentId);
+    if (!result.success) throw new Error(result.error);
   }, []);
 
   const getDocumentUrl = useCallback(async (documentId: string) => {
@@ -357,14 +432,16 @@ export function ClientsProvider({
     return result.data.filter((lot) => !lot.client);
   }, []);
 
-  const assignLot = useCallback(async (propertyId: string, clientId: string) => {
-    const updated = await assignPropertyClient(propertyId, clientId);
+  const assignLot = useCallback(async (propertyId: string, clientId: string): Promise<PropertyLotWithClient> => {
+    const result = await assignPropertyClient(propertyId, clientId);
+    if (!result.success) throw new Error(result.error);
     router.refresh();
-    return updated;
+    return result.data;
   }, [router]);
 
-  const unassignLot = useCallback(async (propertyId: string) => {
-    await assignPropertyClient(propertyId, null);
+  const unassignLot = useCallback(async (propertyId: string): Promise<void> => {
+    const result = await assignPropertyClient(propertyId, null);
+    if (!result.success) throw new Error(result.error);
     router.refresh();
   }, [router]);
 

@@ -141,7 +141,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       if (!activeSiteId || !pendingLotBoundary) return;
       setIsSaving(true);
       try {
-        await createSubdivisionLot({
+        const result = await createSubdivisionLot({
           site_id: activeSiteId,
           block_number: data.block_number,
           lot_number: data.lot_number,
@@ -149,6 +149,10 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
           area_size: data.area_size,
           price_per_sqm: data.price_per_sqm,
         });
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
         toast.success(`Block ${data.block_number} Lot ${data.lot_number} created successfully.`);
         setPendingLotBoundary(null);
         router.refresh();
@@ -166,11 +170,16 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       if (!pendingSiteBoundary) return;
       setIsSaving(true);
       try {
-        const created = await createSite({
+        const result = await createSite({
           name: data.name,
           description: data.description,
           boundary: pendingSiteBoundary,
         });
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
+        const created = result.data;
         toast.success(`Site "${created.name}" created successfully.`);
         setPendingSiteBoundary(null);
         setActiveSiteId(created.site_id);
@@ -192,12 +201,16 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     if (!selectedPlotToDelete) return;
     setIsSaving(true);
     try {
-      await deleteSubdivisionLot({
+      const result = await deleteSubdivisionLot({
         subdivision_id: selectedPlotToDelete.subdivisionId,
         site_id: selectedPlotToDelete.siteId,
         block_number: selectedPlotToDelete.block,
         lot_number: selectedPlotToDelete.lot,
       });
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
       toast.success(
         `Block ${selectedPlotToDelete.block} Lot ${selectedPlotToDelete.lot} deleted successfully.`
       );
@@ -259,7 +272,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       {/* Floating Collapsible Card on Left */}
       <div
         className={cn(
-          'absolute left-4 top-4 bottom-4 z-20 w-[420px] sm:w-[460px] max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ease-in-out',
+          'absolute bottom-2 left-2 top-2 z-20 w-[calc(100vw-1rem)] sm:bottom-4 sm:left-4 sm:top-4 sm:w-[460px] sm:max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ease-in-out',
           isSidebarOpen && !plotType
             ? 'translate-x-0 opacity-100 pointer-events-auto'
             : '-translate-x-[calc(100%+2rem)] opacity-0 pointer-events-none'
