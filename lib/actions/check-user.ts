@@ -15,55 +15,10 @@ export async function getIsCurrentUserSystemAdmin(): Promise<boolean> {
   return hasPermission("system.create");
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Role → Sidebar section mapping
-// ─────────────────────────────────────────────────────────────────────────────
+import { ROLE_SECTIONS, type RoleSection, type RoleTab } from "@/lib/navigation";
 
-export interface RoleTab {
-  title: string;
-  href: string;
-  comingSoon?: true;
-}
-
-export interface RoleSection {
-  category: string;
-  tabs: RoleTab[];
-}
-
-const ROLE_SECTIONS: { role: string; section: RoleSection }[] = [
-  {
-    role: "admin_staff",
-    section: {
-      category: "Administration",
-      tabs: [
-        { title: "Clients", href: "/dashboard/clients" },
-        { title: "Property Lots", href: "/dashboard/properties/map" },
-        { title: "Operations Log", href: "/dashboard/operations", comingSoon: true },
-      ],
-    },
-  },
-  {
-    role: "billing_staff",
-    section: {
-      category: "Billing",
-      tabs: [{ title: "Invoicing & Billing", href: "/dashboard/billing", comingSoon: true }],
-    },
-  },
-  {
-    role: "accounting_staff",
-    section: {
-      category: "Accounting",
-      tabs: [{ title: "Accounts Payable", href: "/dashboard/accounting", comingSoon: true }],
-    },
-  },
-  {
-    role: "legal_staff",
-    section: {
-      category: "Legal",
-      tabs: [{ title: "Contract Management", href: "/dashboard/legal", comingSoon: true }],
-    },
-  },
-];
+export type { RoleSection, RoleTab };
+export { ROLE_SECTIONS };
 
 /**
  * Memoized per request. Only exported members of a "use server" module have to

@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { PERMISSIONS } from "@/lib/permissions";
 import { hasPermission } from "@/lib/permissions";
 import { getUserInfo } from "@/lib/user";
 
@@ -26,8 +27,8 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   if (!user) return EMPTY;
 
   const [canReadProperties, canReadClients] = await Promise.all([
-    hasPermission("properties.read", user.id),
-    hasPermission("clients.read", user.id),
+    hasPermission(PERMISSIONS.PROPERTIES.READ, user.id),
+    hasPermission(PERMISSIONS.CLIENTS.READ, user.id),
   ]);
 
   const supabase = await createClient();

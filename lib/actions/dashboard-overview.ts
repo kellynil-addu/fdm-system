@@ -2,7 +2,7 @@
 
 import { getSiteWithLots } from "@/lib/actions/sites";
 import { createClient } from "@/lib/supabase/server";
-import { hasPermission } from "@/lib/permissions";
+import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 import { getUserInfo } from "@/lib/user";
 import { reviewClientRecord, type ReviewableClient, type ClientFollowUp } from '@/lib/client-record-review';
 import { getPaginationOffsets } from '@/lib/pagination';
@@ -13,8 +13,8 @@ import type { DashboardStats, DashboardMapPreview } from "@/lib/types/dashboard"
 export async function getDashboardOverview(): Promise<DashboardStats> {
   const user = await getUserInfo();
   const [canReadProperties, canReadClients] = user ? await Promise.all([
-    hasPermission("properties.read", user.id),
-    hasPermission("clients.read", user.id),
+    hasPermission(PERMISSIONS.PROPERTIES.READ, user.id),
+    hasPermission(PERMISSIONS.CLIENTS.READ, user.id),
   ]) : [false, false];
   const supabase = await createClient();
   async function mapPreview(): Promise<DashboardMapPreview | null> {

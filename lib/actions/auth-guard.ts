@@ -1,7 +1,7 @@
 "use server";
 
 import { getUserInfo } from "@/lib/user";
-import { hasPermission } from "@/lib/permissions";
+import { hasPermission, type Permission } from "@/lib/permissions";
 
 export async function getAuthorizedCaller(): Promise<
   { id: string } | { error: string }
@@ -22,7 +22,7 @@ export async function getAuthorizedCaller(): Promise<
   return { id: user.id };
 }
 
-export async function requirePermission(permissionName: string): Promise<string> {
+export async function requirePermission(permissionName: Permission): Promise<string> {
   const user = await getUserInfo();
   if (!user) {
     throw new Error("Unauthorized: You must be logged in to perform this action.");
@@ -37,7 +37,7 @@ export async function requirePermission(permissionName: string): Promise<string>
 }
 
 // TBD: we could also give ONLY read access to property and users, instead of having ANY
-export async function requireAnyPermission(permissionNames: string[]): Promise<string> {
+export async function requireAnyPermission(permissionNames: Permission[]): Promise<string> {
   const user = await getUserInfo();
   if (!user) {
     throw new Error("Unauthorized: You must be logged in to perform this action.");
@@ -54,7 +54,7 @@ export async function requireAnyPermission(permissionNames: string[]): Promise<s
 import { redirect } from "next/navigation";
 
 export async function verifyPageAccess(
-  permissionName: string,
+  permissionName: Permission,
   redirectTo: string = "/dashboard"
 ): Promise<{ userId: string }> {
   const user = await getUserInfo();

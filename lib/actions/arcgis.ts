@@ -1,6 +1,7 @@
 "use server";
 
 import { requirePermission } from "@/lib/actions/auth-guard";
+import { PERMISSIONS } from "@/lib/permissions";
 import {
   getArcGISApplicationToken,
   type ArcGISTokenResponse,
@@ -10,9 +11,6 @@ import {
 export async function getArcGISToken(
   options?: ArcGISTokenOptions
 ): Promise<ArcGISTokenResponse> {
-  // Ensure caller is authenticated and possesses properties.read permission
-  await requirePermission("properties.read");
-
+  await requirePermission(PERMISSIONS.PROPERTIES.READ);
   return getArcGISApplicationToken(options);
 }
-

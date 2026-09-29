@@ -40,13 +40,15 @@ fdm-system/
 │   ├── shared/                 # Global cross-cutting shared brand & utility components
 │   └── ui/                     # shadcn/ui primitives and custom base components
 ├── lib/
-│   ├── actions/                # Server actions (auth guards, admin user/role, clients, properties, titles, reports)
-│   ├── actions/                # Server actions (auth guards, admin user/role, clients, properties, titles, reports, arcgis)
+│   ├── actions/                # Declarative Server Actions (thin transport entrypoints using action builders)
+│   ├── services/               # Pure domain services (client, property, admin, reports, search)
 │   ├── arcgis/                 # ArcGIS REST integration & token service
 │   ├── hooks/                  # Client-side React hooks
 │   ├── storage/                # Cloud storage integration helpers (Backblaze B2)
 │   ├── supabase/               # Supabase client factories (browser, server, admin, proxy)
 │   ├── types/                  # Domain TypeScript types (client, property, title, report)
+│   ├── navigation.ts           # Navigation config & role section definitions
+│   ├── permissions.ts          # Central typed PERMISSIONS tree & RBAC helpers
 │   └── pagination.ts           # Shared offset & pagination calculation
 ├── scripts/                    # Standalone scripts & test suite
 │   ├── seed-baseline.ts        # Baseline superadmin & system_admin role seeding

@@ -1,284 +1,78 @@
 "use server";
 
-import { createAdminClient } from "@/lib/supabase/admin";
-import { requirePermission } from "@/lib/actions/auth-guard";
-import { AuthError } from "@supabase/supabase-js";
-import type { RbacRole } from "@/lib/actions/admin-roles";
-import { checkSelfDeactivate, checkSelfDelete } from "@/lib/self-protection";
-import {
-  type ActionResult,
-  actionSuccess,
-  actionError,
-  actionZodError,
-} from "@/lib/actions/action-result";
+import { PERMISSIONS } from "@/lib/permissions";
+import { createAction, createQuery } from "@/lib/actions/action-handler";
 import { createUserSchema, updateUserProfileSchema } from "@/lib/validations/user";
+import * as userAdminService from "@/lib/services/admin/user-admin-service";
+import type {
+  RegisterUserResult,
+  UserListItem,
+} from "@/lib/services/admin/user-admin-service";
 
-export interface RegisterUserParams {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  /** Zero or more rbac.role.id values to assign immediately after creation. */
-  roleIds?: string[];
-}
-
-export type RegisterUserResult = {
-  userId: string;
-};
-
-export interface UserListItem {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  roles: Pick<RbacRole, "id" | "name">[];
-  isBanned: boolean;
-}
+export type { RegisterUserResult, UserListItem };
+export type RegisterUserParams = userAdminService.RegisterUserParams;
 
 export type ListUsersResult = {
   success: true;
   users: UserListItem[];
 };
 
-/**
- * Turns Supabase's raw auth errors into something an admin can act on.
- *
- * Testers hit the duplicate-email case repeatedly and only saw the raw message,
- * which read like a system fault rather than "this account already exists".
- */
-function describeCreateUserError(error: AuthError): string {
-  const code = (error as AuthError & { code?: string }).code;
-  const message = error.message.toLowerCase();
-
-  if (code === "email_exists" || message.includes("already been registered") || message.includes("already exists")) {
-    return "An account with this email address already exists. Search for it in the user list instead of creating a new one.";
-  }
-
-  if (code === "weak_password" || message.includes("password")) {
-    return `Password rejected: ${error.message}`;
-  }
-
-  if (message.includes("invalid") && message.includes("email")) {
-    return "That email address is not valid. Check it and try again.";
-  }
-
-  return error.message;
-}
-
-export async function registerUser(
-  params: unknown
-): Promise<ActionResult<RegisterUserResult>> {
-  try {
-    const parsed = createUserSchema.safeParse(params);
-    if (!parsed.success) {
-      return actionZodError(parsed.error);
-    }
-    const validated = parsed.data;
-
-    await requirePermission("system.create");
-    const adminClient = createAdminClient();
-
-    const { data: createData, error: createError } =
-      await adminClient.auth.admin.createUser({
-        email: validated.email,
-        password: validated.password,
-        email_confirm: true,
-        user_metadata: {
-          first_name: validated.firstName,
-          last_name: validated.lastName,
-        },
-      });
-
-    if (createError) {
-      return actionError(describeCreateUserError(createError));
-    }
-
-    const newUserId = createData.user.id;
-
-    if (validated.roleIds.length > 0) {
-      const uniqueRoleIds = Array.from(new Set(validated.roleIds));
-      const { error: roleError } = await adminClient
-        .schema("rbac")
-        .rpc("set_user_roles", {
-          p_user_id: newUserId,
-          p_role_ids: uniqueRoleIds,
-        });
-
-      if (roleError) {
-        // Revert created auth user to maintain atomicity and avoid orphaned accounts
-        await adminClient.auth.admin.deleteUser(newUserId);
-        return actionError(`Role assignment failed: ${roleError.message}`);
-      }
-    }
-
-    return actionSuccess({ userId: newUserId });
-  } catch (error) {
-    return actionError(error instanceof Error ? error.message : "Failed to register user");
-  }
-}
-
-export async function toggleUser(userId: string, enable: boolean): Promise<ActionResult<{ success: true }>> {
-  try {
-    const callerId = await requirePermission("system.create");
-
-    // Guard against an admin locking themselves out. Enforced here rather than
-    // only in the UI so it still holds if the action is called directly.
-    const deactivateError = checkSelfDeactivate(callerId, userId, enable);
-    if (deactivateError) {
-      return actionError(deactivateError);
-    }
-
-    const adminClient = createAdminClient();
-    const ban_duration = enable ? "0h" : "876000h";
-    const { error } = await adminClient.auth.admin.updateUserById(userId, {
-      ban_duration,
-    });
-
-    if (error) {
-      return actionError(error.message);
-    }
-
-    return actionSuccess({ success: true });
-  } catch (error) {
-    return actionError(error instanceof Error ? error.message : "Failed to toggle user status");
-  }
-}
-
-export async function listUsers(): Promise<ListUsersResult> {
-  await requirePermission("system.create");
-
-  const adminClient = createAdminClient();
-
-  const allAuthUsers: {
-    id: string;
-    email: string;
-    first_name: string;
-    last_name: string;
-    banned_until?: string | null;
-  }[] = [];
-  let page = 1;
-  const perPage = 1000;
-  const maxPages = 10;
-
-  while (page <= maxPages) {
-    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage });
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    allAuthUsers.push(
-      ...data.users.map((u) => ({
-        id: u.id,
-        email: u.email ?? "",
-        first_name: (u.user_metadata as Record<string, string> | null)?.first_name ?? "",
-        last_name: (u.user_metadata as Record<string, string> | null)?.last_name ?? "",
-        banned_until: u.banned_until,
-      }))
-    );
-
-    if (data.users.length < perPage) break;
-    page++;
-  }
-
-  const userIds = allAuthUsers.map((u) => u.id);
-  let userRoles: { user_id: string; role: Pick<RbacRole, "id" | "name"> | null }[] = [];
-
-  if (userIds.length > 0) {
-    const { data: rolesData, error: rolesError } = await adminClient
-      .schema("rbac")
-      .from("user_role")
-      .select("user_id, role:role_id(id, name)")
-      .in("user_id", userIds)
-      .returns<{ user_id: string; role: Pick<RbacRole, "id" | "name"> | null }[]>();
-
-    if (rolesError) {
-      throw new Error(rolesError.message);
-    }
-    userRoles = rolesData ?? [];
-  }
-
-  const rolesByUser = userRoles.reduce((map, row) => {
-    if (row.role) map.set(row.user_id, [...(map.get(row.user_id) ?? []), row.role]);
-    return map;
-  }, new Map<string, Pick<RbacRole, "id" | "name">[]>());
-
-  const now = new Date();
-  const users: UserListItem[] = allAuthUsers.map((u) => ({
-    id: u.id,
-    email: u.email,
-    firstName: u.first_name,
-    lastName: u.last_name,
-    roles: rolesByUser.get(u.id) ?? [],
-    isBanned: !!u.banned_until && new Date(u.banned_until) > now,
-  }));
-
-  return { success: true, users };
-}
-
 export type DeleteUserResult = { success: true };
-
-export async function deleteUser(userId: string): Promise<ActionResult<DeleteUserResult>> {
-  try {
-    const callerId = await requirePermission("system.create");
-
-    const selfDeleteError = checkSelfDelete(callerId, userId);
-    if (selfDeleteError) {
-      return actionError(selfDeleteError);
-    }
-
-    const adminClient = createAdminClient();
-
-    // Remove associated RBAC role mappings first (in case there is no ON DELETE CASCADE)
-    const { error: rolesError } = await adminClient
-      .schema("rbac")
-      .from("user_role")
-      .delete()
-      .eq("user_id", userId);
-
-    if (rolesError) {
-      return actionError(`Role cleanup error: ${rolesError.message}`);
-    }
-
-    const { error: deleteError } = await adminClient.auth.admin.deleteUser(userId);
-
-    if (deleteError) {
-      return actionError(deleteError.message);
-    }
-
-    return actionSuccess({ success: true });
-  } catch (error) {
-    return actionError(error instanceof Error ? error.message : "Failed to delete user");
-  }
-}
-
 export type UpdateUserProfileResult = { success: true };
 
-export async function updateUserProfile(
-  userId: string,
-  firstName: string,
-  lastName: string
-): Promise<ActionResult<UpdateUserProfileResult>> {
-  try {
-    const parsed = updateUserProfileSchema.safeParse({ firstName, lastName });
-    if (!parsed.success) {
-      return actionZodError(parsed.error);
-    }
+export const registerUser = createAction({
+  permission: PERMISSIONS.SYSTEM.CREATE,
+  useAdminClient: true,
+  handler: async (ctx, params: unknown): Promise<RegisterUserResult> => {
+    const validated = createUserSchema.parse(params);
+    return userAdminService.registerUser(ctx.supabase, validated);
+  },
+});
 
-    await requirePermission("system.create");
-    const adminClient = createAdminClient();
-    const { error } = await adminClient.auth.admin.updateUserById(userId, {
-      user_metadata: {
-        first_name: parsed.data.firstName,
-        last_name: parsed.data.lastName,
-      },
-    });
+export const toggleUser = createAction({
+  permission: PERMISSIONS.SYSTEM.CREATE,
+  useAdminClient: true,
+  handler: async (
+    ctx,
+    userId: string,
+    enable: boolean
+  ): Promise<{ success: true }> => {
+    return userAdminService.toggleUser(ctx.supabase, ctx.userId, userId, enable);
+  },
+});
 
-    if (error) {
-      return actionError(error.message);
-    }
+export const listUsers = createQuery({
+  permission: PERMISSIONS.SYSTEM.CREATE,
+  useAdminClient: true,
+  handler: async (ctx): Promise<ListUsersResult> => {
+    const users = await userAdminService.listUsers(ctx.supabase);
+    return { success: true, users };
+  },
+});
 
-    return actionSuccess({ success: true });
-  } catch (error) {
-    return actionError(error instanceof Error ? error.message : "Failed to update user profile");
-  }
-}
+export const deleteUser = createAction({
+  permission: PERMISSIONS.SYSTEM.CREATE,
+  useAdminClient: true,
+  handler: async (ctx, userId: string): Promise<DeleteUserResult> => {
+    return userAdminService.deleteUser(ctx.supabase, ctx.userId, userId);
+  },
+});
+
+export const updateUserProfile = createAction({
+  permission: PERMISSIONS.SYSTEM.CREATE,
+  useAdminClient: true,
+  handler: async (
+    ctx,
+    userId: string,
+    firstName: string,
+    lastName: string
+  ): Promise<UpdateUserProfileResult> => {
+    const parsed = updateUserProfileSchema.parse({ firstName, lastName });
+    return userAdminService.updateUserProfile(
+      ctx.supabase,
+      userId,
+      parsed.firstName,
+      parsed.lastName
+    );
+  },
+});

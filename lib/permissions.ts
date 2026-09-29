@@ -2,6 +2,50 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getUserInfo } from "@/lib/user";
 
+export const PERMISSIONS = {
+    CLIENTS: {
+        CREATE: "clients.create",
+        READ: "clients.read",
+        UPDATE: "clients.update",
+        DELETE: "clients.delete",
+    },
+    PROPERTIES: {
+        CREATE: "properties.create",
+        READ: "properties.read",
+        UPDATE: "properties.update",
+        DELETE: "properties.delete",
+    },
+    SYSTEM: {
+        CREATE: "system.create",
+        READ: "system.read",
+        UPDATE: "system.update",
+        DELETE: "system.delete",
+    },
+    BILLING: {
+        CREATE: "billing.create",
+        READ: "billing.read",
+        UPDATE: "billing.update",
+        DELETE: "billing.delete",
+    },
+    LEGAL: {
+        CREATE: "legal.create",
+        READ: "legal.read",
+        UPDATE: "legal.update",
+        DELETE: "legal.delete",
+    },
+    ACCOUNTING: {
+        CREATE: "accounting.create",
+        READ: "accounting.read",
+        UPDATE: "accounting.update",
+        DELETE: "accounting.delete",
+    },
+} as const;
+
+type ValueOf<T> = T[keyof T];
+export type Permission =
+    | ValueOf<{ [K in keyof typeof PERMISSIONS]: ValueOf<(typeof PERMISSIONS)[K]> }>
+    | (string & {});
+
 /**
  * The RPC calls below are POSTs, which Next.js does not memoize the way it
  * memoizes GET `fetch`es. Without `cache()` the same permission check issued
@@ -60,7 +104,7 @@ const fetchUserPermissions = cache(async (userId: string): Promise<string[]> => 
  * @param userId Optional user UUID. If omitted, resolves to the current user.
  */
 export async function hasPermission(
-    permissionName: string,
+    permissionName: Permission,
     userId?: string
 ): Promise<boolean> {
     if (!permissionName) return false;
