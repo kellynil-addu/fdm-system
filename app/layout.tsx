@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import "./globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title: "FDM - Project Management Platform",
   description: "A warm, minimalist platform for project and resource management. Built for teams who value simplicity and clarity.",
+  referrer: "origin-when-cross-origin",
 };
 
 const geistSans = Geist({
@@ -26,7 +28,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    // NOTE: geistSans is set here as the font FOR THE WHOLE DOCUMENT.
+    // Which hopefully does not break anything.
+    <html lang="en" className={geistSans.variable} suppressHydrationWarning>
       <body className={`${geistSans.className} antialiased`}>
         {/* NOTE: We are currently not supporting dark mode. */}
         <ThemeProvider
@@ -36,8 +40,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
-          <Toaster />
+          <TooltipProvider delayDuration={200}>
+            {children}
+            <Toaster />
+          </TooltipProvider>
         </ThemeProvider>
       </body>
     </html>

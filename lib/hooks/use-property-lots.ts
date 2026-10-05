@@ -3,12 +3,16 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from '@/lib/hooks/use-session';
 import { useStatusFilter } from '@/lib/hooks/use-status-filter';
 import {
   getPropertyLots,
   createPropertyLot,
   updatePropertyLot,
   assignPropertyClient,
+  archivePropertyLot,
+  unarchivePropertyLot,
+  deletePropertyLot,
 } from '@/lib/actions/properties';
 import type { ActionResult } from '@/lib/actions/action-result';
 import type {
@@ -45,11 +49,14 @@ interface PropertyLotsContextValue {
   openDialog: (dialog: PropertyDialog) => void;
   closeDialog: () => void;
   createLot: (input: CreatePropertyLotInput) => Promise<ActionResult<PropertyLot>>;
-  updateLotStatus: (propertyId: string, status: PropertyStatus) => Promise<ActionResult<PropertyLot>>;
   updateLot: (propertyId: string, input: UpdatePropertyLotInput) => Promise<ActionResult<PropertyLot>>;
   assignClient: (propertyId: string, clientId: string | null, status?: PropertyStatus) => Promise<ActionResult<PropertyLotWithClient>>;
   unassignClient: (propertyId: string) => Promise<ActionResult<PropertyLotWithClient>>;
+  archiveLot: (propertyId: string) => Promise<ActionResult<PropertyLot>>;
+  unarchiveLot: (propertyId: string) => Promise<ActionResult<PropertyLot>>;
+  deleteLot: (propertyId: string) => Promise<ActionResult<void>>;
   sites: Site[];
+  isSystemAdmin: boolean;
 }
 
 const PropertyLotsContext = createContext<PropertyLotsContextValue | null>(null);
@@ -84,7 +91,14 @@ function matchesSearch(lot: PropertyLotWithClient, query: string): boolean {
   return words.every((word) => fields.some((field) => field.includes(word)));
 }
 
-export function PropertyLotsProvider({ children, sites }: { children: ReactNode; sites: Site[] }) {
+export function PropertyLotsProvider({
+  children,
+  sites,
+}: {
+  children: ReactNode;
+  sites: Site[];
+}) {
+  const { isSystemAdmin } = useSession();
   const router = useRouter();
   const [lots, setLots] = useState<PropertyLotWithClient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -123,19 +137,6 @@ export function PropertyLotsProvider({ children, sites }: { children: ReactNode;
     [router],
   );
 
-  const updateLotStatus = useCallback(
-    async (propertyId: string, status: PropertyStatus): Promise<ActionResult<PropertyLot>> => {
-      const result = await updatePropertyLot(propertyId, { status });
-      if (!result.success) return result;
-      const updated = result.data;
-      setLots((prev) =>
-        prev.map((lot) => (lot.property_id === propertyId ? { ...lot, ...updated } : lot)),
-      );
-      router.refresh();
-      return result;
-    },
-    [router],
-  );
 
   const updateLot = useCallback(
     async (propertyId: string, input: UpdatePropertyLotInput): Promise<ActionResult<PropertyLot>> => {
@@ -181,6 +182,52 @@ export function PropertyLotsProvider({ children, sites }: { children: ReactNode;
     [router],
   );
 
+  const archiveLot = useCallback(
+    async (propertyId: string): Promise<ActionResult<PropertyLot>> => {
+      const result = await archivePropertyLot(propertyId);
+      if (!result.success) return result;
+      const updated = result.data;
+      setLots((prev) =>
+        prev.map((lot) =>
+          lot.property_id === propertyId
+            ? { ...lot, is_archived: true, archived_at: updated.archived_at }
+            : lot
+        )
+      );
+      router.refresh();
+      return result;
+    },
+    [router]
+  );
+
+  const unarchiveLot = useCallback(
+    async (propertyId: string): Promise<ActionResult<PropertyLot>> => {
+      const result = await unarchivePropertyLot(propertyId);
+      if (!result.success) return result;
+      setLots((prev) =>
+        prev.map((lot) =>
+          lot.property_id === propertyId
+            ? { ...lot, is_archived: false, archived_at: null }
+            : lot
+        )
+      );
+      router.refresh();
+      return result;
+    },
+    [router]
+  );
+
+  const deleteLot = useCallback(
+    async (propertyId: string): Promise<ActionResult<void>> => {
+      const result = await deletePropertyLot(propertyId);
+      if (!result.success) return result;
+      setLots((prev) => prev.filter((lot) => lot.property_id !== propertyId));
+      router.refresh();
+      return result;
+    },
+    [router]
+  );
+
   const value: PropertyLotsContextValue = {
     lots,
     visibleLots,
@@ -194,11 +241,14 @@ export function PropertyLotsProvider({ children, sites }: { children: ReactNode;
     openDialog,
     closeDialog,
     createLot,
-    updateLotStatus,
     updateLot,
     assignClient,
     unassignClient,
+    archiveLot,
+    unarchiveLot,
+    deleteLot,
     sites,
+    isSystemAdmin,
   };
 
   return createElement(PropertyLotsContext.Provider, { value }, children);

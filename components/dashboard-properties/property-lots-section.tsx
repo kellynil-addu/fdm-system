@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardToolbar, CardTableFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 import {
@@ -12,13 +12,8 @@ import {
   LandPlot,
   SearchX,
   Map,
-  ChevronDown,
-  Check,
-  Loader2,
   MoreHorizontal,
   FileDown,
-  UserPlus,
-  UserMinus,
 } from 'lucide-react';
 import { getPropertyReportData } from '@/lib/actions/reports';
 import { generatePropertyPdfReport } from '@/lib/reports/pdf-property-report';
@@ -38,7 +33,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
 import { CreatePropertyLotModal } from './property-lot-create-modal';
 import { AssignLotClientDialog } from './property-lot-assign-dialog';
@@ -51,7 +45,9 @@ import {
   type StatusFilter,
 } from '@/lib/hooks/use-property-lots';
 import type { PropertyLotWithClient, PropertyStatus, Site } from '@/lib/types/property';
-import { STATUSES, STATUS_PILL } from '@/lib/status-colors';
+import { STATUSES, PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
+import { Badge } from '@/components/ui/badge';
+import { IconBox } from '@/components/ui/icon-box';
 
 /** Matches the `duration-200` exit transition on DialogContent. */
 const DIALOG_EXIT_MS = 200;
@@ -70,125 +66,10 @@ const PESO = new Intl.NumberFormat('en-PH', {
 const AREA = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 2 });
 
 function StatusPill({ status }: { status: PropertyStatus }) {
-  const { pill, dot } = STATUS_PILL[status];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${pill}`}>
-      <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+    <Badge variant={PROPERTY_STATUS_VARIANT[status]} shape="pill" dot>
       {status}
-    </span>
-  );
-}
-
-/**
- * The status pill doubles as the control that changes it.
- *
- * Status is reversible and low-stakes, so there is no confirmation step — the
- * toast is the feedback. A pending change disables the trigger so a second
- * click cannot race the first.
- */
-function StatusMenu({ lot }: { lot: PropertyLotWithClient }) {
-  const { updateLotStatus } = usePropertyLots();
-  const { state, execute } = useMutation(updateLotStatus);
-  const isPending = state.status === 'pending';
-
-  async function handleSelect(next: PropertyStatus) {
-    if (next === lot.status) return;
-    const ok = await execute(lot.property_id, next);
-    if (ok) {
-      toast.success(`${lotLabel(lot)} marked ${next}`);
-    }
-  }
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild disabled={isPending}>
-        <button
-          aria-label={`Change status of ${lotLabel(lot)}, currently ${lot.status}`}
-          className="group/status inline-flex items-center gap-1 rounded-full focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-60"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <StatusPill status={lot.status} />
-          {isPending ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-          ) : (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-colors group-hover/status:text-foreground" />
-          )}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[180px]" onClick={(e) => e.stopPropagation()}>
-        <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Set status
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {STATUSES.map((status) => (
-          <DropdownMenuItem
-            key={status}
-            className="justify-between"
-            onSelect={(e) => { e.preventDefault(); void handleSelect(status); }}
-          >
-            <span className="inline-flex items-center gap-2">
-              <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${STATUS_PILL[status].dot}`} />
-              {status}
-            </span>
-            {status === lot.status && <Check className="h-4 w-4" />}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-function LotActionsMenu({ lot }: { lot: PropertyLotWithClient }) {
-  const { openDialog, unassignClient } = usePropertyLots();
-  const { state, execute } = useMutation(unassignClient, {
-    onSuccess: () => {
-      toast.success(`${lotLabel(lot)} unassigned`);
-    },
-  });
-  const isPending = state.status === 'pending';
-
-  async function handleUnassign() {
-    await execute(lot.property_id);
-  }
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild disabled={isPending}>
-        <Button
-          aria-label={`Actions for ${lotLabel(lot)}`}
-          size="icon"
-          variant="ghost"
-          className="opacity-70 hover:opacity-100"
-        >
-          {isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <MoreHorizontal className="h-4 w-4" />
-          )}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Client
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => openDialog({ type: 'assign', lot })}>
-          <UserPlus className="h-4 w-4 mr-2" />
-          {lot.client ? 'Reassign client' : 'Assign client'}
-        </DropdownMenuItem>
-        {lot.client && (
-          <DropdownMenuItem
-            onSelect={(e) => {
-              e.preventDefault();
-              void handleUnassign();
-            }}
-          >
-            <UserMinus className="h-4 w-4 mr-2" />
-            Unassign client
-          </DropdownMenuItem>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    </Badge>
   );
 }
 
@@ -207,9 +88,9 @@ function LotRow({ lot }: { lot: PropertyLotWithClient }) {
     <TableRow className="transition-colors duration-150 hover:bg-row-hover">
       <TableCell className={`py-4 pr-3 ${GUTTER_L}`}>
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-row-hover ring-1 ring-inset ring-border">
+          <IconBox size="md" shape="square">
             <LandPlot className="h-4 w-4 text-muted-foreground" />
-          </div>
+          </IconBox>
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-foreground">{lotLabel(lot)}</p>
             <p className="truncate text-xs text-muted-foreground">{lot.location}</p>
@@ -233,11 +114,8 @@ function LotRow({ lot }: { lot: PropertyLotWithClient }) {
           ? <span className="text-foreground">{lot.client.full_name}</span>
           : <span className="text-muted-foreground">Unassigned</span>}
       </TableCell>
-      <TableCell className={`py-4 px-3 ${GUTTER_R}`}>
-        <div className="flex items-center justify-end gap-1">
-          <StatusMenu lot={lot} />
-          <LotActionsMenu lot={lot} />
-        </div>
+      <TableCell className="py-4 px-3">
+        <StatusPill status={lot.status} />
       </TableCell>
       <TableCell className={`py-4 pl-3 ${GUTTER_R} text-right`} onClick={(e) => e.stopPropagation()}>
         <DropdownMenu>
@@ -256,8 +134,10 @@ function LotRow({ lot }: { lot: PropertyLotWithClient }) {
               Actions
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => handleExportLotPdf(lot)}>
-              <FileDown className="h-4 w-4 mr-2" />
+            <DropdownMenuItem
+              icon={<FileDown className="h-4 w-4" />}
+              onSelect={() => handleExportLotPdf(lot)}
+            >
               Export PDF
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -318,12 +198,12 @@ function EmptyState({ isFiltered, onClear, onCreate }: { isFiltered: boolean; on
         </p>
       </div>
       {isFiltered ? (
-        <Button variant="outline" onClick={onClear} className="gap-1.5 border-border bg-card text-foreground hover:bg-row-hover hover:text-foreground">
+        <Button variant="quiet" onClick={onClear} className="gap-1.5">
           <X className="h-3.5 w-3.5" />
           Clear filters
         </Button>
       ) : (
-        <Button onClick={onCreate} className="gap-2 bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]">
+        <Button onClick={onCreate} className="gap-2">
           <Plus className="h-4 w-4" />
           New Lot
         </Button>
@@ -387,8 +267,8 @@ function PropertyLotsContent() {
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <Button
               asChild
-              variant="outline"
-              className="gap-2 border-border bg-card text-foreground hover:bg-row-hover hover:text-foreground"
+              variant="quiet"
+              className="gap-2"
             >
               <Link href="/dashboard/properties/map">
                 <Map className="h-4 w-4" />
@@ -397,7 +277,7 @@ function PropertyLotsContent() {
             </Button>
             <Button
               onClick={() => openDialog({ type: 'create' })}
-              className="gap-2 bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
+              className="gap-2"
             >
               <Plus className="h-4 w-4" />
               New Lot
@@ -405,7 +285,7 @@ function PropertyLotsContent() {
           </div>
         </div>
 
-        <div className={`flex flex-col gap-3 pb-5 xl:flex-row xl:items-center xl:justify-between ${GUTTER}`}>
+        <CardToolbar>
           <StatusTabs value={statusFilter} onChange={setStatusFilter} counts={counts} />
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-0 flex-1 sm:flex-none">
@@ -426,7 +306,7 @@ function PropertyLotsContent() {
               </Button>
             )}
           </div>
-        </div>
+        </CardToolbar>
 
         <div className="min-h-0 flex-1 overflow-y-auto border-t border-border">
           {error ? (
@@ -474,7 +354,7 @@ function PropertyLotsContent() {
         </div>
 
         {!error && (
-          <div className={`flex shrink-0 items-center justify-between gap-3 border-t border-border py-3 ${GUTTER}`}>
+          <CardTableFooter>
             <p className="text-xs text-muted-foreground" aria-live="polite">
               {isLoading
                 ? 'Loading property lots…'
@@ -482,7 +362,7 @@ function PropertyLotsContent() {
                   ? `Showing ${visibleLots.length} of ${lots.length} lot${lots.length === 1 ? '' : 's'}`
                   : `${lots.length} lot${lots.length === 1 ? '' : 's'}`}
             </p>
-          </div>
+          </CardTableFooter>
         )}
       </Card>
 

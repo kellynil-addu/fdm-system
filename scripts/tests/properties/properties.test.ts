@@ -5,15 +5,28 @@ import {
   getPropertyLots,
   getPropertyLotById,
   updatePropertyLot,
+  archivePropertyLot,
+  unarchivePropertyLot,
   deletePropertyLot,
   assignPropertyClient,
   assignPropertyParties,
+  assignPropertyFullyPaid,
 } from "@/lib/actions/properties";
+import {
+  createSite,
+  archiveSite,
+  unarchiveSite,
+  deleteSite,
+  getSiteWithLots,
+} from "@/lib/actions/sites";
 import { createClient } from "@/lib/actions/clients";
 import {
   loginAsAdmin,
   logoutUser,
   getTestAdminClient,
+  hardDeleteTestProperty,
+  hardDeleteTestClient,
+  hardDeleteTestSite,
   runTrackedCleanups,
 } from "../framework/session";
 import { unwrap } from "../framework/action-helper";
@@ -21,24 +34,30 @@ import { unwrap } from "../framework/action-helper";
 describe("Property Lot Management Actions", () => {
   const testPropertyIds: string[] = [];
   const testClientIds: string[] = [];
+  const testSiteIds: string[] = [];
 
   beforeAll(async () => {
     await loginAsAdmin();
   });
 
   afterAll(async () => {
-    const adminClient = getTestAdminClient();
     for (const id of testPropertyIds) {
       try {
-        await adminClient.from("ledger_account").delete().eq("property_id", id);
-        await adminClient.from("property_lot").delete().eq("property_id", id);
+        await hardDeleteTestProperty(id);
       } catch {
         // Ignore cleanup errors
       }
     }
     for (const id of testClientIds) {
       try {
-        await adminClient.from("client").delete().eq("client_id", id);
+        await hardDeleteTestClient(id);
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+    for (const id of testSiteIds) {
+      try {
+        await hardDeleteTestSite(id);
       } catch {
         // Ignore cleanup errors
       }
@@ -120,9 +139,13 @@ describe("Property Lot Management Actions", () => {
       lot_number: 2,
       area_size: 140,
       price_per_sqm: 8000,
-      status: "Sold",
     }));
     testPropertyIds.push(lot1.property_id, lot2.property_id);
+
+    // Assign lot2 to fully-paid client so its status derives to Sold
+    const client = unwrap(await createClient({ full_name: faker.person.fullName() }));
+    testClientIds.push(client.client_id);
+    unwrap(await assignPropertyFullyPaid(lot2.property_id, client.client_id));
 
     // Filter by search/location
     const searchRes = await getPropertyLots({ search: uniqueLoc });
@@ -132,6 +155,11 @@ describe("Property Lot Management Actions", () => {
     const statusRes = await getPropertyLots({ search: uniqueLoc, status: "Open" });
     expect(statusRes.data.length).toBe(1);
     expect(statusRes.data[0].property_id).toBe(lot1.property_id);
+
+    // Filter by status Sold
+    const soldStatusRes = await getPropertyLots({ search: uniqueLoc, status: "Sold" });
+    expect(soldStatusRes.data.length).toBe(1);
+    expect(soldStatusRes.data[0].property_id).toBe(lot2.property_id);
 
     // Filter by block and lot number
     const blockLotRes = await getPropertyLots({
@@ -143,7 +171,7 @@ describe("Property Lot Management Actions", () => {
     expect(blockLotRes.data[0].property_id).toBe(lot2.property_id);
   });
 
-  it("updatePropertyLot modifies property dimensions and price", async () => {
+  it("updatePropertyLot modifies property dimensions and price while status remains derived", async () => {
     const blockNum = faker.number.int({ min: 100, max: 999 });
     const lot = unwrap(await createPropertyLot({
       location: "Update Estate",
@@ -157,12 +185,11 @@ describe("Property Lot Management Actions", () => {
     const updated = unwrap(await updatePropertyLot(lot.property_id, {
       area_size: 175.25,
       price_per_sqm: 11200,
-      status: "Reserved",
     }));
 
     expect(Number(updated.area_size)).toBe(175.25);
     expect(Number(updated.price_per_sqm)).toBe(11200);
-    expect(updated.status).toBe("Reserved");
+    expect(updated.status).toBe("Open");
   });
 
   it("assignPropertyClient assigns lot to client with default Reserved status", async () => {
@@ -191,7 +218,7 @@ describe("Property Lot Management Actions", () => {
     expect(detail.client?.full_name).toBe(clientName);
   });
 
-  it("assignPropertyClient updates status to Sold when explicitly specified", async () => {
+  it("assignPropertyFullyPaid assigns fully-paid client and derives Sold status via land title", async () => {
     const client = unwrap(await createClient({ full_name: faker.person.fullName() }));
     testClientIds.push(client.client_id);
 
@@ -205,9 +232,10 @@ describe("Property Lot Management Actions", () => {
     }));
     testPropertyIds.push(lot.property_id);
 
-    const soldLot = unwrap(await assignPropertyClient(lot.property_id, client.client_id, "Sold"));
-    expect(soldLot.client_id).toBe(client.client_id);
+    const soldLot = unwrap(await assignPropertyFullyPaid(lot.property_id, client.client_id, "T-998877"));
+    expect(soldLot.client?.client_id).toBe(client.client_id);
     expect(soldLot.status).toBe("Sold");
+    expect(soldLot.title?.title_number).toBe("T-998877");
   });
 
   it("assignPropertyClient clears client and resets status to Open", async () => {
@@ -282,7 +310,7 @@ describe("Property Lot Management Actions", () => {
     }));
     testPropertyIds.push(lot.property_id);
 
-    unwrap(await assignPropertyClient(lot.property_id, client1.client_id, "Sold"));
+    unwrap(await assignPropertyClient(lot.property_id, client1.client_id));
 
     // Direct database attempt to insert a second active ledger for the same lot
     const adminClient = getTestAdminClient();
@@ -311,6 +339,47 @@ describe("Property Lot Management Actions", () => {
     unwrap(await deletePropertyLot(lot.property_id));
 
     await expect(getPropertyLotById(lot.property_id)).rejects.toThrow("Property lot not found");
+  });
+
+  it("archivePropertyLot sets is_archived and archived_at, unarchive resets them", async () => {
+    const blockNum = faker.number.int({ min: 100, max: 999 });
+    const lot = unwrap(await createPropertyLot({
+      location: "Archive Test Estate",
+      block_number: blockNum,
+      lot_number: 1,
+      area_size: 150,
+      price_per_sqm: 10000,
+    }));
+    testPropertyIds.push(lot.property_id);
+
+    const archived = unwrap(await archivePropertyLot(lot.property_id));
+    expect(archived.is_archived).toBe(true);
+    expect(archived.archived_at).not.toBeNull();
+
+    const restored = unwrap(await unarchivePropertyLot(lot.property_id));
+    expect(restored.is_archived).toBe(false);
+    expect(restored.archived_at).toBeNull();
+  });
+
+  it("archiveSite, unarchiveSite, and deleteSite manage site lifecycle", async () => {
+    const siteName = `Test Site ${Date.now()}`;
+    const site = unwrap(await createSite({
+      name: siteName,
+      description: "Test site description",
+      boundary: [[0, 0], [10, 0], [10, 10], [0, 10]],
+    }));
+    testSiteIds.push(site.site_id);
+
+    const archived = unwrap(await archiveSite(site.site_id));
+    expect(archived.is_archived).toBe(true);
+    expect(archived.archived_at).not.toBeNull();
+
+    const restored = unwrap(await unarchiveSite(site.site_id));
+    expect(restored.is_archived).toBe(false);
+    expect(restored.archived_at).toBeNull();
+
+    unwrap(await deleteSite(site.site_id));
+    await expect(getSiteWithLots(site.site_id)).rejects.toThrow("Site not found");
   });
 });
 

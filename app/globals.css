@@ -25,6 +25,9 @@
     --destructive: #ef4444;
     --destructive-foreground: #1A1D20;
     --border: #E2E7EC;
+    --border-warm: #D8D1C5;
+    --border-warm-subtle: #E8E2D6;
+    --border-warm-strong: #C4BCAC;
     --input: #E2E7EC;
     --ring: #5BC4E7;
     --chart-1: #5BC4E7;
@@ -35,6 +38,8 @@
     --radius: 0.5rem;
     --success: #22C55E;
     --success-foreground: #1A1D20;
+    --warning: #F59E0B;
+    --warning-foreground: #FFFFFF;
     --sidebar: #FFFFFF;
     --sidebar-foreground: #1A1D20;
     --sidebar-primary: #5BC4E7;
@@ -120,6 +125,9 @@
     --destructive: #ef4444;
     --destructive-foreground: #FFFFFF;
     --border: #3A3D40;
+    --border-warm: #363B40;
+    --border-warm-subtle: #292D31;
+    --border-warm-strong: #454B52;
     --input: #3A3D40;
     --ring: #5BC4E7;
     --chart-1: #5BC4E7;
@@ -129,6 +137,8 @@
     --chart-5: #C0DCF1;
     --success: #16A34A;
     --success-foreground: #FFFFFF;
+    --warning: #F59E0B;
+    --warning-foreground: #FFFFFF;
     --sidebar: #2A2D30;
     --sidebar-foreground: #F5F3EC;
     --sidebar-primary: #5BC4E7;
@@ -229,6 +239,7 @@
   border-radius: var(--radius);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
   padding: 0;
+  font-family: var(--font-geist-sans), sans-serif;
 }
 
 .maplibre-property-popup .maplibregl-popup-tip {

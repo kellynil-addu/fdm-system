@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { logout as signOut } from '@/lib/auth';
 import { useRouter } from 'next/navigation';
 import type { AuthUser } from '@supabase/supabase-js';
+import type { SessionUser } from '@/lib/types/session';
 import { ComingSoonModal } from './coming-soon-modal';
 import {
   DropdownMenu,
@@ -16,7 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 interface DashboardTopBarProps {
-  user?: AuthUser | null;
+  user?: SessionUser | AuthUser | null;
 }
 
 export function useTopBar() {
@@ -42,7 +43,8 @@ export function useTopBar() {
 
 export function DashboardTopBar({ user }: DashboardTopBarProps) {
   const { isLoggingOut, logoutError, handleLogout } = useTopBar();
-  const displayName = [user?.user_metadata.first_name, user?.user_metadata.last_name]
+  const metadata = user?.user_metadata as Record<string, string> | undefined;
+  const displayName = [metadata?.first_name, metadata?.last_name]
     .filter(Boolean)
     .join(' ') || user?.email || 'Unknown';
   const avatarInitial = displayName[0]?.toUpperCase() ?? '?';
@@ -95,15 +97,12 @@ export function DashboardTopBar({ user }: DashboardTopBarProps) {
               <DropdownMenuItem asChild className="focus:bg-background focus:text-foreground">
                 <Link href="/dashboard/settings">Account Settings</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <button
-                  type="button"
-                  className="relative flex w-full cursor-pointer items-center gap-2 text-left text-sm text-destructive focus:text-destructive"
-                  disabled={isLoggingOut}
-                  onClick={() => void handleLogout()}
-                >
-                  {isLoggingOut ? 'Logging out...' : 'Logout'}
-                </button>
+              <DropdownMenuItem
+                variant="destructive"
+                disabled={isLoggingOut}
+                onSelect={() => void handleLogout()}
+              >
+                {isLoggingOut ? 'Logging out...' : 'Logout'}
               </DropdownMenuItem>
               {logoutError && (
                 <p className="max-w-56 px-2 py-1 text-xs text-destructive">{logoutError}</p>

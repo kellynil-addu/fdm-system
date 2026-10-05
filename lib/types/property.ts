@@ -1,6 +1,8 @@
 import type { Client } from './client';
+import type { LandTitle } from './title';
 
 export type PropertyStatus = 'Open' | 'Reserved' | 'Sold' | 'Forfeited';
+export type SubdivisionDisplayStatus = PropertyStatus | 'Closed';
 export type AccountStatus = 'Active' | 'Matured' | 'Delinquent' | 'Cancelled';
 
 export interface AccountParty {
@@ -39,6 +41,8 @@ export interface Site {
   boundary: unknown;
   created_at: string;
   updated_at: string;
+  is_archived: boolean;
+  archived_at: string | null;
 }
 
 export interface PropertyLot {
@@ -54,12 +58,15 @@ export interface PropertyLot {
   status: PropertyStatus;
   created_at: string;
   updated_at: string;
+  is_archived: boolean;
+  archived_at: string | null;
 }
 
 export interface PropertyLotWithClient extends PropertyLot {
   client: Pick<Client, 'client_id' | 'full_name' | 'status' | 'address'> | null;
   client_id?: string | null;
   active_account?: LedgerAccountWithParties | null;
+  title?: LandTitle | null;
 }
 
 /** A pre-planned lot division on a site, drawn from the plat before any property is created. */
@@ -94,7 +101,6 @@ export interface UpdatePropertyLotInput {
   lot_number?: number;
   area_size?: number;
   price_per_sqm?: number;
-  status?: PropertyStatus;
 }
 
 export interface AssignPartyInput {
@@ -144,5 +150,26 @@ export interface DeleteSubdivisionLotInput {
   site_id: string;
   block_number: number;
   lot_number: number;
+}
+
+export interface OpenSubdivisionForSaleInput {
+  site_id: string;
+  block_number: number;
+  lot_number: number;
+  area_size: number;
+  price_per_sqm: number;
+}
+
+export interface CreateAndAssignPropertyFromSubdivisionInput {
+  site_id: string;
+  block_number: number;
+  lot_number: number;
+  area_size: number;
+  price_per_sqm: number;
+  client_id: string;
+  ownership_type: 'installment' | 'fully_paid';
+  total_contract_price?: number;
+  remaining_balance?: number;
+  title_number?: string;
 }
 

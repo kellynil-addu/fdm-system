@@ -10,8 +10,16 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ## Project Stack Notes
 
-- **UI components**: This project uses [shadcn/ui](https://ui.shadcn.com). New UI components should follow shadcn conventions — prefer composing from existing primitives in `components/ui/` before creating new ones, and use the shadcn CLI (`npx shadcn@latest add <component>`) to add any missing ones.
-- **Card Component & Variants**: `components/ui/card.tsx` already encapsulates base border (`border-border`), surface (`bg-card`), text color (`text-card-foreground`), and shadow defaults. Do not redundantly apply `bg-card`, `border-border`, or `rounded-xl` to `<Card>`. Use its built-in `variant` (`section`, `interactive`, `prominent`, `dashed`) and `padding` (`none`, `default`, `lg`) props instead of writing custom Tailwind utility chains.
+- **UI components**: This project uses [shadcn/ui](https://ui.shadcn.com). Prefer composing from existing primitives in `components/ui/` before creating new ones. For full variant extension recipes and composition guidelines, refer to `.agents/skills/ui-components/SKILL.md`.
+- **Mapping & GIS**: Subdivision plat plans and vector maps use MapLibre GL via `useMapLibreMap`. For SSR safeguards and worker asset configuration, refer to `.agents/skills/maplibre-gl/SKILL.md`.
+- **FDM Domain & Titling Rules**: Core operational invariants, billing formulas, and titling lifecycle rules live in `.agents/skills/fdm-domain/SKILL.md`.
+
+## UI Composition Invariants
+
+- **The "Rule of 2"**: Never write long inline Tailwind utility chains for common visual archetypes across 2+ places; promote them to a primitive prop or variant in `components/ui/`.
+- **Three-Tier Separation**: Strictly separate Primitives (`components/ui/`), Domain Mappings (`lib/`), and Domain Views (`components/dashboard-*/`).
+- **No Redundant Overrides**: Do not pass inline classes that duplicate or contradict a component's built-in variants (e.g. `<Card>` already includes `bg-card`, `border-border`, and `rounded-xl`).
+- See `.agents/skills/ui-components/SKILL.md` for CVA variant patterns, subcomponents, and Card conventions.
 
 ## Folder Structure
 
@@ -19,6 +27,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 ```
 fdm-system/
+├── .agents/                    # Workspace agent customizations
+│   └── skills/                 # Domain skills (ui-components, backend-architecture, maplibre-gl, fdm-domain)
 ├── app/                        # Next.js App Router pages
 │   ├── (auth)/                 # Auth route group (login)
 │   ├── (dashboard)/            # Protected dashboard pages
@@ -40,13 +50,13 @@ fdm-system/
 │   ├── shared/                 # Global cross-cutting shared brand & utility components
 │   └── ui/                     # shadcn/ui primitives and custom base components
 ├── lib/
-│   ├── actions/                # Server actions (auth guards, admin user/role, clients, properties, titles, reports)
-│   ├── actions/                # Server actions (auth guards, admin user/role, clients, properties, titles, reports, arcgis)
+│   ├── actions/                # Server actions & action scopes (action-handler, auth guards, clients, properties, admin, reports)
 │   ├── arcgis/                 # ArcGIS REST integration & token service
 │   ├── hooks/                  # Client-side React hooks
 │   ├── storage/                # Cloud storage integration helpers (Backblaze B2)
 │   ├── supabase/               # Supabase client factories (browser, server, admin, proxy)
 │   ├── types/                  # Domain TypeScript types (client, property, title, report)
+│   ├── validations/            # Zod validation schemas and transform utilities
 │   └── pagination.ts           # Shared offset & pagination calculation
 ├── scripts/                    # Standalone scripts & test suite
 │   ├── seed-baseline.ts        # Baseline superadmin & system_admin role seeding
@@ -71,7 +81,16 @@ fdm-system/
 
 ## Auth & RBAC
 
-Permissions live in the `rbac` Postgres schema (not `public`). Roles are `system_admin`, `admin_staff`, `billing_staff`, `legal_staff`, and `accounting_staff`. Permissions follow the pattern `<resource>.<action>` (e.g. `billing.read`, `system.create`). Use `hasPermission()` and `getUserPermissions()` from `lib/permissions.ts` — don't query `rbac.*` tables directly.
+Permissions live in the `rbac` Postgres schema (not `public`). Roles are `system_admin`, `admin_staff`, `billing_staff`, `legal_staff`, and `accounting_staff`. Permissions follow the pattern `<resource>.<action>` (e.g. `billing.read`, `system.create`). Use `hasPermission()` and `getUserPermissions()` from `lib/permissions.ts` — don't query `rbac.*` tables directly. For admin self-protection rules, see `.agents/skills/backend-architecture/SKILL.md`.
+
+## Server Actions & Action Scopes (`createScope`)
+
+All server actions in `lib/actions/` must use `createScope` from `lib/actions/action-handler.ts` for unified authorization, Supabase client injection, Zod parsing, and error handling.
+
+- **Query vs. Mutation**: Use `scope.query` for data fetching (throwing on error) and `scope.run` for mutations (returning `ActionResult<T>`).
+- **Partial Updates**: Always apply `stripUndefined` from `lib/validations/client.ts` to partial update schemas to prevent clearing unset fields in the database.
+- **File Directives**: Use `import "server-only";` in action builders and helpers. Reserve `"use server";` strictly for files exporting actual `async` server actions.
+- See `.agents/skills/backend-architecture/SKILL.md` for complete scope inheritance patterns, permission guards, and query/mutation boilerplate.
 
 ## Supabase Clients
 
@@ -83,7 +102,7 @@ Three clients exist — use the right one for the context:
 | Admin client | `lib/supabase/admin.ts` | Server Actions only — **bypasses RLS**, never import in client components |
 | Proxy client | `lib/supabase/proxy.ts` | Middleware only — refreshes session cookies |
 
-Always instantiate a new client per request/function call; never store in a global variable.
+Always instantiate a new client per request/function call; never store in a global variable (handled automatically when using `createScope`). Refer to `.agents/skills/backend-architecture/SKILL.md`.
 
 ## Environment Variables
 
@@ -95,9 +114,10 @@ All required vars must be set in `.env.local`. See `.env.example` for the full l
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Anon/publishable key (safe for client) |
 | `SUPABASE_SECRET_KEY` | Service role key — server only, never expose to client |
 
-## Database Migrations
+## Database Migrations & Pre-Flight Introspection
 
-Migration files live in `supabase/migrations/` and must follow the naming convention `YYYYMMDDHHMMSS_description.sql`. Apply with `supabase db push` (remote) or `supabase migration up` (local). Never edit an already-applied migration — create a new one instead.
+- **Pre-Flight Introspection**: Before creating new database migrations, modifying schemas, or implementing backend Server Actions/RPCs, inspect existing live schema, triggers, and functions (via `npx supabase db diff --linked --schema public,rbac` or the catalog inspection queries in `.agents/skills/backend-architecture/SKILL.md`) to prevent drift, duplicate procedures, or conflicting trigger logic.
+- **Migration Standards**: Migration files live in `supabase/migrations/` and must follow the naming convention `YYYYMMDDHHMMSS_description.sql`. Apply with `supabase db push` (remote) or `supabase migration up` (local). Never edit an already-applied migration — create a new one instead. See `.agents/skills/backend-architecture/SKILL.md` for RLS policy standards and function retrieval instructions.
 
 ## Middleware Route Guard
 

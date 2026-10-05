@@ -3,11 +3,19 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { PanelLeftOpen } from 'lucide-react';
 import { SiteMap } from './map-site';
 import { PropertyLotsSidebar } from './property-lots-sidebar';
 import { MapSiteEditor, type SelectedPlotInfo } from './map-site-editor';
-import { createSite, createSubdivisionLot, deleteSubdivisionLot } from '@/lib/actions/sites';
+import {
+  createSite,
+  createSubdivisionLot,
+  deleteSubdivisionLot,
+  archiveSite,
+  unarchiveSite,
+  deleteSite,
+} from '@/lib/actions/sites';
 import type { PropertyLotWithClient, SiteWithLots } from '@/lib/types/property';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -30,7 +38,9 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
 
   // Editor states
   const [isEditorActive, setIsEditorActive] = useState(false);
-  const [activeSiteId, setActiveSiteId] = useState<string | null>(sites[0]?.site_id ?? null);
+  const [activeSiteId, setActiveSiteId] = useState<string | null>(
+    () => sites.find((s) => !s.is_archived)?.site_id ?? sites[0]?.site_id ?? null
+  );
   const [plotType, setPlotType] = useState<'lot' | 'site' | null>(null);
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const [selectedPlotToDelete, setSelectedPlotToDelete] = useState<SelectedPlotInfo | null>(null);
@@ -84,7 +94,8 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       if (active) {
         setIsSidebarOpen(false);
         if (!activeSiteId && sites.length > 0) {
-          setActiveSiteId(sites[0].site_id);
+          const firstSite = sites.find((s) => !s.is_archived) ?? sites[0];
+          setActiveSiteId(firstSite.site_id);
         }
       } else {
         setPlotType(null);
@@ -92,6 +103,10 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         setSelectedPlotToDelete(null);
         setPendingLotBoundary(null);
         setPendingSiteBoundary(null);
+        const currentSite = sites.find((s) => s.site_id === activeSiteId);
+        if (currentSite?.is_archived) {
+          setActiveSiteId(null);
+        }
       }
     },
     [activeSiteId, sites],
@@ -224,8 +239,70 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     }
   }, [selectedPlotToDelete, router]);
 
+  const handleArchiveSite = useCallback(
+    async (siteId: string) => {
+      setIsSaving(true);
+      try {
+        const result = await archiveSite(siteId);
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success('Site archived successfully');
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to archive site');
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [router]
+  );
+
+  const handleUnarchiveSite = useCallback(
+    async (siteId: string) => {
+      setIsSaving(true);
+      try {
+        const result = await unarchiveSite(siteId);
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success('Site restored successfully');
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to restore site');
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [router]
+  );
+
+  const handleDeleteSite = useCallback(
+    async (siteId: string) => {
+      setIsSaving(true);
+      try {
+        const result = await deleteSite(siteId);
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success('Site deleted successfully');
+        setActiveSiteId(null);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to delete site');
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [router]
+  );
+
   return (
-    <div className="relative flex flex-1 h-full min-h-0 w-full flex-col overflow-hidden">
+    <TooltipProvider delayDuration={200}>
+      <div className="relative flex flex-1 h-full min-h-0 w-full flex-col overflow-hidden">
       {/* Background: Edge-to-edge interactive canvas */}
       <div className="absolute inset-0 h-full w-full flex flex-col">
         <SiteMap
@@ -267,6 +344,9 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         onSaveSite={handleSaveSite}
         onDiscardSite={() => setPendingSiteBoundary(null)}
         isSaving={isSaving}
+        onArchiveSite={handleArchiveSite}
+        onUnarchiveSite={handleUnarchiveSite}
+        onDeleteSite={handleDeleteSite}
       />
 
       {/* Floating Collapsible Card on Left */}
@@ -305,6 +385,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
           </span>
         </Button>
       )}
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

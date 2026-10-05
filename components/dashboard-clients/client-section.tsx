@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardToolbar, CardTableFooter } from '@/components/ui/card';
+import { IconBox } from '@/components/ui/icon-box';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import {
   Plus,
   Search,
@@ -11,7 +14,6 @@ import {
   Users,
   SearchX,
   MoreHorizontal,
-  Activity,
   Edit3,
   Archive,
   ArchiveRestore,
@@ -27,6 +29,7 @@ import {
   LayoutList,
   Rows,
   FileDown,
+  ExternalLink,
 } from 'lucide-react';
 import { getClientReportData } from '@/lib/actions/reports';
 import { generateClientPdfReport } from '@/lib/reports/pdf-client-report';
@@ -56,13 +59,14 @@ import {
 } from '@/lib/hooks/use-clients-page';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { formatActivityTime } from '@/lib/format-activity-time';
+import { getArchiveEligibility } from '@/lib/utils/archive-rules';
+import { getClientRequirements } from '@/lib/utils/client-requirements';
 import { CreateClientModal } from './client-create-modal';
 import { EditClientModal } from './client-edit-modal';
 import { DeleteClientDialog } from './client-delete-dialog';
 import { ArchiveClientDialog } from './client-archive-dialog';
 import { DocumentSearchDialog } from './document-search-dialog';
 import { MissingDocumentsDialog } from './missing-documents-dialog';
-import { ClientDetailsModal } from './client-details-modal';
 import { ClientCompactRow, ClientStatusPill } from './client-compact-row';
 import { ClientRowsSkeleton } from '@/components/dashboard-layout/page-skeletons';
 import type { ClientListItem, ContactInfo } from '@/lib/types/client';
@@ -253,46 +257,67 @@ function EmptyState({
 }
 
 function ClientRow({ client }: { client: ClientListItem }) {
-  const { openDialog, restoreClient, missingDocumentAlerts } = useClients();
+  const router = useRouter();
+  const { openDialog, restoreClient, missingDocumentAlerts, isSystemAdmin } = useClients();
   const missingDocs = missingDocumentAlerts.find(
     (alert) => alert.client_id === client.client_id
   );
+  
+  // Calculate requirements status for badge
+  const requirements = getClientRequirements(
+    client,
+    [] // We don't have full document list here, rely on missingDocumentAlerts
+  );
+  const isProfileIncomplete = !requirements.profileComplete;
+  const hasDocIssues = missingDocs && missingDocs.missing_documents.length > 0;
+  const isIncomplete = isProfileIncomplete || hasDocIssues;
+  
   const { state: restoreState, execute: runRestore } = useMutation(restoreClient, {
     onSuccess: () => {
       toast.success(`${client.full_name} restored`);
     },
   });
-  const isArchived = client.status === ARCHIVED_STATUS;
+  const isArchived = client.status === ARCHIVED_STATUS || Boolean(client.is_archived);
+  const eligibility = getArchiveEligibility(isArchived, client.archived_at);
   const isRestoring = restoreState.status === 'pending';
 
   async function handleRestore() {
     await runRestore(client.client_id);
   }
 
+  function handleRowClick() {
+    router.push(`/dashboard/clients/${client.client_id}`);
+  }
+
   return (
     <TableRow
       className="group transition-colors duration-150 hover:bg-row-hover cursor-pointer"
-      onClick={() => openDialog({ type: 'details', client })}
+      onClick={handleRowClick}
     >
       {/* Client identification */}
       <TableCell className={`py-4 pr-3 ${GUTTER_L}`}>
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-row-hover ring-1 ring-inset ring-border text-muted-foreground">
+          <IconBox size="md" shape="circle">
             <UserRound className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
+          </IconBox>
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
               <p className="truncate text-sm font-medium text-foreground">{client.full_name}</p>
-              {missingDocs && (
-                <span
-                  title={`Missing: ${missingDocs.missing_documents.join(', ')}`}
-                  className="shrink-0"
+              {isIncomplete && (
+                <Badge
+                  variant="destructive"
+                  className="shrink-0 text-[10px]"
+                  title={
+                    isProfileIncomplete && hasDocIssues
+                      ? `Missing profile fields and documents: ${missingDocs.missing_documents.join(', ')}`
+                      : isProfileIncomplete
+                        ? 'Incomplete profile (missing address or TIN)'
+                        : `Missing documents: ${missingDocs?.missing_documents.join(', ')}`
+                  }
                 >
-                  <ShieldAlert
-                    className="h-3.5 w-3.5 text-destructive"
-                    aria-label={`Incomplete file, missing ${missingDocs.missing_documents.join(', ')}`}
-                  />
-                </span>
+                  <ShieldAlert className="mr-1 h-2.5 w-2.5" />
+                  Incomplete
+                </Badge>
               )}
             </div>
             <p className="truncate text-xs text-muted-foreground">
@@ -306,7 +331,7 @@ function ClientRow({ client }: { client: ClientListItem }) {
       <TableCell className="px-3 py-4">
         <ContactDetailsCell
           contacts={client.contact_info}
-          onViewMore={() => openDialog({ type: 'details', client })}
+          onViewMore={handleRowClick}
         />
       </TableCell>
 
@@ -349,11 +374,14 @@ function ClientRow({ client }: { client: ClientListItem }) {
               Actions
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => openDialog({ type: 'details', client })}>
-              <Activity className="h-4 w-4 mr-2" />
-              View details
+            <DropdownMenuItem
+              icon={<ExternalLink className="h-4 w-4" />}
+              onSelect={() => router.push(`/dashboard/clients/${client.client_id}`)}
+            >
+              Open profile
             </DropdownMenuItem>
             <DropdownMenuItem
+              icon={<FileDown className="h-4 w-4" />}
               onSelect={async () => {
                 try {
                   const data = await getClientReportData(client.client_id);
@@ -364,36 +392,41 @@ function ClientRow({ client }: { client: ClientListItem }) {
                 }
               }}
             >
-              <FileDown className="h-4 w-4 mr-2" />
               Export PDF
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => openDialog({ type: 'edit', client })}>
-              <Edit3 className="h-4 w-4 mr-2" />
+            <DropdownMenuItem
+              icon={<Edit3 className="h-4 w-4" />}
+              onSelect={() => openDialog({ type: 'edit', client })}
+            >
               Edit client
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            {isArchived ? (
-              <DropdownMenuItem
-                disabled={isRestoring}
-                onSelect={(e) => {
-                  e.preventDefault();
-                  void handleRestore();
-                }}
-              >
-                <ArchiveRestore className="h-4 w-4 mr-2" />
-                Restore client
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem onSelect={() => openDialog({ type: 'archive', client })}>
-                <Archive className="h-4 w-4 mr-2" />
-                Archive client
-              </DropdownMenuItem>
-            )}
             <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
+              hidden={!isArchived}
+              icon={<ArchiveRestore className="h-4 w-4" />}
+              disabled={isRestoring}
+              onSelect={(e) => {
+                e.preventDefault();
+                void handleRestore();
+              }}
+            >
+              Restore client
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              hidden={isArchived}
+              icon={<Archive className="h-4 w-4" />}
+              onSelect={() => openDialog({ type: 'archive', client })}
+            >
+              Archive client
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              hidden={!isArchived || !isSystemAdmin}
+              disabled={!eligibility.isEligibleForDelete}
+              disabledReason={eligibility.tooltipReason}
+              variant="destructive"
+              icon={<Trash2 className="h-4 w-4" />}
               onSelect={() => openDialog({ type: 'delete', client })}
             >
-              <Trash2 className="h-4 w-4 mr-2" />
               Delete client
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -404,6 +437,7 @@ function ClientRow({ client }: { client: ClientListItem }) {
 }
 
 function ClientsContent() {
+  const router = useRouter();
   const {
     clients,
     visibleClients,
@@ -416,6 +450,7 @@ function ClientsContent() {
     activeDialog,
     openDialog,
     missingDocumentAlerts,
+    restoreClient,
   } = useClients();
 
   const [isDocumentSearchOpen, setIsDocumentSearchOpen] = useState(false);
@@ -465,9 +500,10 @@ function ClientsContent() {
           <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
             {missingDocumentAlerts.length > 0 && (
               <Button
-                variant="outline"
+                variant="danger"
+                responsive
                 onClick={() => setIsMissingDocsOpen(true)}
-                className="min-h-10 w-full gap-2 border-destructive bg-card text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_8%,white)] hover:text-destructive sm:w-auto"
+                className="min-h-10 gap-2"
               >
                 <ShieldAlert className="h-4 w-4" />
                 {missingDocumentAlerts.length} incomplete
@@ -475,16 +511,18 @@ function ClientsContent() {
               </Button>
             )}
             <Button
-              variant="outline"
+              variant="quiet"
+              responsive
               onClick={() => setIsDocumentSearchOpen(true)}
-              className="min-h-10 w-full gap-2 border-border bg-card text-foreground hover:bg-row-hover hover:text-foreground sm:w-auto"
+              className="min-h-10 gap-2"
             >
               <FileSearch className="h-4 w-4" />
               Search documents
             </Button>
             <Button
+              responsive
               onClick={() => openDialog({ type: 'create' })}
-              className="min-h-10 w-full gap-2 bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)] sm:w-auto"
+              className="min-h-10 gap-2"
             >
               <Plus className="h-4 w-4" />
               New Client
@@ -493,7 +531,7 @@ function ClientsContent() {
         </div>
 
         {/* Filters and search */}
-        <div className={`flex flex-col gap-3 pb-5 xl:flex-row xl:items-center xl:justify-between ${GUTTER}`}>
+        <CardToolbar>
           <StatusTabs value={statusFilter} onChange={setStatusFilter} counts={counts} />
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             <div className="relative min-w-0 flex-1 sm:flex-none">
@@ -548,7 +586,7 @@ function ClientsContent() {
               </button>
             </div>
           </div>
-        </div>
+        </CardToolbar>
 
         {/* Table / rows */}
         <div className="min-h-0 flex-1 overflow-y-auto border-t border-border">
@@ -614,8 +652,10 @@ function ClientsContent() {
                         client={client}
                         gutterL={GUTTER_L}
                         gutterR={GUTTER_R}
-                        onOpenDetails={() => openDialog({ type: 'details', client })}
+                        onOpenDetails={() => router.push(`/dashboard/clients/${client.client_id}`)}
                         onOpenEdit={() => openDialog({ type: 'edit', client })}
+                        onOpenArchive={() => openDialog({ type: 'archive', client })}
+                        onOpenRestore={() => void restoreClient(client.client_id)}
                         onOpenDelete={() => openDialog({ type: 'delete', client })}
                       />
                     ))}
@@ -626,7 +666,7 @@ function ClientsContent() {
 
         {/* Summary footer */}
         {!error && (
-          <div className={`flex shrink-0 items-center justify-between gap-3 border-t border-border py-3 ${GUTTER}`}>
+          <CardTableFooter>
             <p className="text-xs text-muted-foreground" aria-live="polite">
               {isLoading
                 ? 'Loading clients…'
@@ -634,7 +674,7 @@ function ClientsContent() {
                   ? `Showing ${visibleClients.length} of ${tabTotal} client${tabTotal === 1 ? '' : 's'}`
                   : `${tabTotal} client${tabTotal === 1 ? '' : 's'}`}
             </p>
-          </div>
+          </CardTableFooter>
         )}
       </Card>
 
@@ -645,12 +685,15 @@ function ClientsContent() {
       {activeDialog?.type === 'archive' && <ArchiveClientDialog client={activeDialog.client} open={true} />}
       <DocumentSearchDialog open={isDocumentSearchOpen} onOpenChange={setIsDocumentSearchOpen} />
       <MissingDocumentsDialog open={isMissingDocsOpen} onOpenChange={setIsMissingDocsOpen} />
-      {activeDialog?.type === 'details' && <ClientDetailsModal client={activeDialog.client} open={true} />}
     </>
   );
 }
 
-export function ClientsSection({ clients = [] }: { clients?: ClientListItem[] }) {
+export function ClientsSection({
+  clients = [],
+}: {
+  clients?: ClientListItem[];
+}) {
   return (
     <ClientsProvider initialClients={clients}>
       <ClientsContent />

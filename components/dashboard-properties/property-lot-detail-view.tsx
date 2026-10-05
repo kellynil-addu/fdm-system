@@ -1,22 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, X, LandPlot, User, DollarSign, CheckCircle2, FileDown, Loader2 } from 'lucide-react';
+import { ArrowLeft, X, LandPlot, User, DollarSign, CheckCircle2, FileDown, Loader2, Archive, ArchiveRestore, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { FormField } from '@/components/ui/form-field';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Label } from '@/components/ui/label';
 import { getPropertyReportData } from '@/lib/actions/reports';
 import { generatePropertyPdfReport } from '@/lib/reports/pdf-property-report';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Tooltip,
   TooltipTrigger,
@@ -24,11 +18,14 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
 import { ClientAssignModal } from './client-assign-modal';
+import { DeletePropertyLotDialog } from './property-lot-delete-dialog';
 import { usePropertyLots, lotLabel } from '@/lib/hooks/use-property-lots';
+import { useSession } from '@/lib/hooks/use-session';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
+import { getArchiveEligibility } from '@/lib/utils/archive-rules';
 import type { PropertyLotWithClient } from '@/lib/types/property';
-import { STATUSES, STATUS_PILL } from '@/lib/status-colors';
+import { PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
 import { updateLotSchema, type UpdateLotFormData } from '@/lib/validations/property';
 
 const PESO = new Intl.NumberFormat('en-PH', {
@@ -46,9 +43,26 @@ export interface PropertyLotDetailViewProps {
 }
 
 export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetailViewProps) {
-  const { updateLot } = usePropertyLots();
+  const { updateLot, archiveLot, unarchiveLot } = usePropertyLots();
+  const { isSystemAdmin } = useSession();
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+
+  const isArchived = Boolean(lot.is_archived);
+  const eligibility = getArchiveEligibility(isArchived, lot.archived_at);
+
+  const { state: archiveState, execute: runArchive } = useMutation(archiveLot, {
+    onSuccess: () => {
+      toast.success(`${lotLabel(lot)} archived successfully`);
+    },
+  });
+
+  const { state: unarchiveState, execute: runUnarchive } = useMutation(unarchiveLot, {
+    onSuccess: () => {
+      toast.success(`${lotLabel(lot)} restored successfully`);
+    },
+  });
 
   async function handleExportPdf() {
     setIsExportingPdf(true);
@@ -66,13 +80,12 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
   const form = useForm<UpdateLotFormData>({
     resolver: zodResolver(updateLotSchema),
     defaultValues: {
-      status: lot.status,
       price_per_sqm: lot.price_per_sqm,
       area_size: lot.area_size,
     },
   });
 
-  const { register, control, watch, reset, formState: { errors, isDirty } } = form;
+  const { register, watch, reset, formState: { errors, isDirty } } = form;
 
   const { state, execute } = useMutation(updateLot, {
     setError: form.setError,
@@ -85,7 +98,6 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
   // Sync form values when the selected lot changes
   useEffect(() => {
     reset({
-      status: lot.status,
       price_per_sqm: lot.price_per_sqm,
       area_size: lot.area_size,
     });
@@ -97,7 +109,6 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
 
   const onSubmit = form.handleSubmit(async (data) => {
     await execute(lot.property_id, {
-      status: data.status,
       price_per_sqm: data.price_per_sqm,
       area_size: data.area_size,
     });
@@ -120,7 +131,14 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold leading-tight text-foreground">{lotLabel(lot)}</h2>
+            <div className="flex items-center gap-1.5">
+              <h2 className="truncate text-sm font-semibold leading-tight text-foreground">{lotLabel(lot)}</h2>
+              {isArchived && (
+                <Badge variant="muted" shape="pill">
+                  Archived
+                </Badge>
+              )}
+            </div>
             <p className="truncate text-[11px] text-muted-foreground">{lot.location}</p>
           </div>
         </div>
@@ -206,38 +224,23 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
             </div>
           </div>
 
-          {/* Editable Status */}
+          {/* Read-only Property Status */}
           <div className="space-y-1.5">
-            <Label htmlFor="status-select" className="text-sm font-medium text-foreground">
+            <Label className="text-sm font-medium text-foreground">
               Property Status
             </Label>
-            <Controller
-              name="status"
-              control={control}
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger id="status-select" className="w-full bg-background border-border text-foreground">
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {STATUSES.map((st) => (
-                      <SelectItem key={st} value={st}>
-                        <div className="flex items-center gap-2">
-                          <span
-                            aria-hidden="true"
-                            className={`h-2 w-2 rounded-full ${STATUS_PILL[st].dot}`}
-                          />
-                          <span>{st}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            />
-            {errors.status && (
-              <p className="text-xs text-destructive">{errors.status.message}</p>
-            )}
+            <div className="flex items-center gap-2 pt-0.5">
+              <Badge variant={PROPERTY_STATUS_VARIANT[lot.status]} shape="pill" dot>
+                {lot.status}
+              </Badge>
+              <span className="text-xs text-muted-foreground">
+                {lot.status === 'Sold'
+                  ? 'Fully paid & titled'
+                  : lot.status === 'Reserved'
+                    ? 'Active installment ledger'
+                    : 'Available for acquisition'}
+              </span>
+            </div>
           </div>
 
           {/* Editable Pricing & Dimensions */}
@@ -304,6 +307,82 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
             <CheckCircle2 className="h-4 w-4" />
             <span>Save Changes</span>
           </LoadingButton>
+
+          {/* Archive / Restore / Delete controls */}
+          <div className="flex items-center gap-2 pt-1">
+            {isArchived ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={unarchiveState.status === 'pending'}
+                  onClick={() => runUnarchive(lot.property_id)}
+                  className="flex-1 gap-1.5 text-xs"
+                >
+                  {unarchiveState.status === 'pending' ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <ArchiveRestore className="h-3.5 w-3.5 text-primary" />
+                  )}
+                  <span>Restore Lot</span>
+                </Button>
+
+                {isSystemAdmin && (
+                  eligibility.isEligibleForDelete ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsDeleteDialogOpen(true)}
+                      className="gap-1.5 text-xs border-[color-mix(in_srgb,var(--destructive)_40%,white)] bg-[color-mix(in_srgb,var(--destructive)_10%,white)] text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_18%,white)]"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Delete</span>
+                    </Button>
+                  ) : (
+                    <TooltipProvider delayDuration={150}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="inline-block">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              disabled
+                              className="gap-1.5 text-xs border-border text-muted-foreground opacity-50 cursor-not-allowed"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span>Delete</span>
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          {eligibility.tooltipReason}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )
+                )}
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={archiveState.status === 'pending'}
+                onClick={() => runArchive(lot.property_id)}
+                className="w-full gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+              >
+                {archiveState.status === 'pending' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Archive className="h-3.5 w-3.5" />
+                )}
+                <span>Archive Lot</span>
+              </Button>
+            )}
+          </div>
         </div>
       </form>
 
@@ -311,6 +390,13 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
         open={isAssignModalOpen}
         onOpenChange={setIsAssignModalOpen}
         lot={lot}
+      />
+
+      <DeletePropertyLotDialog
+        lot={lot}
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        onSuccess={() => onBack()}
       />
     </div>
   );

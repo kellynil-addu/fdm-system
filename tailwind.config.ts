@@ -6,7 +6,7 @@ import plugin from "tailwindcss/plugin";
 // So please use the default approach: which is to just directly use the colorMix() 
 // css function instead.
 const colorMixPlugin = plugin(({ addUtilities }) => {
-  const tokens = ["primary", "secondary", "destructive", "success", "muted", "accent"];
+  const tokens = ["primary", "secondary", "destructive", "success", "warning", "muted", "accent"];
   const steps = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90];
   const utils: Record<string, Record<string, string>> = {};
 
@@ -37,6 +37,9 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-geist-sans)", "sans-serif"],
+      },
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
@@ -68,7 +71,13 @@ export default {
           DEFAULT: "var(--destructive)",
           foreground: "var(--destructive-foreground)",
         },
-        border: "var(--border)",
+        border: {
+          DEFAULT: "var(--border)",
+          warm: "var(--border-warm)",
+          "warm-subtle": "var(--border-warm-subtle)",
+          "warm-strong": "var(--border-warm-strong)",
+        },
+        "border-warm": "var(--border-warm)",
         input: "var(--input)",
         ring: "var(--ring)",
         chart: {
@@ -81,6 +90,10 @@ export default {
         success: {
           DEFAULT: "var(--success)",
           foreground: "var(--success-foreground)",
+        },
+        warning: {
+          DEFAULT: "var(--warning)",
+          foreground: "var(--warning-foreground)",
         },
         // Legible text/icon colours for the pale accent surfaces — see the
         // note in globals.css for why only the blue one flips with the theme.
