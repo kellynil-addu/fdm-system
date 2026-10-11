@@ -42,12 +42,19 @@ export function generateClientPdfReport(data: ClientReportData): void {
     body: [
       ['Full Name', data.client.full_name, 'Client ID', data.client.client_id],
       ['Account Status', data.client.status, 'TIN Number', data.client.tin_number || 'None recorded'],
-      ['Address', data.client.address || 'None recorded', 'Registered Date', formatDate(data.client.created_at)],
+      ['Civil Status', data.client.civil_status || 'None recorded', 'Gender', data.client.gender || 'None recorded'],
+      [
+        'Spouse Name',
+        data.client.spouse_name || (data.client.civil_status === 'Married' ? 'Required / Unrecorded' : 'N/A'),
+        'Registered Date',
+        formatDate(data.client.created_at),
+      ],
+      ['Address', data.client.address || 'None recorded', 'Last Profile Update', formatDate(data.client.updated_at)],
       [
         'Primary Contact',
         primaryContact ? `${primaryContact.type}: ${primaryContact.value}` : 'None recorded',
-        'Last Profile Update',
-        formatDate(data.client.updated_at),
+        '',
+        '',
       ],
     ],
   });

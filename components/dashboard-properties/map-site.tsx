@@ -48,7 +48,7 @@ export interface SiteMapProps {
 }
 
 const SIDEBAR_WIDTH = 460;
-const REGIONAL_CENTER: [number, number] = [125.5844925, 7.0447193];
+const REGIONAL_CENTER: [number, number] = [125.7150395, 7.0445282];
 const REGIONAL_ZOOM = 11.8;
 const DETAILS_ZOOM = 14;
 

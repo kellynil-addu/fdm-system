@@ -119,14 +119,15 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
     const assigned = unwrap(
       await assignPropertyFullyPaid(lot.property_id, client.client_id, {
         title_number: titleNumber,
-        title_holder: "client",
+        is_legacy_transferred: true,
       })
     );
 
     expect(assigned.status).toBe("Sold");
     expect(assigned.client?.client_id).toBe(client.client_id);
-    expect(assigned.title?.title_number).toBe(titleNumber);
+    expect(assigned.title_number).toBe(titleNumber);
     expect(assigned.title?.status).toBe("Ready for Claim");
+    expect(assigned.title?.is_legacy_transferred).toBe(true);
     expect(assigned.active_account?.cleared_at).toBeTruthy();
 
     // Verify client details include this owned property

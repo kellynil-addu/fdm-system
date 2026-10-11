@@ -3,32 +3,23 @@ import type { ClientDocument, DocType } from '@/lib/types/client';
 /** The internal release steps, in order. A new title starts at the first one. */
 export const TITLE_STATUSES = [
   'Cleared by Billing',
-  'Legal Processing',
-  'Legal Review',
-  'Management Approval',
-  '30-Day Clearance',
+  'Document Preparation',
+  'For Review',
+  'For Signature',
+  'Clearance Period',
   'Ready for Claim',
   'Released',
 ] as const;
 
 export type TitleStatus = (typeof TITLE_STATUSES)[number];
 
-/** Whose name the title is in. A Deed of Sale is only needed for 'fdm'. */
-export type TitleHolder = 'client' | 'fdm';
-
-export const TITLE_HOLDER_LABEL: Record<TitleHolder, string> = {
-  client: "Client's name",
-  fdm: "FDM's name",
-};
-
 export interface LandTitle {
   title_id: string;
   property_id: string;
   client_id: string;
-  title_number: string | null;
   status: TitleStatus;
-  /** Null only on titles created before Sprint 3. */
-  title_holder: TitleHolder | null;
+  is_legacy_transferred: boolean;
+  clearance_started_at?: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -45,7 +36,50 @@ export interface LandTitle {
     location: string;
     block_number: number;
     lot_number: number;
+    title_number?: string | null;
   } | null;
+  history?: LandTitleStatusHistory[];
+  notices?: LandTitleNotice[];
+}
+
+export interface FileAttachment {
+  attachment_id: string;
+  entity_type: string;
+  entity_id: string;
+  file_category: string;
+  file_path: string;
+  file_name: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  metadata: Record<string, unknown>;
+  uploaded_at: string;
+  uploaded_by: string | null;
+}
+
+export type LandTitleNoticeStatus = 'ongoing' | 'received' | 'returned_to_sender';
+
+export interface LandTitleNotice {
+  notice_id: string;
+  title_id: string;
+  notice_number: 1 | 2 | 3;
+  status: LandTitleNoticeStatus;
+  status_updated_at?: string | null;
+  tracking_number?: string | null;
+  generated_at: string;
+  generated_by: string | null;
+  rts_attachment_id: string | null;
+  rts_attachment?: FileAttachment | null;
+  rts_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LandTitleStatusHistory {
+  history_id: string;
+  title_id: string;
+  status: TitleStatus;
+  changed_at: string;
+  changed_by: string | null;
 }
 
 /** An account Billing has cleared that Legal has not created a title for yet. */
@@ -57,6 +91,7 @@ export interface AccountAwaitingTitle {
     location: string;
     block_number: number;
     lot_number: number;
+    title_number?: string | null;
   };
   /** The principal buyer. The title is linked to this client. */
   client: {
@@ -70,14 +105,14 @@ export interface AccountAwaitingTitle {
 /** What Legal enters when creating the title for a cleared account. */
 export interface CreateLandTitleInput {
   property_id: string;
-  title_holder: TitleHolder;
-  title_number: string;
+  is_legacy_transferred?: boolean;
+  status?: TitleStatus;
 }
 
 export interface UpdateLandTitleInput {
-  title_number?: string | null;
-  title_holder?: TitleHolder;
+  is_legacy_transferred?: boolean;
   status?: TitleStatus;
+  clearance_started_at?: string | null;
 }
 
 /**

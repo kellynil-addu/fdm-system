@@ -16,7 +16,6 @@ import type { ClientDocument } from "@/lib/types/client";
 import {
   RELEASE_DOCUMENT_TYPES,
   type ReleaseDocumentType,
-  type TitleHolder,
 } from "@/lib/types/title";
 
 /**
@@ -37,12 +36,12 @@ const uploadReleaseDocumentSchema = z.object({
   file: documentFileSchema,
 });
 
-type TitleRef = { client_id: string; property_id: string; title_holder: TitleHolder | null };
+type TitleRef = { client_id: string; property_id: string; is_legacy_transferred: boolean };
 
 async function loadTitle(supabase: SupabaseClient, titleId: string): Promise<TitleRef> {
   const { data, error } = await supabase
     .from("land_title")
-    .select("client_id, property_id, title_holder")
+    .select("client_id, property_id, is_legacy_transferred")
     .eq("title_id", titleId)
     .single<TitleRef>();
 
@@ -222,7 +221,7 @@ export async function getMissingReleaseDocumentsForTitle(
       const title = await loadTitle(supabase, validId);
       const documents = await fetchReleaseDocuments(supabase, title);
       return getMissingReleaseDocuments(
-        title.title_holder,
+        title.is_legacy_transferred,
         documents.map((d) => d.document_type)
       );
     },

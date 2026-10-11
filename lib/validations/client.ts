@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DOC_TYPES } from "@/lib/types/client";
+import { DOC_TYPES, CIVIL_STATUSES, GENDERS } from "@/lib/types/client";
 
 export function stripUndefined<T extends Record<string, unknown>>(data: T): Partial<T> {
   return Object.fromEntries(
@@ -13,7 +13,7 @@ export const docTypeSchema = z.enum(DOC_TYPES);
 
 // Letters (including ñ and accented letters), spaces, and the punctuation that
 // appears in names: "Ma. Teresa", "O'Neil", "Santos-Reyes", "dela Cruz, Jr.".
-const PERSON_NAME_PATTERN = /^\p{L}[\p{L}\p{M} .,'-]*$/u;
+export const PERSON_NAME_PATTERN = /^\p{L}[\p{L}\p{M} .,'-]*$/u;
 
 export function personNameSchema(label: string) {
   return z
@@ -113,7 +113,49 @@ export const updateContactInfoSchema = z
   .superRefine(refineContactValue)
   .transform(stripUndefined);
 
-export const clientSchema = z.object({
+export const civilStatusSchema = z.enum(CIVIL_STATUSES);
+export const genderSchema = z.enum(GENDERS);
+
+function refineSpouseInfo(
+  data: { civil_status?: string | null; spouse_name?: string | null },
+  ctx: z.RefinementCtx
+) {
+  if (data.spouse_name) {
+    const trimmed = data.spouse_name.trim();
+    if (trimmed.length > 100) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["spouse_name"],
+        message: "Spouse name must be 100 characters or fewer",
+      });
+    } else if (!PERSON_NAME_PATTERN.test(trimmed)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["spouse_name"],
+        message: "Spouse name can only contain letters, spaces, periods, commas, apostrophes, and hyphens",
+      });
+    }
+  }
+
+  if (data.civil_status === "Married" && (!data.spouse_name || !data.spouse_name.trim())) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["spouse_name"],
+      message: "Spouse name is required for married clients",
+    });
+  }
+}
+
+function sanitizeSpouseInfo<T extends { civil_status?: string | null; spouse_name?: string | null }>(
+  data: T
+): T {
+  if (data.civil_status !== undefined && data.civil_status !== "Married") {
+    return { ...data, spouse_name: null };
+  }
+  return data;
+}
+
+const baseClientFields = z.object({
   full_name: personNameSchema("Full name"),
   address: z.string().trim().nullable().optional(),
   tin_number: z
@@ -125,12 +167,22 @@ export const clientSchema = z.object({
     )
     .nullable()
     .optional(),
+  civil_status: civilStatusSchema.nullable().optional(),
+  spouse_name: z.string().trim().nullable().optional(),
+  gender: genderSchema.nullable().optional(),
   status: z.enum(["Active", "Inactive"]).default("Active"),
 });
 
-export const createClientSchema = clientSchema.extend({
-  contacts: z.array(contactInfoInputSchema).optional(),
-});
+export const clientSchema = baseClientFields
+  .superRefine(refineSpouseInfo)
+  .transform(sanitizeSpouseInfo);
+
+export const createClientSchema = baseClientFields
+  .extend({
+    contacts: z.array(contactInfoInputSchema).optional(),
+  })
+  .superRefine(refineSpouseInfo)
+  .transform(sanitizeSpouseInfo);
 
 export const updateClientSchema = z
   .object({
@@ -146,8 +198,13 @@ export const updateClientSchema = z
       )
       .nullable()
       .optional(),
+    civil_status: civilStatusSchema.nullable().optional(),
+    spouse_name: z.string().trim().nullable().optional(),
+    gender: genderSchema.nullable().optional(),
     status: z.enum(["Active", "Inactive", "Archived"]).optional(),
   })
+  .superRefine(refineSpouseInfo)
+  .transform(sanitizeSpouseInfo)
   .transform(stripUndefined);
 
 export const getClientsParamsSchema = z.object({

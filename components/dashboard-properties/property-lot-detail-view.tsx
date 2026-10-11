@@ -210,6 +210,129 @@ function LotMetricFloatingEditor({
   );
 }
 
+interface LotTitleFloatingEditorProps {
+  title: string;
+  label: string;
+  initialValue: string | null;
+  placeholder?: string;
+  onSave: (value: string | null) => Promise<void>;
+}
+
+function LotTitleFloatingEditor({
+  title,
+  label,
+  initialValue,
+  placeholder,
+  onSave,
+}: LotTitleFloatingEditorProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [rawValue, setRawValue] = useState(initialValue ?? '');
+
+  function handleOpenChange(open: boolean) {
+    if (open) {
+      setRawValue(initialValue ?? '');
+    }
+    setIsOpen(open);
+  }
+
+  async function handleSubmit(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    if (isSaving) return;
+
+    const trimmed = rawValue.trim();
+    setIsSaving(true);
+    try {
+      await onSave(trimmed.length > 0 ? trimmed : null);
+      setIsOpen(false);
+    } catch {
+      // Error feedback is handled by caller toast
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <Popover open={isOpen} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground"
+          aria-label={title}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="right"
+        align="start"
+        sideOffset={8}
+        className="w-72 space-y-3 p-3"
+      >
+        <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+          <p className="text-xs font-semibold text-foreground">{title}</p>
+          <PopoverClose asChild>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+              aria-label="Close editor"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </PopoverClose>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-muted-foreground">
+              {label}
+            </label>
+            <Input
+              type="text"
+              autoFocus
+              value={rawValue}
+              onChange={(e) => setRawValue(e.target.value)}
+              placeholder={placeholder ?? 'e.g. T-123456'}
+              className="h-8 text-xs font-mono"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleSubmit();
+                }
+              }}
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-1">
+            <PopoverClose asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs"
+                disabled={isSaving}
+              >
+                Cancel
+              </Button>
+            </PopoverClose>
+            <Button
+              type="submit"
+              size="sm"
+              className="h-7 gap-1.5 text-xs"
+              disabled={isSaving}
+            >
+              {isSaving && <Loader2 className="h-3 w-3 animate-spin" />}
+              Save
+            </Button>
+          </div>
+        </form>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export interface PropertyLotDetailViewProps {
   lot: PropertyLotWithClient;
   onBack: () => void;
@@ -227,12 +350,14 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
 
   const [draftArea, setDraftArea] = useState<number>(lot.area_size);
   const [draftPrice, setDraftPrice] = useState<number>(lot.price_per_sqm);
+  const [draftTitle, setDraftTitle] = useState<string | null>(lot.title_number ?? null);
 
   // Sync local metrics when the selected lot changes
   useEffect(() => {
     setDraftArea(lot.area_size);
     setDraftPrice(lot.price_per_sqm);
-  }, [lot.property_id, lot.site_id, lot.block_number, lot.lot_number, lot.area_size, lot.price_per_sqm]);
+    setDraftTitle(lot.title_number ?? null);
+  }, [lot.property_id, lot.site_id, lot.block_number, lot.lot_number, lot.area_size, lot.price_per_sqm, lot.title_number]);
 
   const isRegistered = Boolean(lot.property_id);
   const displayStatus: SubdivisionDisplayStatus = isRegistered ? lot.status : 'Closed';
@@ -241,6 +366,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
 
   const currentArea = isRegistered ? lot.area_size : draftArea;
   const currentPrice = isRegistered ? lot.price_per_sqm : draftPrice;
+  const currentTitle = isRegistered ? (lot.title_number ?? null) : draftTitle;
   const calculatedTotal = currentArea * currentPrice;
 
   const { state: archiveState, execute: runArchive } = useMutation(archiveLot, {
@@ -292,6 +418,21 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
     toast.success('Price per sqm updated');
   }
 
+  async function handleUpdateTitle(nextTitle: string | null) {
+    if (!isRegistered) {
+      setDraftTitle(nextTitle);
+      toast.success('Title number updated');
+      return;
+    }
+
+    const res = await updateLot(lot.property_id, { title_number: nextTitle });
+    if (!res.success) {
+      toast.error(res.error || 'Failed to update title number');
+      throw new Error(res.error || 'Failed to update title number');
+    }
+    toast.success('Title number updated');
+  }
+
   async function handleEnsureRegistered(): Promise<string | null> {
     if (lot.property_id) return lot.property_id;
     const res = await createLot({
@@ -302,6 +443,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
       area_size: currentArea,
       price_per_sqm: currentPrice,
       status: 'Open',
+      title_number: currentTitle ?? undefined,
     });
     if (!res.success) {
       toast.error(res.error || 'Failed to open property lot');
@@ -751,31 +893,68 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   Sold lot — owner record linked via land title.
                 </Card>
               )}
+            </>
+          )}
 
-              {/* Land Title Details */}
-              <Card className="overflow-hidden">
-                <div className="flex items-center justify-between border-b border-border bg-row-hover px-3 py-2">
-                  <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
-                    <Award className="h-3.5 w-3.5 text-primary" />
-                    <span>Land Title</span>
-                  </div>
-                  <Badge variant="info" shape="pill">
-                    {lot.title?.status ?? 'Processing'}
-                  </Badge>
+          {/* Land Title (TCT) Details Card for Open, Reserved, and Sold */}
+          {(displayStatus === 'Open' ||
+            displayStatus === 'Reserved' ||
+            displayStatus === 'Sold') && (
+            <Card className="overflow-hidden">
+              <div className="flex items-center justify-between border-b border-border bg-row-hover px-3 py-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                  <Award className="h-3.5 w-3.5 text-primary" />
+                  <span>Land Title</span>
                 </div>
+                {lot.title ? (
+                  <Badge variant="info" shape="pill">
+                    {lot.title.status}
+                  </Badge>
+                ) : currentTitle ? (
+                  <Badge variant="outline" shape="pill" className="text-[10px]">
+                    TCT Recorded
+                  </Badge>
+                ) : null}
+              </div>
 
-                <div className="p-3 text-xs space-y-1">
-                  <p className="text-[11px] text-muted-foreground">Title Number</p>
-                  <p className="text-sm font-semibold text-foreground">
-                    {lot.title?.title_number || (
-                      <span className="italic font-normal text-muted-foreground">
-                        Pending issuance
+              <div className="group flex items-center justify-between gap-2 p-3 transition-colors hover:bg-row-hover">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <p className="text-[11px] font-medium text-muted-foreground">Title Number</p>
+                  <p className="truncate text-sm font-semibold text-foreground font-mono">
+                    {currentTitle || (
+                      <span className="italic font-normal font-sans text-muted-foreground">
+                        No TCT recorded
                       </span>
                     )}
                   </p>
                 </div>
-              </Card>
-            </>
+
+                <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  {currentTitle && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                      onClick={() => handleCopy(currentTitle, 'title_number')}
+                      aria-label="Copy title number"
+                    >
+                      {copiedId === 'title_number' ? (
+                        <Check className="h-3.5 w-3.5 text-success" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  )}
+                  <LotTitleFloatingEditor
+                    title="Edit title number"
+                    label="Transfer Certificate of Title (TCT)"
+                    initialValue={currentTitle}
+                    placeholder="e.g. T-123456"
+                    onSave={handleUpdateTitle}
+                  />
+                </div>
+              </div>
+            </Card>
           )}
         </div>
       </div>
@@ -798,6 +977,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
             lot_number: lot.lot_number,
             area_size: currentArea,
             price_per_sqm: currentPrice,
+            title_number: currentTitle ?? undefined,
           }}
         />
       )}

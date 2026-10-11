@@ -55,7 +55,7 @@ export function DashboardSkeleton() {
 export function AdminSkeleton() {
   return (
     <LoadingRegion label="Loading administration…">
-      <div className="flex flex-1 flex-col gap-6">
+      <div className="flex flex-col gap-6">
         <Skeleton className="h-7 w-48" />
 
         <Card variant="section">
@@ -143,7 +143,7 @@ export function PropertyRowsSkeleton({ rows = 6 }: { rows?: number }) {
 export function PropertiesSkeleton() {
   return (
     <LoadingRegion label="Loading property lots…">
-      <div className="flex flex-1 flex-col gap-6">
+      <div className="flex flex-col gap-6">
         <TitleSkeleton />
 
         <Card variant="section">
@@ -291,7 +291,7 @@ export function ClientRowsSkeleton({ rows = 5 }: { rows?: number }) {
 export function ClientsSkeleton() {
   return (
     <LoadingRegion label="Loading clients…">
-      <div className="flex flex-1 flex-col gap-6">
+      <div className="flex flex-col gap-6">
         <TitleSkeleton />
 
         <Card variant="section">

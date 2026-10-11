@@ -25,7 +25,6 @@ import type {
   AssignPropertyOptions,
   GetPropertyLotsParams,
 } from "@/lib/types/property";
-import type { TitleHolder } from "@/lib/types/title";
 import {
   LOT_WITH_CLIENT_SELECT,
   mapLotWithAccount,
@@ -257,6 +256,7 @@ export async function createPropertyLot(
           price_per_sqm: validatedInput.price_per_sqm,
           status: validatedInput.status ?? "Open",
           site_id: validatedInput.site_id ?? null,
+          title_number: validatedInput.title_number ?? null,
         })
         .select()
         .single<PropertyLot>();
@@ -697,14 +697,20 @@ export async function openSubdivisionForSale(
 export async function assignPropertyFullyPaid(
   propertyId: string,
   clientId: string,
-  existingTitle?: { title_number: string; title_holder: TitleHolder }
+  options?: { title_number?: string; is_legacy_transferred?: boolean; create_title?: boolean }
 ): Promise<ActionResult<PropertyLotWithClient>> {
+  const shouldCreateTitle = Boolean(options?.create_title || options?.title_number);
   return propertyWrite.run({
-    permissions: existingTitle ? ["billing.update", "legal.create"] : ["billing.update"],
+    permissions: shouldCreateTitle ? ["billing.update", "legal.create"] : ["billing.update"],
     schema: assignPropertyFullyPaidActionSchema,
-    input: { propertyId, clientId, existing_title: existingTitle },
+    input: {
+      propertyId,
+      clientId,
+      title_number: options?.title_number,
+      is_legacy_transferred: options?.is_legacy_transferred,
+    },
     handler: async (validatedData, { supabase, userId }) => {
-      const { propertyId: targetLotId, clientId: targetClientId, existing_title } = validatedData;
+      const { propertyId: targetLotId, clientId: targetClientId, title_number, is_legacy_transferred } = validatedData;
 
       await assertClientsActive(supabase, [targetClientId]);
       await assertLotAvailableTo(supabase, targetLotId, [targetClientId]);
@@ -771,12 +777,18 @@ export async function assignPropertyFullyPaid(
         }
       }
 
-      if (existing_title) {
+      if (title_number) {
+        await supabase
+          .from("property_lot")
+          .update({ title_number })
+          .eq("property_id", targetLotId);
+      }
+
+      if (shouldCreateTitle) {
         const { error: titleErr } = await supabase.from("land_title").insert({
           property_id: targetLotId,
           client_id: targetClientId,
-          title_holder: existing_title.title_holder,
-          title_number: existing_title.title_number,
+          is_legacy_transferred: Boolean(is_legacy_transferred),
           status: "Ready for Claim",
         });
 

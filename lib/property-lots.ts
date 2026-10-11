@@ -32,9 +32,8 @@ export interface RawLandTitleRow {
   title_id: string;
   property_id: string;
   client_id: string;
-  title_number: string | null;
   status: string;
-  title_holder: string | null;
+  is_legacy_transferred: boolean;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -72,9 +71,8 @@ export const LOT_WITH_CLIENT_SELECT = `
     title_id,
     property_id,
     client_id,
-    title_number,
     status,
-    title_holder,
+    is_legacy_transferred,
     created_by,
     created_at,
     updated_at,
@@ -100,6 +98,7 @@ export function mapLotWithAccount(lot: RawLotRow): PropertyLotWithClient {
     area_size: lot.area_size,
     price_per_sqm: lot.price_per_sqm,
     status: lot.status,
+    title_number: lot.title_number ?? null,
     created_at: lot.created_at,
     updated_at: lot.updated_at,
     is_archived: Boolean(lot.is_archived),

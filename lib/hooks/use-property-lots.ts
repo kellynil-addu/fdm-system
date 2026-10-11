@@ -126,6 +126,7 @@ export function PropertyLotsProvider({
         lot.block_number,
         lot.lot_number,
         lot.client?.full_name,
+        lot.title_number,
       ],
       placeholder: 'Search location, block or lot',
       ariaLabel: 'Search property lots',

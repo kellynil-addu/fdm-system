@@ -53,7 +53,7 @@ export function ClientFollowUps({ items }: { items: ClientFollowUp[] | null }) {
             </>}
           </div>
         </>}
-        <p className="mt-4 border-t pt-3 text-xs leading-relaxed text-muted-foreground">Archived clients are excluded. Required files: Valid ID, Contract, and Deed of Sale. These checks confirm recorded information, not document validity or whether a contact is still current.</p>
+        <p className="mt-4 border-t pt-3 text-xs leading-relaxed text-muted-foreground">Archived clients are excluded. Required file: Valid ID. These checks confirm recorded information, not document validity or whether a contact is still current.</p>
       </CardContent>
     </Card>
   );

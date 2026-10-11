@@ -287,5 +287,57 @@ describe("Client Management Actions", () => {
     expect(restored.status).toBe("Active");
     expect(restored.archived_at).toBeNull();
   });
+
+  it("creates and updates client with civil_status, spouse_name, and gender", async () => {
+    const fullName = faker.person.fullName();
+    const spouseName = faker.person.fullName();
+
+    const client = unwrap(
+      await createClient({
+        full_name: fullName,
+        civil_status: "Married",
+        spouse_name: spouseName,
+        gender: "Female",
+        status: "Active",
+      })
+    );
+    testClientIds.push(client.client_id);
+
+    expect(client.civil_status).toBe("Married");
+    expect(client.spouse_name).toBe(spouseName);
+    expect(client.gender).toBe("Female");
+
+    const fetched = await getClientById(client.client_id);
+    expect(fetched.civil_status).toBe("Married");
+    expect(fetched.spouse_name).toBe(spouseName);
+    expect(fetched.gender).toBe("Female");
+
+    const updated = unwrap(
+      await updateClient(client.client_id, {
+        civil_status: "Single",
+      })
+    );
+
+    expect(updated.civil_status).toBe("Single");
+    expect(updated.spouse_name).toBeNull();
+
+    const fetchedAfter = await getClientById(client.client_id);
+    expect(fetchedAfter.civil_status).toBe("Single");
+    expect(fetchedAfter.spouse_name).toBeNull();
+  });
+
+  it("rejects client creation when status is Married without spouse name", async () => {
+    const result = await createClient({
+      full_name: faker.person.fullName(),
+      civil_status: "Married",
+      spouse_name: "",
+      status: "Active",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain("Spouse name is required for married clients");
+    }
+  });
 });
 

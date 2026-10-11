@@ -8,7 +8,7 @@ async function AdminContent() {
   const { userId } = await verifyPageAccess('system.read');
 
   return (
-    <div className="flex flex-col gap-6 flex-1">
+    <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold text-foreground">Administration</h1>
       <UserManagementSection currentUserId={userId} />
     </div>

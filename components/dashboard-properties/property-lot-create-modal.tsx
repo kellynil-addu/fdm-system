@@ -42,6 +42,7 @@ export interface CreatePropertyLotModalProps {
     lot_number?: number;
     area_size?: number;
     price_per_sqm?: number;
+    title_number?: string;
   };
 }
 
@@ -76,6 +77,7 @@ export function CreatePropertyLotModal({
       lot_number: initialValues?.lot_number ?? undefined,
       area_size: initialValues?.area_size ?? undefined,
       price_per_sqm: initialValues?.price_per_sqm ?? undefined,
+      title_number: initialValues?.title_number ?? '',
     },
   });
 
@@ -96,6 +98,7 @@ export function CreatePropertyLotModal({
         lot_number: initialValues?.lot_number ?? undefined,
         area_size: initialValues?.area_size ?? undefined,
         price_per_sqm: initialValues?.price_per_sqm ?? undefined,
+        title_number: initialValues?.title_number ?? '',
       });
     }
   }, [open, initialValues, form]);
@@ -112,24 +115,28 @@ export function CreatePropertyLotModal({
       lot_number: data.lot_number,
       area_size: data.area_size,
       price_per_sqm: data.price_per_sqm,
+      title_number: data.title_number ? data.title_number.trim() : undefined,
     });
   });
 
   const area = watch('area_size');
   const rate = watch('price_per_sqm');
-  const total = Number(area) > 0 && Number(rate) > 0 ? Number(area) * Number(rate) : null;
+  const total =
+    Number(area) > 0 && Number(rate) > 0 && Number.isFinite(Number(area) * Number(rate))
+      ? Number(area) * Number(rate)
+      : null;
 
   const isPending = state.status === 'pending';
   const serverError = state.status === 'error' ? state.error : null;
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && handleDismiss()}>
-      <DialogContent className="max-w-md bg-card">
+      <DialogContent className="max-w-md sm:max-w-md bg-card">
         <DialogHeader>
           <DialogTitle>New Property Lot</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={onSubmit} noValidate className="space-y-4">
+        <form onSubmit={onSubmit} noValidate className="min-w-0 space-y-4">
           {serverError && (
             <Alert variant="destructive">
               <AlertDescription>{serverError}</AlertDescription>
@@ -216,11 +223,24 @@ export function CreatePropertyLotModal({
             />
           </div>
 
-          <div className="flex items-center justify-between gap-3 rounded-lg bg-row-hover px-3 py-2.5">
+          <FormField
+            id="title_number"
+            label="Title No. (Optional)"
+            type="text"
+            placeholder="e.g. T-123456"
+            disabled={isPending}
+            error={errors.title_number?.message}
+            {...register('title_number')}
+          />
+
+          <div className="flex min-w-0 w-full items-center justify-between gap-3 rounded-lg bg-row-hover px-3 py-2.5">
             <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Total contract price
             </span>
-            <span className="min-w-0 truncate text-sm font-semibold text-foreground">
+            <span
+              className="min-w-0 max-w-[60%] truncate text-right text-sm font-semibold text-foreground"
+              title={total === null ? undefined : PESO.format(total)}
+            >
               {total === null ? 'Not set' : PESO.format(total)}
             </span>
           </div>

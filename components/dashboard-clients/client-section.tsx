@@ -4,7 +4,7 @@ import { DOC_TYPE_LABEL } from '@/lib/types/client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardStickyHeader } from '@/components/ui/card';
 import {
   FilterToolbar,
   ListPaginationFooter,
@@ -58,6 +58,7 @@ import {
   ARCHIVED_STATUS,
 } from '@/lib/hooks/use-clients-page';
 import { useMutation } from '@/lib/hooks/use-mutation';
+import { useDialogPresence } from '@/lib/hooks/use-dialog-presence';
 import { formatActivityTime } from '@/lib/format-activity-time';
 import { getArchiveEligibility } from '@/lib/utils/archive-rules';
 import { getClientRequirements } from '@/lib/utils/client-requirements';
@@ -172,7 +173,7 @@ function EmptyState({
 }) {
   const Icon = controller.isFiltered ? SearchX : Users;
   return (
-    <div className="flex flex-col items-center justify-center gap-4 px-6 py-20 text-center">
+    <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-row-hover">
         <Icon className="h-5 w-5 text-muted-foreground" />
       </div>
@@ -261,9 +262,9 @@ function ClientRow({ client }: { client: ClientListItem }) {
                   className="shrink-0 text-[10px]"
                   title={
                     isProfileIncomplete && hasDocIssues
-                      ? `Missing profile fields and documents: ${missingDocs.missing_documents.map((t) => DOC_TYPE_LABEL[t]).join(', ')}`
+                      ? `Missing profile fields and documents: ${[...requirements.missingProfile, ...missingDocs.missing_documents.map((t) => DOC_TYPE_LABEL[t])].join(', ')}`
                       : isProfileIncomplete
-                        ? 'Incomplete profile (missing address or TIN)'
+                        ? `Incomplete profile (missing ${requirements.missingProfile.join(', ')})`
                         : `Missing documents: ${missingDocs?.missing_documents.map((t) => DOC_TYPE_LABEL[t]).join(', ')}`
                   }
                 >
@@ -402,6 +403,8 @@ function ClientsContent() {
     restoreClient,
   } = useClients();
 
+  const { rendered: dialog, isOpen: isDialogOpen } = useDialogPresence(activeDialog);
+
   const [isDocumentSearchOpen, setIsDocumentSearchOpen] = useState(false);
   const [isMissingDocsOpen, setIsMissingDocsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'standard' | 'compact'>('standard');
@@ -409,64 +412,65 @@ function ClientsContent() {
   return (
     <>
       <Card variant="section">
-        {/* Header */}
-        <div className={`flex flex-wrap items-start justify-between gap-4 pb-5 pt-6 ${GUTTER}`}>
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold leading-none tracking-tight text-foreground">
-              Client Directory
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Manage client records, contact information, and activity history.
-            </p>
-          </div>
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
-            {missingDocumentAlerts.length > 0 && (
+        <CardStickyHeader>
+          {/* Header */}
+          <div className={`flex flex-wrap items-start justify-between gap-4 pb-5 pt-6 ${GUTTER}`}>
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold leading-none tracking-tight text-foreground">
+                Client Directory
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Manage client records, contact information, and activity history.
+              </p>
+            </div>
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+              {missingDocumentAlerts.length > 0 && (
+                <Button
+                  variant="danger"
+                  responsive
+                  onClick={() => setIsMissingDocsOpen(true)}
+                  className="min-h-10 gap-2"
+                >
+                  <ShieldAlert className="h-4 w-4" />
+                  {missingDocumentAlerts.length} incomplete
+                  {missingDocumentAlerts.length === 1 ? ' file' : ' files'}
+                </Button>
+              )}
               <Button
-                variant="danger"
+                variant="quiet"
                 responsive
-                onClick={() => setIsMissingDocsOpen(true)}
+                onClick={() => setIsDocumentSearchOpen(true)}
                 className="min-h-10 gap-2"
               >
-                <ShieldAlert className="h-4 w-4" />
-                {missingDocumentAlerts.length} incomplete
-                {missingDocumentAlerts.length === 1 ? ' file' : ' files'}
+                <FileSearch className="h-4 w-4" />
+                Search documents
               </Button>
-            )}
-            <Button
-              variant="quiet"
-              responsive
-              onClick={() => setIsDocumentSearchOpen(true)}
-              className="min-h-10 gap-2"
-            >
-              <FileSearch className="h-4 w-4" />
-              Search documents
-            </Button>
-            <Button
-              responsive
-              onClick={() => openDialog({ type: 'create' })}
-              className="min-h-10 gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              New Client
-            </Button>
+              <Button
+                responsive
+                onClick={() => openDialog({ type: 'create' })}
+                className="min-h-10 gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                New Client
+              </Button>
+            </div>
           </div>
-        </div>
 
-        {/* Filters, search, and sort */}
-        <FilterToolbar
-          controller={controller}
-          viewMode={{
-            value: viewMode,
-            onChange: setViewMode,
-            options: [
-              { value: 'standard', label: 'Standard view', icon: <LayoutList className="h-4 w-4" /> },
-              { value: 'compact', label: 'Compact view', icon: <Rows className="h-4 w-4" /> },
-            ],
-          }}
-        />
+          {/* Filters, search, and sort */}
+          <FilterToolbar
+            controller={controller}
+            viewMode={{
+              value: viewMode,
+              onChange: setViewMode,
+              options: [
+                { value: 'standard', label: 'Standard view', icon: <LayoutList className="h-4 w-4" /> },
+                { value: 'compact', label: 'Compact view', icon: <Rows className="h-4 w-4" /> },
+              ],
+            }}
+          />
+        </CardStickyHeader>
 
         {/* Table / rows */}
-        <div className="min-h-0 flex-1 overflow-y-auto border-t border-border">
           {error ? (
             <div role="alert" className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
               <p className="text-sm font-medium text-destructive">Could not load clients</p>
@@ -481,7 +485,7 @@ function ClientsContent() {
             />
           ) : (
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-card">
+              <TableHeader className="bg-card">
                 {viewMode === 'standard' ? (
                   <TableRow className="bg-card hover:bg-card">
                     <TableHead className={`h-11 pr-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${GUTTER_L}`}>
@@ -538,7 +542,6 @@ function ClientsContent() {
               </TableBody>
             </Table>
           )}
-        </div>
 
         {/* Summary footer */}
         {!error && (
@@ -553,10 +556,10 @@ function ClientsContent() {
       </Card>
 
       {/* Dialogs */}
-      {activeDialog?.type === 'create' && <CreateClientModal open={true} />}
-      {activeDialog?.type === 'edit' && <EditClientModal client={activeDialog.client} open={true} />}
-      {activeDialog?.type === 'delete' && <DeleteClientDialog client={activeDialog.client} open={true} />}
-      {activeDialog?.type === 'archive' && <ArchiveClientDialog client={activeDialog.client} open={true} />}
+      {dialog?.type === 'create' && <CreateClientModal open={isDialogOpen} />}
+      {dialog?.type === 'edit' && <EditClientModal client={dialog.client} open={isDialogOpen} />}
+      {dialog?.type === 'delete' && <DeleteClientDialog client={dialog.client} open={isDialogOpen} />}
+      {dialog?.type === 'archive' && <ArchiveClientDialog client={dialog.client} open={isDialogOpen} />}
       <DocumentSearchDialog open={isDocumentSearchOpen} onOpenChange={setIsDocumentSearchOpen} />
       <MissingDocumentsDialog open={isMissingDocsOpen} onOpenChange={setIsMissingDocsOpen} />
     </>

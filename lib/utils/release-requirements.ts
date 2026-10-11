@@ -1,37 +1,37 @@
 import {
   RELEASE_DOCUMENT_TYPES,
   type ReleaseDocumentType,
-  type TitleHolder,
 } from '@/lib/types/title';
 
 /**
  * The documents a title's release packet needs. The Deed of Sale is only
- * needed while the title is still in FDM's name. A title from before Sprint 3
- * has no recorded holder, so it is treated like FDM's and the Deed of Sale is
- * not skipped by accident.
+ * needed while the title is in FDM's name. A legacy pre-transferred title
+ * already has the client's name on it, so the Deed of Sale is skipped.
  */
-export function getRequiredReleaseDocuments(holder: TitleHolder | null): ReleaseDocumentType[] {
-  return RELEASE_DOCUMENT_TYPES.filter((type) => type !== 'Deed of Sale' || holder !== 'client');
+export function getRequiredReleaseDocuments(isLegacyTransferred?: boolean | null): ReleaseDocumentType[] {
+  return RELEASE_DOCUMENT_TYPES.filter((type) => type !== 'Deed of Sale' || !isLegacyTransferred);
 }
 
 /** Required documents that have not been uploaded yet, in checklist order. */
 export function getMissingReleaseDocuments(
-  holder: TitleHolder | null,
+  isLegacyTransferred: boolean | null | undefined,
   uploadedTypes: Iterable<string>
 ): ReleaseDocumentType[] {
   const uploaded = new Set(uploadedTypes);
-  return getRequiredReleaseDocuments(holder).filter((type) => !uploaded.has(type));
+  return getRequiredReleaseDocuments(isLegacyTransferred).filter((type) => !uploaded.has(type));
 }
 
 /**
- * Whether the packet is complete enough to go to Management. Route Title
- * Release for Approval (S3-13) uses this to stop an incomplete release.
+ * Whether the packet is complete enough to go to Management. Checks both
+ * the required documents and whether the lot has a registered TCT number.
  */
 export function isReleasePacketComplete(
-  holder: TitleHolder | null,
-  uploadedTypes: Iterable<string>
+  isLegacyTransferred: boolean | null | undefined,
+  uploadedTypes: Iterable<string>,
+  hasTitleNumber?: boolean
 ): boolean {
-  return getMissingReleaseDocuments(holder, uploadedTypes).length === 0;
+  const docsComplete = getMissingReleaseDocuments(isLegacyTransferred, uploadedTypes).length === 0;
+  return hasTitleNumber !== undefined ? docsComplete && Boolean(hasTitleNumber) : docsComplete;
 }
 
 /**

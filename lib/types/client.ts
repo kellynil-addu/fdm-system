@@ -28,13 +28,22 @@ export const DOC_TYPE_LABEL: Record<DocType, string> = {
   Other: 'Other',
 };
 
-export const REQUIRED_CLIENT_DOCUMENTS: DocType[] = ['Valid ID', 'Contract', 'Deed of Sale'];
+export const REQUIRED_CLIENT_DOCUMENTS: DocType[] = ['Valid ID'];
+
+export const CIVIL_STATUSES = ['Single', 'Married', 'Widowed', 'Separated'] as const;
+export type CivilStatus = (typeof CIVIL_STATUSES)[number];
+
+export const GENDERS = ['Male', 'Female', 'Other'] as const;
+export type Gender = (typeof GENDERS)[number];
 
 export interface Client {
   client_id: string;
   full_name: string;
   address: string | null;
   tin_number: string | null;
+  civil_status?: CivilStatus | null;
+  spouse_name?: string | null;
+  gender?: Gender | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -115,6 +124,9 @@ export interface CreateClientInput {
   full_name: string;
   address?: string | null;
   tin_number?: string | null;
+  civil_status?: CivilStatus | null;
+  spouse_name?: string | null;
+  gender?: Gender | null;
   status?: string;
   contacts?: CreateContactInfoInput[];
 }
@@ -123,6 +135,9 @@ export interface UpdateClientInput {
   full_name?: string;
   address?: string | null;
   tin_number?: string | null;
+  civil_status?: CivilStatus | null;
+  spouse_name?: string | null;
+  gender?: Gender | null;
   status?: string;
 }
 

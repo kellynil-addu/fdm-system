@@ -60,10 +60,10 @@ export const TITLE_STATUS_VARIANT: Record<
   'info' | 'muted' | 'warning' | 'success'
 > = {
   'Cleared by Billing': 'info',
-  'Legal Processing': 'muted',
-  'Legal Review': 'muted',
-  'Management Approval': 'muted',
-  '30-Day Clearance': 'muted',
+  'Document Preparation': 'muted',
+  'For Review': 'info',
+  'For Signature': 'warning',
+  'Clearance Period': 'info',
   'Ready for Claim': 'warning',
   Released: 'success',
 };

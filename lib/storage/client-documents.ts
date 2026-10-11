@@ -4,36 +4,16 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
-  S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getStorageBucket, getStorageClient } from "./s3";
 
-export const CLIENT_DOCUMENTS_BUCKET = "client-documents";
+export { getStorageBucket, getStorageClient };
+
+/** Folder prefix inside the shared bucket for client documents. */
+export const CLIENT_DOCUMENTS_FOLDER = "clients";
 
 export { MAX_DOCUMENT_BYTES, ALLOWED_DOCUMENT_TYPES } from "@/lib/validations/document";
-
-export function getStorageClient(): S3Client {
-  const endpoint = process.env.S3_ENDPOINT;
-  const region = process.env.S3_REGION;
-  const accessKeyId = process.env.S3_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
-
-  if (!endpoint || !region || !accessKeyId || !secretAccessKey) {
-    throw new Error(
-      "Missing S3 storage configuration (S3_ENDPOINT, S3_REGION, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY)"
-    );
-  }
-
-  // Path-style addressing and on-demand checksums ensure compatibility across Supabase S3 and Backblaze B2
-  return new S3Client({
-    endpoint,
-    region,
-    credentials: { accessKeyId, secretAccessKey },
-    forcePathStyle: true,
-    requestChecksumCalculation: "WHEN_REQUIRED",
-    responseChecksumValidation: "WHEN_REQUIRED",
-  });
-}
 
 /**
  * `{client_id}/{uuid}-{sanitized-filename}`.
@@ -49,7 +29,7 @@ function buildObjectPath(clientId: string, fileName: string): string {
     .replace(/^\.+/, "")
     .slice(-100);
 
-  return `${clientId}/${crypto.randomUUID()}-${cleaned || "document"}`;
+  return `${CLIENT_DOCUMENTS_FOLDER}/${clientId}/${crypto.randomUUID()}-${cleaned || "document"}`;
 }
 
 export async function uploadClientDocumentObject(
@@ -57,13 +37,14 @@ export async function uploadClientDocumentObject(
   file: File
 ): Promise<string> {
   const client = getStorageClient();
+  const bucket = getStorageBucket();
   const path = buildObjectPath(clientId, file.name);
   const body = Buffer.from(await file.arrayBuffer());
 
   try {
     await client.send(
       new PutObjectCommand({
-        Bucket: CLIENT_DOCUMENTS_BUCKET,
+        Bucket: bucket,
         Key: path,
         Body: body,
         ContentType: file.type,
@@ -90,11 +71,12 @@ export async function createClientDocumentUrl(
   expiresInSeconds = 60
 ): Promise<string> {
   const client = getStorageClient();
+  const bucket = getStorageBucket();
 
   try {
     return await getSignedUrl(
       client,
-      new GetObjectCommand({ Bucket: CLIENT_DOCUMENTS_BUCKET, Key: path }),
+      new GetObjectCommand({ Bucket: bucket, Key: path }),
       { expiresIn: expiresInSeconds }
     );
   } catch (err) {
@@ -105,10 +87,11 @@ export async function createClientDocumentUrl(
 
 export async function removeClientDocumentObject(path: string): Promise<void> {
   const client = getStorageClient();
+  const bucket = getStorageBucket();
 
   try {
     await client.send(
-      new DeleteObjectCommand({ Bucket: CLIENT_DOCUMENTS_BUCKET, Key: path })
+      new DeleteObjectCommand({ Bucket: bucket, Key: path })
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";

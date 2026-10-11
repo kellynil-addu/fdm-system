@@ -7,22 +7,24 @@ import {
 } from "@/lib/utils/release-requirements";
 
 describe("Release packet checklist", () => {
-  it("needs the Deed of Sale only when the title is in FDM's name", () => {
-    expect(getRequiredReleaseDocuments("fdm")).toContain("Deed of Sale");
-    expect(getRequiredReleaseDocuments("client")).not.toContain("Deed of Sale");
-    expect(getRequiredReleaseDocuments("client")).toHaveLength(5);
+  it("needs the Deed of Sale only when not a legacy pre-transferred title", () => {
+    expect(getRequiredReleaseDocuments(false)).toContain("Deed of Sale");
+    expect(getRequiredReleaseDocuments(true)).not.toContain("Deed of Sale");
+    expect(getRequiredReleaseDocuments(true)).toHaveLength(5);
   });
 
-  it("keeps the Deed of Sale when whose name is not recorded yet", () => {
+  it("keeps the Deed of Sale when legacy flag is false or not recorded", () => {
     expect(getRequiredReleaseDocuments(null)).toContain("Deed of Sale");
+    expect(getRequiredReleaseDocuments(undefined)).toContain("Deed of Sale");
   });
 
   it("never asks for an e-CAR", () => {
-    expect(getRequiredReleaseDocuments("fdm")).not.toContain("eCAR");
+    expect(getRequiredReleaseDocuments(false)).not.toContain("eCAR");
+    expect(getRequiredReleaseDocuments(true)).not.toContain("eCAR");
   });
 
   it("lists missing items in checklist order", () => {
-    expect(getMissingReleaseDocuments("fdm", ["Payment History", "Title Copy"])).toEqual([
+    expect(getMissingReleaseDocuments(false, ["Payment History", "Title Copy"])).toEqual([
       "SOA",
       "Certificate of Ownership",
       "Contract",
@@ -30,10 +32,11 @@ describe("Release packet checklist", () => {
     ]);
   });
 
-  it("is complete once every required item is uploaded", () => {
-    const clientPacket = ["SOA", "Payment History", "Certificate of Ownership", "Contract", "Title Copy"];
-    expect(isReleasePacketComplete("client", clientPacket)).toBe(true);
-    expect(isReleasePacketComplete("fdm", clientPacket)).toBe(false);
+  it("is complete once every required item is uploaded and title number exists", () => {
+    const packetWithoutDOAS = ["SOA", "Payment History", "Certificate of Ownership", "Contract", "Title Copy"];
+    expect(isReleasePacketComplete(true, packetWithoutDOAS, true)).toBe(true);
+    expect(isReleasePacketComplete(false, packetWithoutDOAS, true)).toBe(false);
+    expect(isReleasePacketComplete(true, packetWithoutDOAS, false)).toBe(false);
   });
 
   it("counts a client's documents for a lot when linked to it or to no lot", () => {

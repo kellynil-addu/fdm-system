@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { IconBox } from '@/components/ui/icon-box';
-import { RadioCard } from '@/components/ui/radio-card';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   CheckCircle2,
@@ -38,7 +37,6 @@ import {
   type SelectedLotDetails,
 } from './block-lot-popup';
 import { useClientDetail } from '@/lib/hooks/use-client-detail';
-import { TITLE_HOLDER_LABEL, type TitleHolder } from '@/lib/types/title';
 import type { Site, SiteWithLots } from '@/lib/types/property';
 
 const PESO = new Intl.NumberFormat('en-PH', {
@@ -47,7 +45,7 @@ const PESO = new Intl.NumberFormat('en-PH', {
   maximumFractionDigits: 0,
 });
 
-type AssignmentStage = 'reserved' | 'title-in-process' | 'to-claim' | null;
+type AssignmentStage = 'account-settlement' | 'legal-processing' | 'for-release' | null;
 
 interface StageOption {
   id: AssignmentStage;
@@ -59,25 +57,25 @@ interface StageOption {
 
 const STAGE_OPTIONS: StageOption[] = [
   {
-    id: 'reserved',
-    title: 'Reserved',
-    description: 'Client will be or is currently paying via installment',
+    id: 'account-settlement',
+    title: 'Account Settlement',
+    description: 'Client is paying or restructuring via installment plan',
     icon: Receipt,
     requiresComplete: true,
   },
   {
-    id: 'title-in-process',
-    title: 'Title in Process',
-    description: 'Client is fully paid. Billing clears the account and Legal creates the title',
+    id: 'legal-processing',
+    title: 'Legal Processing',
+    description: 'Client is fully paid. Billing clears account and Legal drafts DOAS & title',
     icon: FileText,
     requiresComplete: true,
   },
   {
-    id: 'to-claim',
-    title: 'To Claim',
-    description: 'Title is fully processed and awaiting pickup at office',
+    id: 'for-release',
+    title: 'For Release',
+    description: 'Title and executed documents are ready for client turnover at office',
     icon: Award,
-    requiresComplete: false,
+    requiresComplete: true,
   },
 ];
 
@@ -107,13 +105,13 @@ export function PropertyAssignmentWizard({
   const [selectedStage, setSelectedStage] = useState<AssignmentStage>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Reserved stage state
+  // Account Settlement stage state
   const [totalContractPrice, setTotalContractPrice] = useState<string>('');
   const [isEditingPrice, setIsEditingPrice] = useState(false);
 
-  // To Claim stage state
+  // For Release stage state
   const [titleNumber, setTitleNumber] = useState<string>('');
-  const [titleHolder, setTitleHolder] = useState<TitleHolder | null>(null);
+  const [isLegacyTransferred, setIsLegacyTransferred] = useState<boolean>(false);
 
   const [sites, setSites] = useState<Site[]>([]);
   const [isLoadingPreSelected, setIsLoadingPreSelected] = useState(false);
@@ -267,7 +265,7 @@ export function PropertyAssignmentWizard({
     numericPrice,
   ]);
 
-  // Keep Reserved stage totalContractPrice synced with computed lot total unless manually overridden
+  // Keep Account Settlement totalContractPrice synced with computed lot total unless manually overridden
   useEffect(() => {
     if (!isEditingPrice) {
       setTotalContractPrice(computedTotalPrice !== null ? computedTotalPrice.toString() : '');
@@ -312,7 +310,7 @@ export function PropertyAssignmentWizard({
   function handleStageSelect(stage: AssignmentStage) {
     setSelectedStage((current) => (current === stage ? null : stage));
     setTitleNumber('');
-    setTitleHolder(null);
+    setIsLegacyTransferred(false);
   }
 
   async function handleSubmit() {
@@ -348,7 +346,7 @@ export function PropertyAssignmentWizard({
         targetPropertyId = createResult.data.property_id;
       }
 
-      if (selectedStage === 'reserved') {
+      if (selectedStage === 'account-settlement') {
         const tcp = parseFloat(totalContractPrice);
         if (isNaN(tcp) || tcp <= 0) {
           toast.error('Invalid total contract price');
@@ -374,10 +372,10 @@ export function PropertyAssignmentWizard({
         }
 
         const actionText = selectedLotDetails.isUnopenedPlot
-          ? `Opened Block ${selectedLotDetails.blockNumber} Lot ${selectedLotDetails.lotNumber} and assigned as Reserved`
-          : `Property assigned as Reserved with installment plan`;
+          ? `Opened Block ${selectedLotDetails.blockNumber} Lot ${selectedLotDetails.lotNumber} and assigned under Account Settlement`
+          : `Property assigned under Account Settlement with installment plan`;
         toast.success(actionText);
-      } else if (selectedStage === 'title-in-process') {
+      } else if (selectedStage === 'legal-processing') {
         const result = await assignPropertyFullyPaid(targetPropertyId, client.client_id);
 
         if (!result.success) {
@@ -385,18 +383,19 @@ export function PropertyAssignmentWizard({
         }
 
         const actionText = selectedLotDetails.isUnopenedPlot
-          ? `Opened Block ${selectedLotDetails.blockNumber} Lot ${selectedLotDetails.lotNumber} as fully paid, cleared by Billing`
-          : `Property assigned as fully paid, cleared by Billing`;
+          ? `Opened Block ${selectedLotDetails.blockNumber} Lot ${selectedLotDetails.lotNumber} as fully paid, queued for Legal Processing`
+          : `Property assigned as fully paid, queued for Legal Processing`;
         toast.success(actionText);
-      } else if (selectedStage === 'to-claim') {
-        if (!titleNumber.trim() || !titleHolder) {
-          toast.error('Title number and whose name the title is in are required for the To Claim stage');
+      } else if (selectedStage === 'for-release') {
+        if (!titleNumber.trim()) {
+          toast.error('Title number is required for the For Release stage');
           return;
         }
 
         const result = await assignPropertyFullyPaid(targetPropertyId, client.client_id, {
           title_number: titleNumber.trim(),
-          title_holder: titleHolder,
+          is_legacy_transferred: isLegacyTransferred,
+          create_title: true,
         });
 
         if (!result.success) {
@@ -404,8 +403,8 @@ export function PropertyAssignmentWizard({
         }
 
         const actionText = selectedLotDetails.isUnopenedPlot
-          ? `Opened Block ${selectedLotDetails.blockNumber} Lot ${selectedLotDetails.lotNumber} with title ready for claim`
-          : `Property assigned with title ready for claim`;
+          ? `Opened Block ${selectedLotDetails.blockNumber} Lot ${selectedLotDetails.lotNumber} with title ready for release`
+          : `Property assigned with title ready for release`;
         toast.success(actionText);
       }
 
@@ -416,7 +415,7 @@ export function PropertyAssignmentWizard({
       setEditingMetric(null);
       setSelectedStage(null);
       setTitleNumber('');
-      setTitleHolder(null);
+      setIsLegacyTransferred(false);
 
       router.refresh();
 
@@ -434,11 +433,26 @@ export function PropertyAssignmentWizard({
   const canProceed = Boolean(selectedLotDetails) && Boolean(selectedStage);
   const selectedStageOption = STAGE_OPTIONS.find((opt) => opt.id === selectedStage);
   const needsRequirements = selectedStageOption?.requiresComplete && !requirements.isComplete;
-  const needsTitleNumber = selectedStage === 'to-claim' && (!titleNumber.trim() || !titleHolder);
+  const needsTitleNumber = selectedStage === 'for-release' && !titleNumber.trim();
   const hasAnyInput = Boolean(blockInput || lotInput || areaInput || priceInput || selectedStage);
 
   return (
     <div className="space-y-5">
+      {!requirements.isComplete && (
+        <Alert variant="warning">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription className="space-y-1">
+            <p className="font-semibold text-foreground">Client requirements incomplete</p>
+            <p className="text-xs">
+              Missing: <span className="font-medium">{formatMissingRequirements(requirements)}</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              You can prepare the assignment details below, but finalizing the assignment is locked until these requirements are completed.
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* 1. Inline Property Lot Chooser */}
       <div className="space-y-3">
         <Label className="text-sm font-semibold text-foreground">
@@ -770,14 +784,6 @@ export function PropertyAssignmentWizard({
                     {option.description}
                   </p>
                 </div>
-                {option.requiresComplete && (
-                  <Badge
-                    variant="outline"
-                    className="mt-1 text-[10px] uppercase tracking-wider"
-                  >
-                    Requires Complete Profile
-                  </Badge>
-                )}
               </button>
             );
           })}
@@ -791,24 +797,8 @@ export function PropertyAssignmentWizard({
             3. {selectedStageOption?.title} Details
           </Label>
 
-          {/* Requirements Warning for Reserved and Title in Process */}
-          {needsRequirements && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <p className="font-semibold">Missing Requirements:</p>
-                <p className="mt-1 text-sm">
-                  {formatMissingRequirements(requirements)}
-                </p>
-                <p className="mt-2 text-xs">
-                  Complete the client profile and upload required documents before assigning this property.
-                </p>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Reserved Stage Form */}
-          {selectedStage === 'reserved' && (
+          {/* Account Settlement Stage Form */}
+          {selectedStage === 'account-settlement' && (
             <div className="space-y-4 rounded-lg border border-border bg-card p-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -858,16 +848,16 @@ export function PropertyAssignmentWizard({
             </div>
           )}
 
-          {/* Title in Process Stage Form */}
-          {selectedStage === 'title-in-process' && (
+          {/* Legal Processing Stage Form */}
+          {selectedStage === 'legal-processing' && (
             <div className="space-y-4 rounded-lg border border-border bg-card p-4">
               <Alert>
                 <FileText className="h-4 w-4" />
                 <AlertDescription className="text-sm">
-                  <p className="font-semibold">Title Processing Workflow</p>
+                  <p className="font-semibold">Legal Processing Workflow</p>
                   <ul className="mt-2 list-inside list-disc space-y-1 text-xs">
                     <li>The account will be marked &quot;Cleared by Billing&quot; and the lot &quot;Sold&quot;</li>
-                    <li>Legal staff then create the title record from the Legal page</li>
+                    <li>Legal staff then prepare the DOAS and title record from the Legal page</li>
                     <li>Client is fully paid for this property</li>
                   </ul>
                 </AlertDescription>
@@ -875,12 +865,12 @@ export function PropertyAssignmentWizard({
             </div>
           )}
 
-          {/* To Claim Stage Form */}
-          {selectedStage === 'to-claim' && (
+          {/* For Release Stage Form */}
+          {selectedStage === 'for-release' && (
             <div className="space-y-4 rounded-lg border border-border bg-card p-4">
               <div className="space-y-2">
                 <Label htmlFor="title-number" className="text-sm font-medium">
-                  Title Number <span className="text-destructive">*</span>
+                  Title Number (TCT / OCT) <span className="text-destructive">*</span>
                 </Label>
                 <Input
                   id="title-number"
@@ -890,34 +880,35 @@ export function PropertyAssignmentWizard({
                   className="font-mono"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Enter the official title number issued by authorities
+                  Official title number registered for this property lot.
                 </p>
               </div>
 
-              <fieldset className="space-y-2">
-                <legend className="text-sm font-medium">
-                  Whose name is the title in? <span className="text-destructive">*</span>
-                </legend>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {(['client', 'fdm'] as const).map((holder) => (
-                    <RadioCard
-                      key={holder}
-                      name="title-holder"
-                      value={holder}
-                      checked={titleHolder === holder}
-                      onChange={() => setTitleHolder(holder)}
-                      label={TITLE_HOLDER_LABEL[holder]}
-                    />
-                  ))}
-                </div>
-              </fieldset>
+              <div className="rounded-lg border border-border p-3.5 space-y-2 bg-sidebar-accent/50">
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={isLegacyTransferred}
+                    onChange={(e) => setIsLegacyTransferred(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                  />
+                  <div className="space-y-0.5">
+                    <span className="text-sm font-medium text-foreground">
+                      Legacy pre-transferred title
+                    </span>
+                    <p className="text-xs text-muted-foreground">
+                      Check if FDM already transferred the title into the client&apos;s name during historical 80%–90% settlement. Bypasses Deed of Absolute Sale (DOAS) drafting during release.
+                    </p>
+                  </div>
+                </label>
+              </div>
 
               <Alert>
                 <Award className="h-4 w-4" />
                 <AlertDescription className="text-sm">
-                  <p className="font-semibold">Ready for Client Pickup</p>
+                  <p className="font-semibold">Ready for Client Turnover</p>
                   <p className="mt-1 text-xs">
-                    The account will be cleared by Billing and the title created at &quot;Ready for Claim&quot;. This stage bypasses profile requirements as the title is already processed.
+                    The account will be cleared by Billing and the title record staged directly as &quot;Ready for Claim&quot;.
                   </p>
                 </AlertDescription>
               </Alert>
@@ -939,7 +930,7 @@ export function PropertyAssignmentWizard({
             setEditingMetric(null);
             setSelectedStage(null);
             setTitleNumber('');
-            setTitleHolder(null);
+            setIsLegacyTransferred(false);
             setTotalContractPrice('');
             setIsEditingPrice(false);
           }}
@@ -951,6 +942,7 @@ export function PropertyAssignmentWizard({
           type="button"
           onClick={handleSubmit}
           disabled={!canProceed || needsRequirements || needsTitleNumber || isSubmitting}
+          title={needsRequirements ? `Cannot assign: Missing ${formatMissingRequirements(requirements)}` : undefined}
           className="gap-2"
         >
           {isSubmitting ? (
@@ -959,14 +951,7 @@ export function PropertyAssignmentWizard({
               Assigning...
             </>
           ) : (
-            <>
-              Assign Property
-              {needsRequirements && (
-                <Badge variant="destructive" className="ml-1 text-[10px]">
-                  Requirements Missing
-                </Badge>
-              )}
-            </>
+            'Assign Property'
           )}
         </Button>
       </div>

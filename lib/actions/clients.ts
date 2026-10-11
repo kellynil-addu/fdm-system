@@ -273,6 +273,9 @@ export async function createClient(input: unknown): Promise<ActionResult<Client>
           full_name: validatedInput.full_name,
           address: validatedInput.address ?? null,
           tin_number: validatedInput.tin_number ?? null,
+          civil_status: validatedInput.civil_status ?? null,
+          spouse_name: validatedInput.spouse_name ?? null,
+          gender: validatedInput.gender ?? null,
           status: validatedInput.status ?? "Active",
         })
         .select()

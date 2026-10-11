@@ -40,8 +40,7 @@ import { PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
 import { Badge } from '@/components/ui/badge';
 import { IconBox } from '@/components/ui/icon-box';
 import { cn } from '@/lib/utils';
-
-const DIALOG_EXIT_MS = 200;
+import { useDialogPresence } from '@/lib/hooks/use-dialog-presence';
 
 const PESO = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -128,6 +127,11 @@ function LotRowItem({
   onSelect?: () => void;
   onHover?: (hovering: boolean) => void;
 }) {
+  const showTct = Boolean(
+    lot.title_number &&
+    (lot.status === 'Open' || lot.status === 'Reserved' || lot.status === 'Sold')
+  );
+
   return (
     <div
       onClick={onSelect}
@@ -173,7 +177,14 @@ function LotRowItem({
           <span className="font-semibold text-foreground">{PESO.format(totalPrice(lot))}</span>
           <span className="ml-1 text-[11px]">({PESO.format(lot.price_per_sqm)}/sqm)</span>
         </div>
-        <span className="font-medium">{AREA.format(lot.area_size)} sqm</span>
+        <div className="flex items-center gap-2">
+          {showTct && (
+            <span className="font-mono text-[11px] text-muted-foreground">
+              TCT {lot.title_number}
+            </span>
+          )}
+          <span className="font-medium">{AREA.format(lot.area_size)} sqm</span>
+        </div>
       </div>
     </div>
   );
@@ -239,6 +250,7 @@ export interface PropertyLotsSidebarProps {
     lot_number?: number;
     area_size?: number;
     price_per_sqm?: number;
+    title_number?: string;
   } | null;
   onClearCreateInitialValues?: () => void;
 }
@@ -263,7 +275,7 @@ function PropertyLotsSidebarContent({
   } = usePropertyLots();
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [renderedDialog, setRenderedDialog] = useState(activeDialog);
+  const { rendered: renderedDialog, isOpen: isDialogOpen } = useDialogPresence(activeDialog);
   const wasDialogOpenedRef = useRef(false);
 
   const activeSelectedLot = useMemo(() => {
@@ -303,14 +315,6 @@ function PropertyLotsSidebarContent({
     }
   }, [activeDialog, onClearCreateInitialValues]);
 
-  useEffect(() => {
-    if (activeDialog) {
-      setRenderedDialog(activeDialog);
-      return;
-    }
-    const timer = setTimeout(() => setRenderedDialog(null), DIALOG_EXIT_MS);
-    return () => clearTimeout(timer);
-  }, [activeDialog]);
 
   if (activeSelectedLot) {
     return (
@@ -502,7 +506,7 @@ function PropertyLotsSidebarContent({
       {/* Dialog for creating lots */}
       {renderedDialog?.type === 'create' && (
         <CreatePropertyLotModal
-          open={activeDialog !== null}
+          open={isDialogOpen}
           sites={sites}
           initialValues={createInitialValues ?? undefined}
         />

@@ -4,32 +4,28 @@ import { TITLE_STATUSES } from "@/lib/types/title";
 
 export const titleStatusSchema = z.enum(TITLE_STATUSES, { error: "Choose a valid title status" });
 
-export const titleHolderSchema = z.enum(["client", "fdm"], {
-  error: "Choose whose name the title is in",
-});
-
-const titleNumberSchema = z
+export const titleNumberSchema = z
   .string({ error: "Title number is required" })
   .trim()
   .min(1, "Title number is required")
   .max(100, "Title number must be 100 characters or fewer");
 
-/** The fields Legal fills in, shared by the create and edit forms. */
-export const titleRecordFormSchema = z.object({
-  title_holder: titleHolderSchema,
+export const updatePropertyTitleNumberSchema = z.object({
+  property_id: uuidSchema,
   title_number: titleNumberSchema,
 });
 
-/** Legal creates a title for a lot whose account Billing has cleared. */
-export const createLandTitleSchema = titleRecordFormSchema.extend({
+export const createLandTitleSchema = z.object({
   property_id: uuidSchema,
+  is_legacy_transferred: z.boolean().optional().default(false),
+  status: titleStatusSchema.optional().default("Document Preparation"),
 });
 
 export const updateLandTitleSchema = z
   .object({
-    title_number: titleNumberSchema.optional(),
-    title_holder: titleHolderSchema.optional(),
+    is_legacy_transferred: z.boolean().optional(),
     status: titleStatusSchema.optional(),
+    clearance_started_at: z.string().datetime().nullable().optional(),
   })
   .transform(stripUndefined);
 
@@ -42,13 +38,12 @@ export const getLandTitlesParamsSchema = z
     page: z.number().int().positive().optional().default(1),
     limit: z.number().int().positive().max(500).optional().default(10),
     sortBy: z
-      .enum(["created_at", "updated_at", "title_number", "status"])
+      .enum(["created_at", "updated_at", "status"])
       .optional()
       .default("created_at"),
     sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
   })
   .optional();
 
-export type TitleRecordFormData = z.infer<typeof titleRecordFormSchema>;
 export type CreateLandTitleFormData = z.infer<typeof createLandTitleSchema>;
 export type UpdateLandTitleFormData = z.infer<typeof updateLandTitleSchema>;

@@ -68,7 +68,7 @@ export function MissingDocumentsDialog({
         <DialogHeader>
           <DialogTitle>Incomplete client files</DialogTitle>
           <DialogDescription>
-            Clients missing a Valid ID, Contract or Deed of Sale. Archived
+            Clients missing a Valid ID. Archived
             clients are not included.
           </DialogDescription>
         </DialogHeader>

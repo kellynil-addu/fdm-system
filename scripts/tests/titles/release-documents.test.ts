@@ -43,6 +43,7 @@ describe("Release documents are client documents", () => {
         lot_number: faker.number.int({ min: 1, max: 99 }),
         area_size: 150,
         price_per_sqm: 9000,
+        title_number: `TCT-${label.replace(/\s/g, "")}-${Date.now()}`,
       })
     );
     testPropertyIds.push(lot.property_id);
@@ -50,8 +51,7 @@ describe("Release documents are client documents", () => {
     const title = unwrap(
       await createLandTitle({
         property_id: lot.property_id,
-        title_holder: "fdm",
-        title_number: `TCT-${label.replace(/\s/g, "")}-${Date.now()}`,
+        is_legacy_transferred: false,
       })
     );
     return { lotId: lot.property_id, titleId: title.title_id };

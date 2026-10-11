@@ -59,6 +59,7 @@ export interface PropertyLot {
   area_size: number;
   price_per_sqm: number;
   status: PropertyStatus;
+  title_number?: string | null;
   created_at: string;
   updated_at: string;
   is_archived: boolean;
@@ -96,6 +97,7 @@ export interface CreatePropertyLotInput {
   area_size: number;
   price_per_sqm: number;
   status?: PropertyStatus;
+  title_number?: string | null;
 }
 
 export interface UpdatePropertyLotInput {
@@ -104,6 +106,7 @@ export interface UpdatePropertyLotInput {
   lot_number?: number;
   area_size?: number;
   price_per_sqm?: number;
+  title_number?: string | null;
 }
 
 export interface AssignPartyInput {

@@ -3,11 +3,12 @@
 import { Fragment, useState, useEffect, useRef, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardTableFooter } from '@/components/ui/card';
+import { Card, CardTableFooter, CardStickyHeader } from '@/components/ui/card';
 import { FilterToolbar } from '@/components/ui/filter-toolbar';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { FormField } from '@/components/ui/form-field';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { useDialogPresence } from '@/lib/hooks/use-dialog-presence';
 import { RoleCheckboxList } from './role-checkbox-list';
 import {
   Plus,
@@ -61,7 +62,6 @@ import { CreateUserModal } from './user-create-modal';
 import {
   AdminUsersProvider,
   useAdminUsers,
-  type AdminDialog,
   type StatusFilter,
 } from '@/lib/hooks/use-admin-users';
 import { useMutation } from '@/lib/hooks/use-mutation';
@@ -84,9 +84,6 @@ const TINTS = {
   rowOpen: 'bg-row-active hover:bg-row-active',
   rowMenuBtn: 'hover:bg-card hover:text-foreground hover:shadow-sm data-[state=open]:bg-card data-[state=open]:text-foreground data-[state=open]:shadow-sm',
 };
-
-/** Matches the `duration-200` exit transition on Dialog/AlertDialog content. */
-const DIALOG_EXIT_MS = 200;
 
 /**
  * Consistent horizontal gutter for every band of the card.
@@ -123,28 +120,6 @@ function selfProtection(user: UserListItem, currentUserId: string) {
     canToggle: !(isSelf && !user.isBanned),
     canDelete: !isSelf,
   };
-}
-
-/**
- * Keeps the most recent dialog mounted for the length of its exit animation.
- *
- * Radix animates a dialog out on the element it is unmounting. Rendering
- * dialogs straight off `activeDialog` tore them from the screen the instant the
- * value became null, so the close animation never played.
- */
-function useDialogPresence(activeDialog: AdminDialog) {
-  const [rendered, setRendered] = useState<AdminDialog>(activeDialog);
-
-  useEffect(() => {
-    if (activeDialog) {
-      setRendered(activeDialog);
-      return;
-    }
-    const timer = setTimeout(() => setRendered(null), DIALOG_EXIT_MS);
-    return () => clearTimeout(timer);
-  }, [activeDialog]);
-
-  return { rendered, isOpen: activeDialog !== null };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -680,7 +655,7 @@ function EmptyState({
   const Icon = isFiltered ? SearchX : UserRoundPlus;
 
   return (
-    <div className="flex flex-col items-center justify-center gap-4 px-6 py-20 text-center">
+    <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-row-hover">
         <Icon className="h-5 w-5 text-muted-foreground" />
       </div>
@@ -749,108 +724,108 @@ function UserManagementContent() {
   return (
     <>
       <Card variant="section">
-        {/* Header */}
-        <div className={`flex flex-wrap items-start justify-between gap-4 pb-5 pt-6 ${GUTTER}`}>
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold leading-none tracking-tight text-foreground">
-              User Management
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Create accounts and control what each member of the team can reach.
-            </p>
+        <CardStickyHeader>
+          {/* Header */}
+          <div className={`flex flex-wrap items-start justify-between gap-4 pb-5 pt-6 ${GUTTER}`}>
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold leading-none tracking-tight text-foreground">
+                User Management
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Create accounts and control what each member of the team can reach.
+              </p>
+            </div>
+            <Button
+              onClick={() => openDialog({ type: 'create' })}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create User
+            </Button>
           </div>
-          <Button
-            onClick={() => openDialog({ type: 'create' })}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Create User
-          </Button>
-        </div>
 
-        {/* Toolbar */}
-        <FilterToolbar
-          tabs={{
-            value: statusFilter,
-            onChange: setStatusFilter,
-            ariaLabel: 'Filter by status',
-            items: [
-              { value: 'all', label: 'All', count: counts.all },
-              { value: 'active', label: 'Active', count: counts.active },
-              { value: 'inactive', label: 'Inactive', count: counts.inactive },
-            ],
-          }}
-          search={{
-            value: search,
-            onChange: setSearch,
-            placeholder: 'Search name, email or role',
-            ariaLabel: 'Search users',
-          }}
-          filters={[
-            {
-              type: 'single-select',
-              id: 'role',
-              label: 'Role',
-              allLabel: 'All roles',
-              value: roleFilter,
-              onChange: setRoleFilter,
-              options: roles.map((role) => ({
-                value: role.id,
-                label: roleLabel(role.name),
-              })),
-            },
-          ]}
-          isFiltered={isFiltered}
-          onClear={clearFilters}
-        />
+          {/* Toolbar */}
+          <FilterToolbar
+            tabs={{
+              value: statusFilter,
+              onChange: setStatusFilter,
+              ariaLabel: 'Filter by status',
+              items: [
+                { value: 'all', label: 'All', count: counts.all },
+                { value: 'active', label: 'Active', count: counts.active },
+                { value: 'inactive', label: 'Inactive', count: counts.inactive },
+              ],
+            }}
+            search={{
+              value: search,
+              onChange: setSearch,
+              placeholder: 'Search name, email or role',
+              ariaLabel: 'Search users',
+            }}
+            filters={[
+              {
+                type: 'single-select',
+                id: 'role',
+                label: 'Role',
+                allLabel: 'All roles',
+                value: roleFilter,
+                onChange: setRoleFilter,
+                options: roles.map((role) => ({
+                  value: role.id,
+                  label: roleLabel(role.name),
+                })),
+              },
+            ]}
+            isFiltered={isFiltered}
+            onClear={clearFilters}
+          />
+        </CardStickyHeader>
 
         {/* List */}
-        <div className="min-h-0 flex-1 overflow-y-auto border-t border-border">
-          {error ? (
-            <div role="alert" className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
-              <p className="text-sm font-medium text-destructive">Could not load users</p>
-              <p className="max-w-sm text-sm text-muted-foreground">{error}</p>
-            </div>
-          ) : isLoading ? (
-            <UserRowsSkeleton />
-          ) : visibleUsers.length === 0 ? (
-            <EmptyState
-              isFiltered={isFiltered}
-              onClearFilters={clearFilters}
-              onCreateUser={() => openDialog({ type: 'create' })}
-            />
-          ) : (
-            <Table>
-              <TableHeader className="sticky top-0 z-10">
-                <TableRow className="bg-card hover:bg-card">
-                  <TableHead className={`h-11 pr-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${GUTTER_L}`}>
-                    User
-                  </TableHead>
-                  <TableHead className="hidden h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:table-cell">
-                    Roles
-                  </TableHead>
-                  <TableHead className="h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Status
-                  </TableHead>
-                  <TableHead className={`h-11 w-14 pl-3 ${GUTTER_R}`}>
-                    <span className="sr-only">Actions</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleUsers.map((user) => {
-                  const isExpanded = selectedUserId === user.id;
-                  return (
-                    <Fragment key={user.id}>
-                      <UserRow user={user} isExpanded={isExpanded} />
-                      {isExpanded && <UserDetailRow user={user} />}
-                    </Fragment>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+        {error ? (
+          <div role="alert" className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
+            <p className="text-sm font-medium text-destructive">Could not load users</p>
+            <p className="max-w-sm text-sm text-muted-foreground">{error}</p>
+          </div>
+        ) : isLoading ? (
+          <UserRowsSkeleton />
+        ) : visibleUsers.length === 0 ? (
+          <EmptyState
+            isFiltered={isFiltered}
+            onClearFilters={clearFilters}
+            onCreateUser={() => openDialog({ type: 'create' })}
+          />
+        ) : (
+          <Table>
+            <TableHeader className="bg-card">
+              <TableRow className="bg-card hover:bg-card">
+                <TableHead className={`h-11 pr-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${GUTTER_L}`}>
+                  User
+                </TableHead>
+                <TableHead className="hidden h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:table-cell">
+                  Roles
+                </TableHead>
+                <TableHead className="h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Status
+                </TableHead>
+                <TableHead className={`h-11 w-14 pl-3 ${GUTTER_R}`}>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visibleUsers.map((user) => {
+                const isExpanded = selectedUserId === user.id;
+                return (
+                  <Fragment key={user.id}>
+                    <UserRow user={user} isExpanded={isExpanded} />
+                    {isExpanded && <UserDetailRow user={user} />}
+                  </Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
 
         {/* Footer */}
         {!error && (

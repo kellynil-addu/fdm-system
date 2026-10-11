@@ -31,6 +31,8 @@ import type {
   ClientLog,
   ClientDocument,
   CreateClientLogInput,
+  CivilStatus,
+  Gender,
 } from '@/lib/types/client';
 
 /**
@@ -43,6 +45,9 @@ export interface ClientDetailContextValue {
   client: ClientWithDetails;
   updateAddress: (address: string) => Promise<Client>;
   updateTin: (tinNumber: string) => Promise<Client>;
+  updateCivilStatus: (civilStatus: CivilStatus, spouseName?: string | null) => Promise<Client>;
+  updateSpouseName: (spouseName: string) => Promise<Client>;
+  updateGender: (gender: Gender) => Promise<Client>;
   addContact: (type: string, value: string) => Promise<ContactInfo | null>;
   updateContact: (contactId: string, type: string, value: string) => Promise<ContactInfo | null>;
   deleteContact: (contactId: string) => Promise<void>;
@@ -100,6 +105,51 @@ export function ClientDetailProvider({
       if (!result.success) throw new Error(result.error);
 
       setClient((prev) => ({ ...prev, tin_number: result.data.tin_number }));
+      router.refresh();
+      return result.data;
+    },
+    [client.client_id, router]
+  );
+
+  const updateCivilStatus = useCallback(
+    async (civilStatus: CivilStatus, spouseName?: string | null): Promise<Client> => {
+      const payload: { civil_status: CivilStatus; spouse_name?: string | null } = {
+        civil_status: civilStatus,
+        spouse_name: civilStatus === 'Married' ? (spouseName?.trim() || null) : null,
+      };
+      const result = await updateClientAction(client.client_id, payload);
+      if (!result.success) throw new Error(result.error);
+
+      setClient((prev) => ({
+        ...prev,
+        civil_status: result.data.civil_status,
+        spouse_name: result.data.spouse_name,
+      }));
+      router.refresh();
+      return result.data;
+    },
+    [client.client_id, router]
+  );
+
+  const updateSpouseName = useCallback(
+    async (spouseName: string): Promise<Client> => {
+      const trimmed = spouseName.trim() || null;
+      const result = await updateClientAction(client.client_id, { spouse_name: trimmed });
+      if (!result.success) throw new Error(result.error);
+
+      setClient((prev) => ({ ...prev, spouse_name: result.data.spouse_name }));
+      router.refresh();
+      return result.data;
+    },
+    [client.client_id, router]
+  );
+
+  const updateGender = useCallback(
+    async (gender: Gender): Promise<Client> => {
+      const result = await updateClientAction(client.client_id, { gender });
+      if (!result.success) throw new Error(result.error);
+
+      setClient((prev) => ({ ...prev, gender: result.data.gender }));
       router.refresh();
       return result.data;
     },
@@ -267,6 +317,9 @@ export function ClientDetailProvider({
     client,
     updateAddress,
     updateTin,
+    updateCivilStatus,
+    updateSpouseName,
+    updateGender,
     addContact,
     updateContact,
     deleteContact,

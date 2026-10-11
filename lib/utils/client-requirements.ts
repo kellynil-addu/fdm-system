@@ -4,39 +4,42 @@ import {
   type Client,
   type ClientDocument,
   type DocType,
+  type CivilStatus,
+  type Gender,
 } from '@/lib/types/client';
 
+export type ClientProfileRequirementsInput = Pick<Client, 'full_name' | 'address' | 'tin_number'> & {
+  civil_status?: CivilStatus | null;
+  spouse_name?: string | null;
+  gender?: Gender | null;
+  contact_info?: Array<{ value?: string | null }>;
+};
+
 export interface ClientRequirements {
-  /** Whether profile fields (full_name, address, tin_number) are all present */
   profileComplete: boolean;
-  /** Whether all required documents are uploaded */
   documentsComplete: boolean;
-  /** Whether client meets all requirements (profile + documents) */
   isComplete: boolean;
-  /** List of missing profile fields */
   missingProfile: string[];
-  /** List of missing required document types */
   missingDocuments: DocType[];
 }
 
-/**
- * Check if a client's profile is complete.
- * A complete profile requires: full_name, address, and tin_number.
- */
-export function isProfileComplete(client: Pick<Client, 'full_name' | 'address' | 'tin_number'>): boolean {
+export function isProfileComplete(client: ClientProfileRequirementsInput): boolean {
+  const isSpouseValid = client.civil_status === 'Married' ? Boolean(client.spouse_name?.trim()) : true;
+
   return Boolean(
     client.full_name?.trim() &&
     client.address?.trim() &&
-    client.tin_number?.trim()
+    client.tin_number?.trim() &&
+    client.civil_status &&
+    client.gender &&
+    isSpouseValid &&
+    client.contact_info?.some((c) => Boolean(c.value?.trim()))
   );
 }
 
-/**
- * Get list of missing profile fields for a client.
- */
-export function getMissingProfileFields(client: Pick<Client, 'full_name' | 'address' | 'tin_number'>): string[] {
+export function getMissingProfileFields(client: ClientProfileRequirementsInput): string[] {
   const missing: string[] = [];
-  
+
   if (!client.full_name?.trim()) {
     missing.push('Full name');
   }
@@ -46,7 +49,18 @@ export function getMissingProfileFields(client: Pick<Client, 'full_name' | 'addr
   if (!client.tin_number?.trim()) {
     missing.push('TIN number');
   }
-  
+  if (!client.civil_status) {
+    missing.push('Civil status');
+  } else if (client.civil_status === 'Married' && !client.spouse_name?.trim()) {
+    missing.push('Spouse name');
+  }
+  if (!client.gender) {
+    missing.push('Gender');
+  }
+  if (!client.contact_info?.some((c) => Boolean(c.value?.trim()))) {
+    missing.push('Contact information');
+  }
+
   return missing;
 }
 
@@ -66,23 +80,15 @@ export function getMissingDocuments(documents: ClientDocument[]): DocType[] {
   return REQUIRED_CLIENT_DOCUMENTS.filter((required) => !presentTypes.has(required));
 }
 
-/**
- * Comprehensive check of whether a client meets all requirements
- * to be assigned to a property (profile complete + required documents uploaded).
- */
 export function isClientComplete(
-  client: Pick<Client, 'full_name' | 'address' | 'tin_number'>,
+  client: ClientProfileRequirementsInput,
   documents: ClientDocument[]
 ): boolean {
   return isProfileComplete(client) && hasRequiredDocuments(documents);
 }
 
-/**
- * Get detailed requirements status for a client.
- * Returns breakdown of what's complete and what's missing.
- */
 export function getClientRequirements(
-  client: Pick<Client, 'full_name' | 'address' | 'tin_number'>,
+  client: ClientProfileRequirementsInput,
   documents: ClientDocument[]
 ): ClientRequirements {
   const profileComplete = isProfileComplete(client);

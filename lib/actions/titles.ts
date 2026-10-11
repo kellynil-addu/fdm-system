@@ -7,6 +7,7 @@ import { uuidSchema } from "@/lib/validations/client";
 import {
   createLandTitleSchema,
   updateLandTitleSchema,
+  updatePropertyTitleNumberSchema,
   getLandTitlesParamsSchema,
 } from "@/lib/validations/title";
 import type { AccountAwaitingTitle, CreateLandTitleInput, LandTitle } from "@/lib/types/title";
@@ -14,7 +15,7 @@ import type { PaginatedResult } from "@/lib/types/client";
 
 // The client's documents ride along so title lists can show release packet progress.
 const TITLE_SELECT =
-  "*, client:client_id(client_id, full_name, status, address, documents:client_document(document_type, property_id)), property:property_id(property_id, location, block_number, lot_number)";
+  "*, client:client_id(client_id, full_name, status, address, documents:client_document(document_type, property_id)), property:property_id(property_id, location, block_number, lot_number, title_number), history:land_title_status_history(history_id, title_id, status, changed_at, changed_by)";
 
 const titleBase = createScope();
 const titleCreate = createScope(["legal.create"]);
@@ -47,9 +48,6 @@ export async function getLandTitles(
       }
       if (validatedParams?.status) {
         query = query.eq("status", validatedParams.status);
-      }
-      if (validatedParams?.search) {
-        query = query.ilike("title_number", `%${validatedParams.search}%`);
       }
 
       const sortBy = validatedParams?.sortBy ?? "created_at";
@@ -105,6 +103,7 @@ interface RawClearedAccount {
     location: string;
     block_number: number;
     lot_number: number;
+    title_number?: string | null;
     land_title: { title_id: string }[] | { title_id: string } | null;
   } | null;
   parties: { is_primary: boolean; client: { client_id: string; full_name: string } | null }[];
@@ -121,7 +120,7 @@ export async function getAccountsAwaitingTitle(): Promise<AccountAwaitingTitle[]
     const { data, error } = await supabase
       .from("ledger_account")
       .select(
-        "account_id, cleared_at, property:property_id(property_id, location, block_number, lot_number, land_title(title_id)), parties:account_party(is_primary, client:client_id(client_id, full_name))"
+        "account_id, cleared_at, property:property_id(property_id, location, block_number, lot_number, title_number, land_title(title_id)), parties:account_party(is_primary, client:client_id(client_id, full_name))"
       )
       .eq("status", "Active")
       .not("cleared_at", "is", null)
@@ -152,6 +151,7 @@ export async function getAccountsAwaitingTitle(): Promise<AccountAwaitingTitle[]
             location: property.location,
             block_number: property.block_number,
             lot_number: property.lot_number,
+            title_number: property.title_number ?? null,
           },
           client: party?.client ?? null,
           co_buyers: coBuyers,
@@ -172,7 +172,7 @@ export async function createLandTitle(
   return titleCreate.run({
     schema: createLandTitleSchema,
     input,
-    handler: async ({ property_id, title_holder, title_number }, { supabase }) => {
+    handler: async ({ property_id, is_legacy_transferred, status }, { supabase }) => {
       const { data: account, error: accountError } = await supabase
         .from("ledger_account")
         .select("account_id, cleared_at, parties:account_party(client_id, is_primary)")
@@ -204,8 +204,8 @@ export async function createLandTitle(
         .insert({
           property_id,
           client_id: buyer.client_id,
-          title_holder,
-          title_number,
+          is_legacy_transferred: Boolean(is_legacy_transferred),
+          status: status ?? "Document Preparation",
         })
         .select(TITLE_SELECT)
         .single<LandTitle>();
@@ -239,6 +239,31 @@ export async function updateLandTitle(
 
       if (error || !data) {
         throw new Error(`Failed to update land title: ${error?.message ?? "Unknown error"}`);
+      }
+
+      return data;
+    },
+  });
+}
+
+/** Updates the TCT number directly on the property lot. */
+export async function updatePropertyTitleNumber(
+  propertyId: string,
+  titleNumber: string
+): Promise<ActionResult<{ property_id: string; title_number: string }>> {
+  return titleUpdate.run({
+    schema: updatePropertyTitleNumberSchema,
+    input: { property_id: propertyId, title_number: titleNumber },
+    handler: async ({ property_id, title_number }, { supabase }) => {
+      const { data, error } = await supabase
+        .from("property_lot")
+        .update({ title_number })
+        .eq("property_id", property_id)
+        .select("property_id, title_number")
+        .single<{ property_id: string; title_number: string }>();
+
+      if (error || !data) {
+        throw new Error(`Failed to update title number: ${error?.message ?? "Unknown error"}`);
       }
 
       return data;
