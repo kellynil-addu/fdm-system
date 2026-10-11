@@ -1,15 +1,18 @@
 'use client';
 
+import { DOC_TYPE_LABEL } from '@/lib/types/client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardToolbar, CardTableFooter } from '@/components/ui/card';
+import { Card, CardStickyHeader } from '@/components/ui/card';
+import {
+  FilterToolbar,
+  ListPaginationFooter,
+} from '@/components/ui/filter-toolbar';
 import { IconBox } from '@/components/ui/icon-box';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
   Plus,
-  Search,
   X,
   Users,
   SearchX,
@@ -32,7 +35,6 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { getClientReportData } from '@/lib/actions/reports';
-import { generateClientPdfReport } from '@/lib/reports/pdf-client-report';
 import {
   Table,
   TableBody,
@@ -50,14 +52,13 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import {
   ClientsProvider,
   useClients,
   ARCHIVED_STATUS,
-  type ClientStatusFilter,
 } from '@/lib/hooks/use-clients-page';
 import { useMutation } from '@/lib/hooks/use-mutation';
+import { useDialogPresence } from '@/lib/hooks/use-dialog-presence';
 import { formatActivityTime } from '@/lib/format-activity-time';
 import { getArchiveEligibility } from '@/lib/utils/archive-rules';
 import { getClientRequirements } from '@/lib/utils/client-requirements';
@@ -74,52 +75,6 @@ import type { ClientListItem, ContactInfo } from '@/lib/types/client';
 const GUTTER = 'px-4 sm:px-6';
 const GUTTER_L = 'pl-4 sm:pl-6';
 const GUTTER_R = 'pr-4 sm:pr-6';
-
-function StatusTabs({
-  value,
-  onChange,
-  counts,
-}: {
-  value: ClientStatusFilter;
-  onChange: (val: ClientStatusFilter) => void;
-  counts: Record<ClientStatusFilter, number>;
-}) {
-  const tabs: { value: ClientStatusFilter; label: string }[] = [
-    { value: 'all', label: 'Current' },
-    { value: 'all-records', label: 'All records' },
-    { value: 'Active', label: 'Active' },
-    { value: 'Inactive', label: 'Inactive' },
-    { value: 'Archived', label: 'Archived' },
-  ];
-
-  return (
-    <div
-      role="group"
-      aria-label="Filter clients by status"
-      className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-lg bg-row-hover p-1"
-    >
-      {tabs.map((tab) => {
-        const isActive = value === tab.value;
-        return (
-          <button
-            key={tab.value}
-            type="button"
-            aria-pressed={isActive}
-            onClick={() => onChange(tab.value)}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
-              isActive
-                ? 'bg-card text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab.label}
-            <span className="text-xs tabular-nums text-muted-foreground">{counts[tab.value]}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 function ContactDetailsCell({
   contacts,
@@ -210,34 +165,32 @@ function ContactDetailsCell({
 }
 
 function EmptyState({
-  isFiltered,
-  onClear,
+  controller,
   onCreate,
 }: {
-  isFiltered: boolean;
-  onClear: () => void;
+  controller: { isFiltered: boolean; clearAll: () => void };
   onCreate: () => void;
 }) {
-  const Icon = isFiltered ? SearchX : Users;
+  const Icon = controller.isFiltered ? SearchX : Users;
   return (
-    <div className="flex flex-col items-center justify-center gap-4 px-6 py-20 text-center">
+    <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-row-hover">
         <Icon className="h-5 w-5 text-muted-foreground" />
       </div>
       <div className="space-y-1.5">
         <p className="text-sm font-semibold text-foreground">
-          {isFiltered ? 'No matching clients' : 'No clients yet'}
+          {controller.isFiltered ? 'No matching clients' : 'No clients yet'}
         </p>
         <p className="max-w-sm text-sm text-muted-foreground">
-          {isFiltered
+          {controller.isFiltered
             ? 'Try a different search term, or clear the filters to view all clients.'
             : 'Add the first client to start maintaining client records and contact information.'}
         </p>
       </div>
-      {isFiltered ? (
+      {controller.isFiltered ? (
         <Button
           variant="outline"
-          onClick={onClear}
+          onClick={controller.clearAll}
           className="gap-1.5 border-border bg-card text-foreground hover:bg-row-hover hover:text-foreground"
         >
           <X className="h-3.5 w-3.5" />
@@ -309,10 +262,10 @@ function ClientRow({ client }: { client: ClientListItem }) {
                   className="shrink-0 text-[10px]"
                   title={
                     isProfileIncomplete && hasDocIssues
-                      ? `Missing profile fields and documents: ${missingDocs.missing_documents.join(', ')}`
+                      ? `Missing profile fields and documents: ${[...requirements.missingProfile, ...missingDocs.missing_documents.map((t) => DOC_TYPE_LABEL[t])].join(', ')}`
                       : isProfileIncomplete
-                        ? 'Incomplete profile (missing address or TIN)'
-                        : `Missing documents: ${missingDocs?.missing_documents.join(', ')}`
+                        ? `Incomplete profile (missing ${requirements.missingProfile.join(', ')})`
+                        : `Missing documents: ${missingDocs?.missing_documents.map((t) => DOC_TYPE_LABEL[t]).join(', ')}`
                   }
                 >
                   <ShieldAlert className="mr-1 h-2.5 w-2.5" />
@@ -385,6 +338,8 @@ function ClientRow({ client }: { client: ClientListItem }) {
               onSelect={async () => {
                 try {
                   const data = await getClientReportData(client.client_id);
+                  // Loaded on demand so jsPDF stays out of the page bundle.
+                  const { generateClientPdfReport } = await import('@/lib/reports/pdf-client-report');
                   generateClientPdfReport(data);
                   toast.success('Client PDF report generated');
                 } catch (err) {
@@ -439,157 +394,83 @@ function ClientRow({ client }: { client: ClientListItem }) {
 function ClientsContent() {
   const router = useRouter();
   const {
-    clients,
-    visibleClients,
+    controller,
     isLoading,
     error,
-    search,
-    setSearch,
-    statusFilter,
-    setStatusFilter,
     activeDialog,
     openDialog,
     missingDocumentAlerts,
     restoreClient,
   } = useClients();
 
+  const { rendered: dialog, isOpen: isDialogOpen } = useDialogPresence(activeDialog);
+
   const [isDocumentSearchOpen, setIsDocumentSearchOpen] = useState(false);
   const [isMissingDocsOpen, setIsMissingDocsOpen] = useState(false);
-
   const [viewMode, setViewMode] = useState<'standard' | 'compact'>('standard');
-
-  const isFiltered = search.trim() !== '' || statusFilter !== 'all';
-
-  /**
-   * Denominator for the footer: the set the current tab draws from, not every
-   * loaded row. All records includes archives; Current excludes them.
-   */
-  const tabTotal = statusFilter === 'all-records' ? clients.length :
-    statusFilter === 'Archived'
-      ? clients.filter((c) => c.status === ARCHIVED_STATUS).length
-      : clients.filter((c) => c.status !== ARCHIVED_STATUS).length;
-
-  // Current clients exclude archives; All records matches the dashboard total.
-  const active = clients.filter((c) => c.status !== ARCHIVED_STATUS);
-  const counts: Record<ClientStatusFilter, number> = {
-    all: active.length,
-    'all-records': clients.length,
-    Active: active.filter((c) => c.status.toLowerCase() === 'active').length,
-    Inactive: active.filter((c) => c.status.toLowerCase() === 'inactive').length,
-    Archived: clients.length - active.length,
-  };
-
-  function clearFilters() {
-    setSearch('');
-    setStatusFilter('all');
-  }
 
   return (
     <>
       <Card variant="section">
-        {/* Header */}
-        <div className={`flex flex-wrap items-start justify-between gap-4 pb-5 pt-6 ${GUTTER}`}>
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold leading-none tracking-tight text-foreground">
-              Client Directory
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Manage client records, contact information, and activity history.
-            </p>
-          </div>
-          <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
-            {missingDocumentAlerts.length > 0 && (
+        <CardStickyHeader>
+          {/* Header */}
+          <div className={`flex flex-wrap items-start justify-between gap-4 pb-5 pt-6 ${GUTTER}`}>
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold leading-none tracking-tight text-foreground">
+                Client Directory
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Manage client records, contact information, and activity history.
+              </p>
+            </div>
+            <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto">
+              {missingDocumentAlerts.length > 0 && (
+                <Button
+                  variant="danger"
+                  responsive
+                  onClick={() => setIsMissingDocsOpen(true)}
+                  className="min-h-10 gap-2"
+                >
+                  <ShieldAlert className="h-4 w-4" />
+                  {missingDocumentAlerts.length} incomplete
+                  {missingDocumentAlerts.length === 1 ? ' file' : ' files'}
+                </Button>
+              )}
               <Button
-                variant="danger"
+                variant="quiet"
                 responsive
-                onClick={() => setIsMissingDocsOpen(true)}
+                onClick={() => setIsDocumentSearchOpen(true)}
                 className="min-h-10 gap-2"
               >
-                <ShieldAlert className="h-4 w-4" />
-                {missingDocumentAlerts.length} incomplete
-                {missingDocumentAlerts.length === 1 ? ' file' : ' files'}
+                <FileSearch className="h-4 w-4" />
+                Search documents
               </Button>
-            )}
-            <Button
-              variant="quiet"
-              responsive
-              onClick={() => setIsDocumentSearchOpen(true)}
-              className="min-h-10 gap-2"
-            >
-              <FileSearch className="h-4 w-4" />
-              Search documents
-            </Button>
-            <Button
-              responsive
-              onClick={() => openDialog({ type: 'create' })}
-              className="min-h-10 gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              New Client
-            </Button>
-          </div>
-        </div>
-
-        {/* Filters and search */}
-        <CardToolbar>
-          <StatusTabs value={statusFilter} onChange={setStatusFilter} counts={counts} />
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <div className="relative min-w-0 flex-1 sm:flex-none">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search name, address, or contact"
-                aria-label="Search clients"
-                className="w-full pl-9 sm:w-72"
-              />
-            </div>
-            {isFiltered && (
               <Button
-                variant="ghost"
-                onClick={clearFilters}
-                className="gap-1.5 text-muted-foreground hover:bg-row-hover hover:text-foreground"
+                responsive
+                onClick={() => openDialog({ type: 'create' })}
+                className="min-h-10 gap-2"
               >
-                <X className="h-3.5 w-3.5" />
-                Clear
+                <Plus className="h-4 w-4" />
+                New Client
               </Button>
-            )}
-            <div className="flex items-center rounded-lg border border-border bg-card p-0.5">
-              <button
-                type="button"
-                onClick={() => setViewMode('standard')}
-                className={cn(
-                  'rounded-md p-1.5 transition-colors',
-                  viewMode === 'standard'
-                    ? 'bg-row-hover text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                title="Standard view"
-                aria-label="Standard view"
-              >
-                <LayoutList className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('compact')}
-                className={cn(
-                  'rounded-md p-1.5 transition-colors',
-                  viewMode === 'compact'
-                    ? 'bg-row-hover text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-                title="Compact view"
-                aria-label="Compact view"
-              >
-                <Rows className="h-4 w-4" />
-              </button>
             </div>
           </div>
-        </CardToolbar>
+
+          {/* Filters, search, and sort */}
+          <FilterToolbar
+            controller={controller}
+            viewMode={{
+              value: viewMode,
+              onChange: setViewMode,
+              options: [
+                { value: 'standard', label: 'Standard view', icon: <LayoutList className="h-4 w-4" /> },
+                { value: 'compact', label: 'Compact view', icon: <Rows className="h-4 w-4" /> },
+              ],
+            }}
+          />
+        </CardStickyHeader>
 
         {/* Table / rows */}
-        <div className="min-h-0 flex-1 overflow-y-auto border-t border-border">
           {error ? (
             <div role="alert" className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
               <p className="text-sm font-medium text-destructive">Could not load clients</p>
@@ -597,15 +478,14 @@ function ClientsContent() {
             </div>
           ) : isLoading ? (
             <ClientRowsSkeleton />
-          ) : visibleClients.length === 0 ? (
+          ) : controller.matchedItems.length === 0 ? (
             <EmptyState
-              isFiltered={isFiltered}
-              onClear={clearFilters}
+              controller={controller}
               onCreate={() => openDialog({ type: 'create' })}
             />
           ) : (
             <Table>
-              <TableHeader className="sticky top-0 z-10 bg-card">
+              <TableHeader className="bg-card">
                 {viewMode === 'standard' ? (
                   <TableRow className="bg-card hover:bg-card">
                     <TableHead className={`h-11 pr-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${GUTTER_L}`}>
@@ -643,10 +523,10 @@ function ClientsContent() {
               </TableHeader>
               <TableBody>
                 {viewMode === 'standard'
-                  ? visibleClients.map((client) => (
+                  ? controller.truncatedItems.map((client) => (
                       <ClientRow key={client.client_id} client={client} />
                     ))
-                  : visibleClients.map((client) => (
+                  : controller.truncatedItems.map((client) => (
                       <ClientCompactRow
                         key={client.client_id}
                         client={client}
@@ -662,27 +542,24 @@ function ClientsContent() {
               </TableBody>
             </Table>
           )}
-        </div>
 
         {/* Summary footer */}
         {!error && (
-          <CardTableFooter>
-            <p className="text-xs text-muted-foreground" aria-live="polite">
-              {isLoading
-                ? 'Loading clients…'
-                : isFiltered
-                  ? `Showing ${visibleClients.length} of ${tabTotal} client${tabTotal === 1 ? '' : 's'}`
-                  : `${tabTotal} client${tabTotal === 1 ? '' : 's'}`}
-            </p>
-          </CardTableFooter>
+          <ListPaginationFooter
+            controller={controller}
+            isLoading={isLoading}
+            singularLabel="client"
+            pluralLabel="clients"
+            loadingText="Loading clients…"
+          />
         )}
       </Card>
 
       {/* Dialogs */}
-      {activeDialog?.type === 'create' && <CreateClientModal open={true} />}
-      {activeDialog?.type === 'edit' && <EditClientModal client={activeDialog.client} open={true} />}
-      {activeDialog?.type === 'delete' && <DeleteClientDialog client={activeDialog.client} open={true} />}
-      {activeDialog?.type === 'archive' && <ArchiveClientDialog client={activeDialog.client} open={true} />}
+      {dialog?.type === 'create' && <CreateClientModal open={isDialogOpen} />}
+      {dialog?.type === 'edit' && <EditClientModal client={dialog.client} open={isDialogOpen} />}
+      {dialog?.type === 'delete' && <DeleteClientDialog client={dialog.client} open={isDialogOpen} />}
+      {dialog?.type === 'archive' && <ArchiveClientDialog client={dialog.client} open={isDialogOpen} />}
       <DocumentSearchDialog open={isDocumentSearchOpen} onOpenChange={setIsDocumentSearchOpen} />
       <MissingDocumentsDialog open={isMissingDocsOpen} onOpenChange={setIsMissingDocsOpen} />
     </>

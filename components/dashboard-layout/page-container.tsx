@@ -4,26 +4,18 @@ import { cn } from '@/lib/utils';
 export interface PageContainerProps extends React.HTMLAttributes<HTMLDivElement> {
   /**
    * Whether the container handles vertical scrolling.
-   * Defaults to `true` (`overflow-y-auto`). Set to `false` (`overflow-hidden`)
-   * for full-height views like maps, editors, or dashboards that manage their own dimensions.
+   * Supports `true` (overflow-y-auto), `false` (overflow-hidden),
+   * or `'responsive'` (page scroll on mobile, locked full-height on desktop).
    */
-  scrollable?: boolean;
+  scrollable?: boolean | 'responsive';
   /**
-   * Whether to apply standard page padding (`p-8`).
-   * Defaults to `true`. Set to `false` for full-bleed edge-to-edge layouts.
+   * Whether to apply page padding. Supports `true` (all sides), `'horizontal'` (x-axis only), or `false`.
    */
-  padding?: boolean;
+  padding?: boolean | 'horizontal';
   children: React.ReactNode;
   className?: string;
 }
 
-/**
- * Standard container for dashboard pages.
- *
- * Provides consistent padding and scroll container behavior across dashboard views,
- * while allowing full-bleed and full-height layouts (such as the Site Map) to opt out
- * of padding or page-level scrolling.
- */
 export function PageContainer({
   scrollable = true,
   padding = true,
@@ -31,12 +23,27 @@ export function PageContainer({
   children,
   ...props
 }: PageContainerProps) {
+  const scrollClasses =
+    scrollable === 'responsive'
+      ? 'overflow-y-auto md:overflow-hidden md:h-full'
+      : scrollable
+      ? 'overflow-y-auto'
+      : 'overflow-hidden';
+
+  const paddingClasses =
+    padding === 'horizontal'
+      ? 'min-h-full px-4 sm:px-8'
+      : padding &&
+        (scrollable === 'responsive'
+          ? 'min-h-full md:min-h-0 p-4 sm:p-8'
+          : 'min-h-full p-4 sm:p-8');
+
   return (
     <div
       className={cn(
         'flex-1 min-h-0 h-full flex flex-col',
-        scrollable ? 'overflow-y-auto' : 'overflow-hidden',
-        padding && 'min-h-full p-4 sm:p-8',
+        scrollClasses,
+        paddingClasses,
         className
       )}
       {...props}

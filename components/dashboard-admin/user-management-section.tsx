@@ -3,11 +3,12 @@
 import { Fragment, useState, useEffect, useRef, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardToolbar, CardTableFooter } from '@/components/ui/card';
+import { Card, CardTableFooter, CardStickyHeader } from '@/components/ui/card';
+import { FilterToolbar } from '@/components/ui/filter-toolbar';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { FormField } from '@/components/ui/form-field';
-import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { useDialogPresence } from '@/lib/hooks/use-dialog-presence';
 import { RoleCheckboxList } from './role-checkbox-list';
 import {
   Plus,
@@ -15,9 +16,6 @@ import {
   Trash2,
   X,
   MoreHorizontal,
-  Search,
-  ListFilter,
-  Check,
   ChevronRight,
   UserRoundPlus,
   UserRoundCheck,
@@ -64,7 +62,6 @@ import { CreateUserModal } from './user-create-modal';
 import {
   AdminUsersProvider,
   useAdminUsers,
-  type AdminDialog,
   type StatusFilter,
 } from '@/lib/hooks/use-admin-users';
 import { useMutation } from '@/lib/hooks/use-mutation';
@@ -87,9 +84,6 @@ const TINTS = {
   rowOpen: 'bg-row-active hover:bg-row-active',
   rowMenuBtn: 'hover:bg-card hover:text-foreground hover:shadow-sm data-[state=open]:bg-card data-[state=open]:text-foreground data-[state=open]:shadow-sm',
 };
-
-/** Matches the `duration-200` exit transition on Dialog/AlertDialog content. */
-const DIALOG_EXIT_MS = 200;
 
 /**
  * Consistent horizontal gutter for every band of the card.
@@ -126,28 +120,6 @@ function selfProtection(user: UserListItem, currentUserId: string) {
     canToggle: !(isSelf && !user.isBanned),
     canDelete: !isSelf,
   };
-}
-
-/**
- * Keeps the most recent dialog mounted for the length of its exit animation.
- *
- * Radix animates a dialog out on the element it is unmounting. Rendering
- * dialogs straight off `activeDialog` tore them from the screen the instant the
- * value became null, so the close animation never played.
- */
-function useDialogPresence(activeDialog: AdminDialog) {
-  const [rendered, setRendered] = useState<AdminDialog>(activeDialog);
-
-  useEffect(() => {
-    if (activeDialog) {
-      setRendered(activeDialog);
-      return;
-    }
-    const timer = setTimeout(() => setRendered(null), DIALOG_EXIT_MS);
-    return () => clearTimeout(timer);
-  }, [activeDialog]);
-
-  return { rendered, isOpen: activeDialog !== null };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -511,7 +483,7 @@ function UserRow({ user, isExpanded }: { user: UserListItem; isExpanded: boolean
           }`}
         />
         <div className="flex items-center gap-3">
-          {/* A real button, so the row can be expanded from the keyboard — the
+          {/* A real button, so the row can be expanded from the keyboard. The
               row's own click handler is mouse-only. */}
           <button
             type="button"
@@ -605,8 +577,8 @@ function UserDetailRow({ user }: { user: UserListItem }) {
           className={`animate-in fade-in-0 slide-in-from-top-2 shadow-[0_10px_12px_-10px_var(--row-panel-shadow)] duration-200 pb-6 pt-4 ${GUTTER}`}
         >
           <dl className="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-4">
-            <DetailField label="First name">{user.firstName || '—'}</DetailField>
-            <DetailField label="Last name">{user.lastName || '—'}</DetailField>
+            <DetailField label="First name">{user.firstName || 'Not provided'}</DetailField>
+            <DetailField label="Last name">{user.lastName || 'Not provided'}</DetailField>
             <DetailField label="Email address">
               <span className="break-all">{user.email}</span>
             </DetailField>
@@ -668,97 +640,6 @@ function UserDetailRow({ user }: { user: UserListItem }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Toolbar                                                                   */
-/* -------------------------------------------------------------------------- */
-
-/** Status filter as a segmented control, doubling as an at-a-glance breakdown. */
-function StatusTabs({
-  value,
-  onChange,
-  counts,
-}: {
-  value: StatusFilter;
-  onChange: (v: StatusFilter) => void;
-  counts: Record<StatusFilter, number>;
-}) {
-  const tabs: { value: StatusFilter; label: string }[] = [
-    { value: 'all', label: 'All' },
-    { value: 'active', label: 'Active' },
-    { value: 'inactive', label: 'Inactive' },
-  ];
-
-  return (
-    <div role="group" aria-label="Filter by status" className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-lg bg-row-hover p-1">
-      {tabs.map((tab) => {
-        const isActive = value === tab.value;
-        return (
-          <button
-            key={tab.value}
-            type="button"
-            aria-pressed={isActive}
-            onClick={() => onChange(tab.value)}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
-              isActive
-                ? 'bg-card text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab.label}
-            <span className={`text-xs tabular-nums ${isActive ? 'text-muted-foreground' : ''}`}>
-              {counts[tab.value]}
-            </span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function RoleFilter({
-  value,
-  onChange,
-}: {
-  value: string | null;
-  onChange: (v: string | null) => void;
-}) {
-  const { roles } = useAdminUsers();
-  const active = roles.find((r) => r.id === value);
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="quiet" className="gap-2">
-          <ListFilter className="h-4 w-4 text-muted-foreground" />
-          {active ? roleLabel(active.name) : 'All roles'}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[220px]">
-        <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Role
-        </DropdownMenuLabel>
-        <DropdownMenuItem
-          onSelect={(e) => { e.preventDefault(); onChange(null); }}
-          className="justify-between"
-        >
-          All roles
-          {value === null && <Check className="h-4 w-4" />}
-        </DropdownMenuItem>
-        {roles.map((role) => (
-          <DropdownMenuItem
-            key={role.id}
-            onSelect={(e) => { e.preventDefault(); onChange(role.id); }}
-            className="justify-between"
-          >
-            {roleLabel(role.name)}
-            {value === role.id && <Check className="h-4 w-4" />}
-          </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /*  Loading / empty states                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -774,7 +655,7 @@ function EmptyState({
   const Icon = isFiltered ? SearchX : UserRoundPlus;
 
   return (
-    <div className="flex flex-col items-center justify-center gap-4 px-6 py-20 text-center">
+    <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-row-hover">
         <Icon className="h-5 w-5 text-muted-foreground" />
       </div>
@@ -810,6 +691,7 @@ function EmptyState({
 function UserManagementContent() {
   const {
     users,
+    roles,
     visibleUsers,
     isLoading,
     error,
@@ -842,97 +724,108 @@ function UserManagementContent() {
   return (
     <>
       <Card variant="section">
-        {/* Header */}
-        <div className={`flex flex-wrap items-start justify-between gap-4 pb-5 pt-6 ${GUTTER}`}>
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold leading-none tracking-tight text-foreground">
-              User Management
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Create accounts and control what each member of the team can reach.
-            </p>
-          </div>
-          <Button
-            onClick={() => openDialog({ type: 'create' })}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Create User
-          </Button>
-        </div>
-
-        {/* Toolbar */}
-        <CardToolbar>
-          <StatusTabs value={statusFilter} onChange={setStatusFilter} counts={counts} />
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <div className="relative min-w-0 flex-1 sm:flex-none">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search name, email or role"
-                aria-label="Search users"
-                className="w-full pl-9 sm:w-72"
-              />
+        <CardStickyHeader>
+          {/* Header */}
+          <div className={`flex flex-wrap items-start justify-between gap-4 pb-5 pt-6 ${GUTTER}`}>
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold leading-none tracking-tight text-foreground">
+                User Management
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Create accounts and control what each member of the team can reach.
+              </p>
             </div>
-            <RoleFilter value={roleFilter} onChange={setRoleFilter} />
-            {isFiltered && (
-              <Button variant="ghost" onClick={clearFilters} className="gap-1.5 text-muted-foreground hover:bg-row-hover hover:text-foreground">
-                <X className="h-3.5 w-3.5" />
-                Clear
-              </Button>
-            )}
+            <Button
+              onClick={() => openDialog({ type: 'create' })}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create User
+            </Button>
           </div>
-        </CardToolbar>
+
+          {/* Toolbar */}
+          <FilterToolbar
+            tabs={{
+              value: statusFilter,
+              onChange: setStatusFilter,
+              ariaLabel: 'Filter by status',
+              items: [
+                { value: 'all', label: 'All', count: counts.all },
+                { value: 'active', label: 'Active', count: counts.active },
+                { value: 'inactive', label: 'Inactive', count: counts.inactive },
+              ],
+            }}
+            search={{
+              value: search,
+              onChange: setSearch,
+              placeholder: 'Search name, email or role',
+              ariaLabel: 'Search users',
+            }}
+            filters={[
+              {
+                type: 'single-select',
+                id: 'role',
+                label: 'Role',
+                allLabel: 'All roles',
+                value: roleFilter,
+                onChange: setRoleFilter,
+                options: roles.map((role) => ({
+                  value: role.id,
+                  label: roleLabel(role.name),
+                })),
+              },
+            ]}
+            isFiltered={isFiltered}
+            onClear={clearFilters}
+          />
+        </CardStickyHeader>
 
         {/* List */}
-        <div className="min-h-0 flex-1 overflow-y-auto border-t border-border">
-          {error ? (
-            <div role="alert" className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
-              <p className="text-sm font-medium text-destructive">Could not load users</p>
-              <p className="max-w-sm text-sm text-muted-foreground">{error}</p>
-            </div>
-          ) : isLoading ? (
-            <UserRowsSkeleton />
-          ) : visibleUsers.length === 0 ? (
-            <EmptyState
-              isFiltered={isFiltered}
-              onClearFilters={clearFilters}
-              onCreateUser={() => openDialog({ type: 'create' })}
-            />
-          ) : (
-            <Table>
-              <TableHeader className="sticky top-0 z-10">
-                <TableRow className="bg-card hover:bg-card">
-                  <TableHead className={`h-11 pr-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${GUTTER_L}`}>
-                    User
-                  </TableHead>
-                  <TableHead className="hidden h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:table-cell">
-                    Roles
-                  </TableHead>
-                  <TableHead className="h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Status
-                  </TableHead>
-                  <TableHead className={`h-11 w-14 pl-3 ${GUTTER_R}`}>
-                    <span className="sr-only">Actions</span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleUsers.map((user) => {
-                  const isExpanded = selectedUserId === user.id;
-                  return (
-                    <Fragment key={user.id}>
-                      <UserRow user={user} isExpanded={isExpanded} />
-                      {isExpanded && <UserDetailRow user={user} />}
-                    </Fragment>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+        {error ? (
+          <div role="alert" className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
+            <p className="text-sm font-medium text-destructive">Could not load users</p>
+            <p className="max-w-sm text-sm text-muted-foreground">{error}</p>
+          </div>
+        ) : isLoading ? (
+          <UserRowsSkeleton />
+        ) : visibleUsers.length === 0 ? (
+          <EmptyState
+            isFiltered={isFiltered}
+            onClearFilters={clearFilters}
+            onCreateUser={() => openDialog({ type: 'create' })}
+          />
+        ) : (
+          <Table>
+            <TableHeader className="bg-card">
+              <TableRow className="bg-card hover:bg-card">
+                <TableHead className={`h-11 pr-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${GUTTER_L}`}>
+                  User
+                </TableHead>
+                <TableHead className="hidden h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:table-cell">
+                  Roles
+                </TableHead>
+                <TableHead className="h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Status
+                </TableHead>
+                <TableHead className={`h-11 w-14 pl-3 ${GUTTER_R}`}>
+                  <span className="sr-only">Actions</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {visibleUsers.map((user) => {
+                const isExpanded = selectedUserId === user.id;
+                return (
+                  <Fragment key={user.id}>
+                    <UserRow user={user} isExpanded={isExpanded} />
+                    {isExpanded && <UserDetailRow user={user} />}
+                  </Fragment>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
 
         {/* Footer */}
         {!error && (

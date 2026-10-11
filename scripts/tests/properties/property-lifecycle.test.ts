@@ -11,6 +11,7 @@ import {
 } from "@/lib/actions/properties";
 import { createSite, getSiteWithLots } from "@/lib/actions/sites";
 import { createClient, getClientById } from "@/lib/actions/clients";
+import { deleteLandTitle } from "@/lib/actions/titles";
 import {
   loginAsAdmin,
   hardDeleteTestProperty,
@@ -19,6 +20,8 @@ import {
   getTestAdminClient,
 } from "../framework/session";
 import { unwrap } from "../framework/action-helper";
+import { uniqueNameSuffix } from "../framework/fake-data";
+import { undoBillingClearance } from "@/lib/actions/billing";
 
 describe("Property Lifecycle & Subdivision Transitions", () => {
   const testPropertyIds: string[] = [];
@@ -95,7 +98,7 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
   it("assignPropertyFullyPaid transitions lot to Sold and records land_title", async () => {
     const client = unwrap(
       await createClient({
-        full_name: `Fully Paid Owner ${Date.now()}`,
+        full_name: `Fully Paid Owner ${uniqueNameSuffix()}`,
       })
     );
     testClientIds.push(client.client_id);
@@ -114,13 +117,18 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
 
     const titleNumber = `TCT-PAID-${Date.now()}`;
     const assigned = unwrap(
-      await assignPropertyFullyPaid(lot.property_id, client.client_id, titleNumber)
+      await assignPropertyFullyPaid(lot.property_id, client.client_id, {
+        title_number: titleNumber,
+        is_legacy_transferred: true,
+      })
     );
 
     expect(assigned.status).toBe("Sold");
     expect(assigned.client?.client_id).toBe(client.client_id);
-    expect(assigned.title?.title_number).toBe(titleNumber);
-    expect(assigned.active_account).toBeNull();
+    expect(assigned.title_number).toBe(titleNumber);
+    expect(assigned.title?.status).toBe("Ready for Claim");
+    expect(assigned.title?.is_legacy_transferred).toBe(true);
+    expect(assigned.active_account?.cleared_at).toBeTruthy();
 
     // Verify client details include this owned property
     const clientDetails = await getClientById(client.client_id);
@@ -130,7 +138,20 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
     const clientLots = await getPropertyLots({ client_id: client.client_id });
     expect(clientLots.data.some((l) => l.property_id === lot.property_id)).toBe(true);
 
-    // Unassigning clears the client and removes land title
+    // Unassigning a titled lot directly is blocked until the land title is deleted
+    const blockedUnassign = await assignPropertyClient(lot.property_id, null);
+    expect(blockedUnassign.success).toBe(false);
+    if (!blockedUnassign.success) {
+      expect(blockedUnassign.error).toMatch(/Cannot unassign a titled property lot/i);
+    }
+
+    unwrap(await deleteLandTitle(assigned.title!.title_id));
+
+    // Still cleared by Billing, so unassigning stays blocked until that is undone
+    const blockedCleared = await assignPropertyClient(lot.property_id, null);
+    expect(blockedCleared.success).toBe(false);
+    unwrap(await undoBillingClearance(assigned.active_account!.account_id));
+
     const cleared = unwrap(await assignPropertyClient(lot.property_id, null));
     expect(cleared.status).toBe("Open");
     expect(cleared.client).toBeNull();
@@ -148,14 +169,14 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
 
     const installmentClient = unwrap(
       await createClient({
-        full_name: `Installment Buyer ${Date.now()}`,
+        full_name: `Installment Buyer ${uniqueNameSuffix()}`,
       })
     );
     testClientIds.push(installmentClient.client_id);
 
     const paidClient = unwrap(
       await createClient({
-        full_name: `Outright Owner ${Date.now()}`,
+        full_name: `Outright Owner ${uniqueNameSuffix()}`,
       })
     );
     testClientIds.push(paidClient.client_id);
@@ -191,15 +212,16 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
         price_per_sqm: 12000,
         client_id: paidClient.client_id,
         ownership_type: "fully_paid",
-        title_number: `TCT-DIRECT-${Date.now()}`,
       })
     );
     testPropertyIds.push(paidLot.property_id);
 
+    // A fully paid sale is an account already cleared by Billing, with no title yet
     expect(paidLot.status).toBe("Sold");
     expect(paidLot.client?.client_id).toBe(paidClient.client_id);
-    expect(paidLot.title).not.toBeNull();
-    expect(paidLot.active_account).toBeNull();
+    expect(paidLot.title).toBeNull();
+    expect(paidLot.active_account?.cleared_at).toBeTruthy();
+    expect(Number(paidLot.active_account?.remaining_balance)).toBe(0);
 
     // Verify both clients resolve their respective properties
     const [instDetails, paidDetails] = await Promise.all([
@@ -253,7 +275,7 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
     // 3. Assign to Client A as Reserved
     const clientA = unwrap(
       await createClient({
-        full_name: `Buyer A ${Date.now()}`,
+        full_name: `Buyer A ${uniqueNameSuffix()}`,
       })
     );
     testClientIds.push(clientA.client_id);

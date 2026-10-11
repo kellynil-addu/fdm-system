@@ -4,8 +4,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 /**
  * Suspense fallbacks for the dashboard pages.
  *
- * Each one mirrors the real page's layout — same card count, same grid, same
- * rough block sizes — so the content lands in place instead of the page
+ * Each one mirrors the real page's layout (same card count, same grid, same
+ * rough block sizes), so the content lands in place instead of the page
  * jumping when a centred spinner is swapped out for a full layout.
  *
  * `aria-hidden` plus a labelled `role="status"` wrapper keeps screen readers
@@ -55,7 +55,7 @@ export function DashboardSkeleton() {
 export function AdminSkeleton() {
   return (
     <LoadingRegion label="Loading administration…">
-      <div className="flex flex-1 flex-col gap-6">
+      <div className="flex flex-col gap-6 pt-4 sm:pt-8 pb-6 sm:pb-8">
         <Skeleton className="h-7 w-48" />
 
         <Card variant="section">
@@ -87,7 +87,7 @@ export function AdminSkeleton() {
 }
 
 /**
- * Placeholder user rows, shaped like the real ones — same 36px avatar and the
+ * Placeholder user rows, shaped like the real ones: same 36px avatar and the
  * same `py-4`, so the list does not reflow when the data arrives.
  *
  * Exported because the admin page's Suspense fallback and the user table's own
@@ -114,7 +114,7 @@ export function UserRowsSkeleton({ rows = 5 }: { rows?: number }) {
 }
 
 /**
- * Placeholder lot rows, shaped like the real ones — same 36px tile and `py-4`,
+ * Placeholder lot rows, shaped like the real ones: same 36px tile and `py-4`,
  * so the table does not reflow when the data arrives.
  *
  * Exported because the properties page's Suspense fallback and the lot table's
@@ -143,7 +143,7 @@ export function PropertyRowsSkeleton({ rows = 6 }: { rows?: number }) {
 export function PropertiesSkeleton() {
   return (
     <LoadingRegion label="Loading property lots…">
-      <div className="flex flex-1 flex-col gap-6">
+      <div className="flex flex-col gap-6 pt-4 sm:pt-8 pb-6 sm:pb-8">
         <TitleSkeleton />
 
         <Card variant="section">
@@ -291,7 +291,7 @@ export function ClientRowsSkeleton({ rows = 5 }: { rows?: number }) {
 export function ClientsSkeleton() {
   return (
     <LoadingRegion label="Loading clients…">
-      <div className="flex flex-1 flex-col gap-6">
+      <div className="flex flex-col gap-6 pt-4 sm:pt-8 pb-6 sm:pb-8">
         <TitleSkeleton />
 
         <Card variant="section">

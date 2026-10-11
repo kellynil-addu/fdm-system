@@ -1,25 +1,19 @@
 import "server-only";
 
-import { createClient } from "@/lib/supabase/server";
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getStorageBucket, getStorageClient } from "./s3";
 
-/**
- * Object storage for client paperwork, backing `client_document.file_path`.
- *
- * Every call goes through the request-scoped (cookie-bound) Supabase client, so
- * the policies added in 20260920200000 are enforced as the signed-in user. Do
- * not swap in the admin client here: it bypasses RLS and would silently undo
- * the permission gating on the bucket.
- */
+export { getStorageBucket, getStorageClient };
 
-export const CLIENT_DOCUMENTS_BUCKET = "client-documents";
+/** Folder prefix inside the shared bucket for client documents. */
+export const CLIENT_DOCUMENTS_FOLDER = "clients";
 
-/** Matches the bucket's own limits, declared in the migration. */
-export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
-export const ALLOWED_DOCUMENT_TYPES = [
-  "application/pdf",
-  "image/jpeg",
-  "image/png",
-] as const;
+export { MAX_DOCUMENT_BYTES, ALLOWED_DOCUMENT_TYPES } from "@/lib/validations/document";
 
 /**
  * `{client_id}/{uuid}-{sanitized-filename}`.
@@ -35,22 +29,31 @@ function buildObjectPath(clientId: string, fileName: string): string {
     .replace(/^\.+/, "")
     .slice(-100);
 
-  return `${clientId}/${crypto.randomUUID()}-${cleaned || "document"}`;
+  return `${CLIENT_DOCUMENTS_FOLDER}/${clientId}/${crypto.randomUUID()}-${cleaned || "document"}`;
 }
 
 export async function uploadClientDocumentObject(
   clientId: string,
   file: File
 ): Promise<string> {
-  const supabase = await createClient();
+  const client = getStorageClient();
+  const bucket = getStorageBucket();
   const path = buildObjectPath(clientId, file.name);
+  const body = Buffer.from(await file.arrayBuffer());
 
-  const { error } = await supabase.storage
-    .from(CLIENT_DOCUMENTS_BUCKET)
-    .upload(path, file, { contentType: file.type, upsert: false });
-
-  if (error) {
-    throw new Error(`Failed to upload document: ${error.message}`);
+  try {
+    await client.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: path,
+        Body: body,
+        ContentType: file.type,
+        ContentLength: body.byteLength,
+      })
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    throw new Error(`Failed to upload document: ${message}`);
   }
 
   return path;
@@ -67,27 +70,31 @@ export async function createClientDocumentUrl(
   path: string,
   expiresInSeconds = 60
 ): Promise<string> {
-  const supabase = await createClient();
+  const client = getStorageClient();
+  const bucket = getStorageBucket();
 
-  const { data, error } = await supabase.storage
-    .from(CLIENT_DOCUMENTS_BUCKET)
-    .createSignedUrl(path, expiresInSeconds);
-
-  if (error || !data?.signedUrl) {
-    throw new Error(`Failed to open document: ${error?.message ?? "No URL returned"}`);
+  try {
+    return await getSignedUrl(
+      client,
+      new GetObjectCommand({ Bucket: bucket, Key: path }),
+      { expiresIn: expiresInSeconds }
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "No URL returned";
+    throw new Error(`Failed to open document: ${message}`);
   }
-
-  return data.signedUrl;
 }
 
 export async function removeClientDocumentObject(path: string): Promise<void> {
-  const supabase = await createClient();
+  const client = getStorageClient();
+  const bucket = getStorageBucket();
 
-  const { error } = await supabase.storage
-    .from(CLIENT_DOCUMENTS_BUCKET)
-    .remove([path]);
-
-  if (error) {
-    throw new Error(`Failed to remove stored document: ${error.message}`);
+  try {
+    await client.send(
+      new DeleteObjectCommand({ Bucket: bucket, Key: path })
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    throw new Error(`Failed to remove stored document: ${message}`);
   }
 }

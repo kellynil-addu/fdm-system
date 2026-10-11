@@ -3,7 +3,10 @@
 import { useEffect, useState, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import {
+  FilterToolbar,
+  ListShowMoreButton,
+} from '@/components/ui/filter-toolbar';
 import {
   Table,
   TableBody,
@@ -14,7 +17,6 @@ import {
 } from '@/components/ui/table';
 import {
   Plus,
-  Search,
   X,
   LandPlot,
   SearchX,
@@ -32,15 +34,13 @@ import {
   usePropertyLots,
   lotLabel,
   totalPrice,
-  type StatusFilter,
 } from '@/lib/hooks/use-property-lots';
 import type { PropertyLotWithClient, PropertyStatus, Site } from '@/lib/types/property';
-import { STATUSES, PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
+import { PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
 import { Badge } from '@/components/ui/badge';
 import { IconBox } from '@/components/ui/icon-box';
 import { cn } from '@/lib/utils';
-
-const DIALOG_EXIT_MS = 200;
+import { useDialogPresence } from '@/lib/hooks/use-dialog-presence';
 
 const PESO = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -67,9 +67,9 @@ const STATUS_AVATAR: Record<PropertyStatus, { border: string; bg: string; text: 
     text: 'text-accent-gold-foreground',
   },
   Forfeited: {
-    border: 'border-destructive',
-    bg: 'bg-[color-mix(in_srgb,var(--destructive)_10%,white)]',
-    text: 'text-destructive',
+    border: 'border-[#8B5CF6]',
+    bg: 'bg-[color-mix(in_srgb,#8B5CF6_12%,white)]',
+    text: 'text-[#7C3AED]',
   },
 };
 
@@ -77,7 +77,7 @@ const STATUS_TEXT: Record<PropertyStatus, string> = {
   Open: 'text-success',
   Reserved: 'text-accent-blue-foreground',
   Sold: 'text-accent-gold-foreground',
-  Forfeited: 'text-destructive',
+  Forfeited: 'text-[#7C3AED]',
 };
 
 function getInitials(name: string): string {
@@ -127,6 +127,11 @@ function LotRowItem({
   onSelect?: () => void;
   onHover?: (hovering: boolean) => void;
 }) {
+  const showTct = Boolean(
+    lot.title_number &&
+    (lot.status === 'Open' || lot.status === 'Reserved' || lot.status === 'Sold')
+  );
+
   return (
     <div
       onClick={onSelect}
@@ -172,56 +177,27 @@ function LotRowItem({
           <span className="font-semibold text-foreground">{PESO.format(totalPrice(lot))}</span>
           <span className="ml-1 text-[11px]">({PESO.format(lot.price_per_sqm)}/sqm)</span>
         </div>
-        <span className="font-medium">{AREA.format(lot.area_size)} sqm</span>
+        <div className="flex items-center gap-2">
+          {showTct && (
+            <span className="font-mono text-[11px] text-muted-foreground">
+              TCT {lot.title_number}
+            </span>
+          )}
+          <span className="font-medium">{AREA.format(lot.area_size)} sqm</span>
+        </div>
       </div>
     </div>
   );
 }
 
-function StatusTabs({
-  value,
-  onChange,
-  counts,
-}: {
-  value: StatusFilter;
-  onChange: (v: StatusFilter) => void;
-  counts: Record<StatusFilter, number>;
-}) {
-  const tabs: StatusFilter[] = ['all', ...STATUSES];
-  return (
-    <div role="group" aria-label="Filter by status" className="flex flex-wrap items-center gap-1 rounded-lg bg-row-hover p-1">
-      {tabs.map((tab) => {
-        const isActive = value === tab;
-        return (
-          <button
-            key={tab}
-            role="tab"
-            type="button"
-            aria-selected={isActive}
-            onClick={() => onChange(tab)}
-            className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
-              isActive ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab === 'all' ? 'All' : tab}
-            <span className="text-[10px] tabular-nums text-muted-foreground">({counts[tab]})</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 function EmptyState({
-  isFiltered,
-  onClear,
+  controller,
   onCreate,
 }: {
-  isFiltered: boolean;
-  onClear: () => void;
+  controller: { isFiltered: boolean; clearAll: () => void };
   onCreate: () => void;
 }) {
-  const Icon = isFiltered ? SearchX : LandPlot;
+  const Icon = controller.isFiltered ? SearchX : LandPlot;
   return (
     <div className="flex flex-col items-center justify-center gap-3 px-4 py-12 text-center">
       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-row-hover">
@@ -229,19 +205,19 @@ function EmptyState({
       </div>
       <div className="space-y-1">
         <p className="text-sm font-semibold text-foreground">
-          {isFiltered ? 'No matching lots' : 'No property lots yet'}
+          {controller.isFiltered ? 'No matching lots' : 'No property lots yet'}
         </p>
         <p className="max-w-xs text-xs text-muted-foreground">
-          {isFiltered
+          {controller.isFiltered
             ? 'Try a different search term or clear the filter.'
             : 'Add the first lot to start tracking lot availability.'}
         </p>
       </div>
-      {isFiltered ? (
+      {controller.isFiltered ? (
         <Button
           variant="outline"
           size="sm"
-          onClick={onClear}
+          onClick={controller.clearAll}
           className="gap-1.5 border-border bg-card text-xs text-foreground hover:bg-row-hover hover:text-foreground"
         >
           <X className="h-3.5 w-3.5" />
@@ -267,7 +243,15 @@ export interface PropertyLotsSidebarProps {
   selectedLot?: PropertyLotWithClient | null;
   onSelectLot?: (lot: PropertyLotWithClient | null) => void;
   onHoverLot?: (lotKey: string | null) => void;
-  createInitialValues?: { site_id?: string; block_number?: number; lot_number?: number } | null;
+  onSiteFilterChange?: (siteId: string | null) => void;
+  createInitialValues?: {
+    site_id?: string;
+    block_number?: number;
+    lot_number?: number;
+    area_size?: number;
+    price_per_sqm?: number;
+    title_number?: string;
+  } | null;
   onClearCreateInitialValues?: () => void;
 }
 
@@ -282,25 +266,30 @@ function PropertyLotsSidebarContent({
 }: PropertyLotsSidebarProps) {
   const {
     lots,
-    visibleLots,
+    controller,
     isLoading,
     error,
     activeDialog,
     openDialog,
     closeDialog,
-    search,
-    setSearch,
-    statusFilter,
-    setStatusFilter,
   } = usePropertyLots();
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [renderedDialog, setRenderedDialog] = useState(activeDialog);
+  const { rendered: renderedDialog, isOpen: isDialogOpen } = useDialogPresence(activeDialog);
   const wasDialogOpenedRef = useRef(false);
 
   const activeSelectedLot = useMemo(() => {
     if (!selectedLot) return null;
-    return lots.find((l) => l.property_id === selectedLot.property_id) ?? selectedLot;
+    return (
+      lots.find(
+        (l) =>
+          (selectedLot.property_id && l.property_id === selectedLot.property_id) ||
+          (selectedLot.site_id &&
+            l.site_id === selectedLot.site_id &&
+            l.block_number === selectedLot.block_number &&
+            l.lot_number === selectedLot.lot_number)
+      ) ?? selectedLot
+    );
   }, [lots, selectedLot]);
 
   // Close dialog when a lot is selected for inspection
@@ -326,14 +315,6 @@ function PropertyLotsSidebarContent({
     }
   }, [activeDialog, onClearCreateInitialValues]);
 
-  useEffect(() => {
-    if (activeDialog) {
-      setRenderedDialog(activeDialog);
-      return;
-    }
-    const timer = setTimeout(() => setRenderedDialog(null), DIALOG_EXIT_MS);
-    return () => clearTimeout(timer);
-  }, [activeDialog]);
 
   if (activeSelectedLot) {
     return (
@@ -343,20 +324,6 @@ function PropertyLotsSidebarContent({
         onClose={onClose}
       />
     );
-  }
-
-  const isFiltered = search.trim() !== '' || statusFilter !== 'all';
-  const counts = {
-    all: lots.length,
-    Open: lots.filter((l) => l.status === 'Open').length,
-    Reserved: lots.filter((l) => l.status === 'Reserved').length,
-    Sold: lots.filter((l) => l.status === 'Sold').length,
-    Forfeited: lots.filter((l) => l.status === 'Forfeited').length,
-  } satisfies Record<StatusFilter, number>;
-
-  function clearFilters() {
-    setSearch('');
-    setStatusFilter('all');
   }
 
   return (
@@ -370,7 +337,7 @@ function PropertyLotsSidebarContent({
           <div>
             <h2 className="text-sm font-semibold leading-none text-foreground">Property Lots</h2>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              {lots.length} lot{lots.length === 1 ? '' : 's'} total
+              {controller.totalPoolCount} lot{controller.totalPoolCount === 1 ? '' : 's'} total
             </p>
           </div>
         </div>
@@ -413,82 +380,19 @@ function PropertyLotsSidebarContent({
         </div>
       </div>
 
-      {/* Filter Tabs */}
-      <div className="border-b border-border px-4 py-2.5">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Status
-          </span>
-          {isFiltered && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="text-xs text-primary transition-colors hover:underline"
-            >
-              Reset filters
-            </button>
-          )}
-        </div>
-        <StatusTabs value={statusFilter} onChange={setStatusFilter} counts={counts} />
-      </div>
-
-      {/* Search Toolbar & View Toggle */}
-      <div className="flex items-center gap-2 border-b border-border px-4 py-2.5">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search location, block or lot…"
-            aria-label="Search property lots"
-            className="h-8 w-full pl-8 pr-8 text-xs"
-          />
-          {search && (
-            <button
-              type="button"
-              onClick={() => setSearch('')}
-              aria-label="Clear search"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex items-center rounded-lg border border-border bg-card p-0.5">
-          <button
-            type="button"
-            onClick={() => setViewMode('grid')}
-            className={cn(
-              'rounded-md p-1.5 transition-colors',
-              viewMode === 'grid'
-                ? 'bg-row-hover text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            title="Grid view"
-            aria-label="Grid view"
-            aria-pressed={viewMode === 'grid'}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            className={cn(
-              'rounded-md p-1.5 transition-colors',
-              viewMode === 'list'
-                ? 'bg-row-hover text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-            title="List view"
-            aria-label="List view"
-            aria-pressed={viewMode === 'list'}
-          >
-            <LayoutList className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
+      <FilterToolbar
+        variant="stacked"
+        controller={controller}
+        sort={false}
+        viewMode={{
+          value: viewMode,
+          onChange: setViewMode,
+          options: [
+            { value: 'grid', label: 'Grid view', icon: <LayoutGrid className="h-3.5 w-3.5" /> },
+            { value: 'list', label: 'List view', icon: <LayoutList className="h-3.5 w-3.5" /> },
+          ],
+        }}
+      />
 
       {/* List Body */}
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -499,74 +403,79 @@ function PropertyLotsSidebarContent({
           </div>
         ) : isLoading ? (
           <PropertyRowsSkeleton rows={4} />
-        ) : visibleLots.length === 0 ? (
+        ) : controller.matchedItems.length === 0 ? (
           <EmptyState
-            isFiltered={isFiltered}
-            onClear={clearFilters}
+            controller={controller}
             onCreate={() => openDialog({ type: 'create' })}
           />
-        ) : viewMode === 'grid' ? (
-          <div className="divide-y divide-border">
-            {visibleLots.map((lot) => (
-              <LotRowItem
-                key={lot.property_id}
-                lot={lot}
-                onSelect={() => onSelectLot?.(lot)}
-                onHover={(hovering) =>
-                  onHoverLot?.(
-                    hovering
-                      ? (lot.site_id
-                          ? `${lot.site_id}:${lot.block_number}-${lot.lot_number}`
-                          : `${lot.block_number}-${lot.lot_number}`)
-                      : null
-                  )
-                }
-              />
-            ))}
-          </div>
         ) : (
-          <div className="p-3">
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-card">
-                    <TableHead className="h-9 px-3 text-[11px] uppercase">Lot</TableHead>
-                    <TableHead className="h-9 px-2 text-[11px] uppercase">Area</TableHead>
-                    <TableHead className="h-9 px-2 text-[11px] uppercase">Price</TableHead>
-                    <TableHead className="h-9 px-3 text-[11px] uppercase">Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {visibleLots.map((lot) => (
-                    <TableRow
-                      key={lot.property_id}
-                      onClick={() => onSelectLot?.(lot)}
-                      onMouseEnter={() =>
-                        onHoverLot?.(
-                          lot.site_id
-                            ? `${lot.site_id}:${lot.block_number}-${lot.lot_number}`
-                            : `${lot.block_number}-${lot.lot_number}`
-                        )
-                      }
-                      onMouseLeave={() => onHoverLot?.(null)}
-                      className="text-xs cursor-pointer hover:bg-row-hover"
-                    >
-                      <TableCell className="py-2.5 px-3 font-medium">{lotLabel(lot)}</TableCell>
-                      <TableCell className="py-2.5 px-2 whitespace-nowrap text-muted-foreground">
-                        {AREA.format(lot.area_size)} sqm
-                      </TableCell>
-                      <TableCell className="py-2.5 px-2 whitespace-nowrap">
-                        {PESO.format(totalPrice(lot))}
-                      </TableCell>
-                      <TableCell className="py-2.5 px-3">
-                        <StatusPill status={lot.status} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
+          <>
+            {viewMode === 'grid' ? (
+              <div className="divide-y divide-border">
+                {controller.truncatedItems.map((lot) => (
+                  <LotRowItem
+                    key={lot.property_id}
+                    lot={lot}
+                    onSelect={() => onSelectLot?.(lot)}
+                    onHover={(hovering) =>
+                      onHoverLot?.(
+                        hovering
+                          ? (lot.site_id
+                              ? `${lot.site_id}:${lot.block_number}-${lot.lot_number}`
+                              : `${lot.block_number}-${lot.lot_number}`)
+                          : null
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="p-3">
+                <div className="overflow-x-auto rounded-lg border border-border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-card">
+                        <TableHead className="h-9 px-3 text-[11px] uppercase">Lot</TableHead>
+                        <TableHead className="h-9 px-2 text-[11px] uppercase">Area</TableHead>
+                        <TableHead className="h-9 px-2 text-[11px] uppercase">Price</TableHead>
+                        <TableHead className="h-9 px-3 text-[11px] uppercase">Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {controller.truncatedItems.map((lot) => (
+                        <TableRow
+                          key={lot.property_id}
+                          onClick={() => onSelectLot?.(lot)}
+                          onMouseEnter={() =>
+                            onHoverLot?.(
+                              lot.site_id
+                                ? `${lot.site_id}:${lot.block_number}-${lot.lot_number}`
+                                : `${lot.block_number}-${lot.lot_number}`
+                            )
+                          }
+                          onMouseLeave={() => onHoverLot?.(null)}
+                          className="text-xs cursor-pointer hover:bg-row-hover"
+                        >
+                          <TableCell className="py-2.5 px-3 font-medium">{lotLabel(lot)}</TableCell>
+                          <TableCell className="py-2.5 px-2 whitespace-nowrap text-muted-foreground">
+                            {AREA.format(lot.area_size)} sqm
+                          </TableCell>
+                          <TableCell className="py-2.5 px-2 whitespace-nowrap">
+                            {PESO.format(totalPrice(lot))}
+                          </TableCell>
+                          <TableCell className="py-2.5 px-3">
+                            <StatusPill status={lot.status} />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
+
+            <ListShowMoreButton controller={controller} />
+          </>
         )}
       </div>
 
@@ -576,9 +485,9 @@ function PropertyLotsSidebarContent({
           <span>
             {isLoading
               ? 'Loading…'
-              : isFiltered
-                ? `Showing ${visibleLots.length} of ${lots.length}`
-                : `${lots.length} lots total`}
+              : controller.isFiltered || controller.truncatedItems.length < controller.matchedItems.length
+                ? `Showing ${controller.truncatedItems.length} of ${controller.matchedItems.length} (${controller.totalPoolCount} total)`
+                : `${controller.totalPoolCount} lot${controller.totalPoolCount === 1 ? '' : 's'} total`}
           </span>
           <Button
             asChild
@@ -597,7 +506,7 @@ function PropertyLotsSidebarContent({
       {/* Dialog for creating lots */}
       {renderedDialog?.type === 'create' && (
         <CreatePropertyLotModal
-          open={activeDialog !== null}
+          open={isDialogOpen}
           sites={sites}
           initialValues={createInitialValues ?? undefined}
         />
@@ -608,7 +517,11 @@ function PropertyLotsSidebarContent({
 
 export function PropertyLotsSidebar(props: PropertyLotsSidebarProps) {
   return (
-    <PropertyLotsProvider sites={props.sites}>
+    <PropertyLotsProvider
+      sites={props.sites}
+      truncationMode="cap"
+      onSiteFilterChange={props.onSiteFilterChange}
+    >
       <PropertyLotsSidebarContent {...props} />
     </PropertyLotsProvider>
   );

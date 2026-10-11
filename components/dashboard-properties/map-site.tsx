@@ -27,7 +27,13 @@ export interface SiteMapProps {
   onSelectLot?: (lotId: string | null) => void;
   hoveredLotKey?: string | null;
   onSelectLotProperty?: (lot: PropertyLotWithClient) => void;
-  onSelectUnregistered?: (data: { siteId: string; block: number; lot: number }) => void;
+  onSelectUnregistered?: (data: {
+    siteId: string;
+    block: number;
+    lot: number;
+    areaSize?: number;
+    pricePerSqm?: number;
+  }) => void;
   isSidebarOpen?: boolean;
   className?: string;
   initialCenter?: [number, number]; // [lng, lat]
@@ -42,7 +48,7 @@ export interface SiteMapProps {
 }
 
 const SIDEBAR_WIDTH = 460;
-const REGIONAL_CENTER: [number, number] = [125.5844925, 7.0447193];
+const REGIONAL_CENTER: [number, number] = [125.7150395, 7.0445282];
 const REGIONAL_ZOOM = 11.8;
 const DETAILS_ZOOM = 14;
 
@@ -50,7 +56,7 @@ const STATUS_COLOR_MAP: Record<string, string> = {
   Open: '#22C55E',
   Reserved: '#5BC4E7',
   Sold: '#F5CE42',
-  Forfeited: '#ef4444',
+  Forfeited: '#8B5CF6',
   Closed: '#6C7E8E',
   Available: '#6C7E8E',
   Unregistered: '#6C7E8E',
@@ -114,6 +120,24 @@ function scaleBasemapSymbolText(style: StyleSpecification | unknown, factor: num
   return { ...spec, layers };
 }
 
+const SATELLITE_BACKGROUND_COLOR = '#0b1120';
+const NORMAL_BACKGROUND_COLOR = '#f8f4f0';
+
+// Ensure satellite basemap style has a dark blue background layer while tiles load
+function withSatelliteBackground(style: StyleSpecification): StyleSpecification {
+  if (!style || !Array.isArray(style.layers)) return style;
+  const backgroundLayer: LayerSpecification = {
+    id: 'background',
+    type: 'background',
+    paint: { 'background-color': SATELLITE_BACKGROUND_COLOR },
+  };
+  const nonBackgroundLayers = style.layers.filter((layer) => layer.type !== 'background');
+  return {
+    ...style,
+    layers: [backgroundLayer, ...nonBackgroundLayers],
+  };
+}
+
 const SATELLITE_FALLBACK_STYLE = {
   version: 8,
   glyphs: 'https://tiles.versatiles.org/assets/glyphs/{fontstack}/{range}.pbf',
@@ -130,7 +154,7 @@ const SATELLITE_FALLBACK_STYLE = {
     {
       id: 'background',
       type: 'background',
-      paint: { 'background-color': '#0b1120' },
+      paint: { 'background-color': SATELLITE_BACKGROUND_COLOR },
     },
     {
       id: 'versatiles-satellite-layer',
@@ -179,7 +203,7 @@ export function SiteMap({
   onDeletePlotRef.current = onDeletePlot;
   const isEditorModeRef = useRef(isEditorMode);
   isEditorModeRef.current = isEditorMode;
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(() => cachedArcgisToken);
   const [mapMode, setMapMode] = useState<'satellite' | 'normal'>(() => {
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
       const saved = localStorage.getItem('fdm_map_mode');
@@ -188,7 +212,7 @@ export function SiteMap({
     return 'satellite';
   });
   const [isFallbackActive, setIsFallbackActive] = useState(false);
-  const [isCheckingArcGIS, setIsCheckingArcGIS] = useState(false);
+  const [isCheckingArcGIS, setIsCheckingArcGIS] = useState<boolean>(() => !cachedArcgisToken);
   const [styleRevision, setStyleRevision] = useState(0);
   const [currentZoom, setCurrentZoom] = useState<number>(initialZoom);
   const [activeLotId, setActiveLotId] = useState<string | null>(selectedLotId ?? null);
@@ -211,6 +235,7 @@ export function SiteMap({
     center: initialCenter,
     zoom: initialZoom,
     padding: { top: 0, bottom: 0, left: isSidebarOpen ? SIDEBAR_WIDTH : 0, right: 0 },
+    backgroundColor: mapMode === 'satellite' ? SATELLITE_BACKGROUND_COLOR : NORMAL_BACKGROUND_COLOR,
   });
 
   // Track style reload events to mount custom property layers on top
@@ -255,7 +280,7 @@ export function SiteMap({
       try {
         const { style, token: receivedToken } = await getArcGISHybridStyle();
         setToken(receivedToken);
-        cachedScaledArcgisStyle = scaleBasemapSymbolText(style, 1.28);
+        cachedScaledArcgisStyle = withSatelliteBackground(scaleBasemapSymbolText(style, 1.28));
         cachedArcgisToken = receivedToken;
         setIsFallbackActive(false);
       } catch {
@@ -322,14 +347,15 @@ export function SiteMap({
     onSelectLot?.(null);
   }, [onSelectLot]);
 
-  // Navigate to property details for registered lots
+  // Navigate to property details for registered or closed lots
   const handleViewDetails = useCallback(
     (p: LotPlotProperties) => {
       handleClosePopup();
       const lotObj =
-        registeredLotsMapRef.current.get(p.propertyId) ??
-        registeredLotsMapRef.current.get(`${p.siteId}:${p.block}-${p.lot}`) ??
-        registeredLotsMapRef.current.get(`${p.block}-${p.lot}`) ??
+        (p.propertyId ? registeredLotsMapRef.current.get(p.propertyId) : undefined) ??
+        (p.siteId
+          ? registeredLotsMapRef.current.get(`${p.siteId}:${p.block}-${p.lot}`)
+          : registeredLotsMapRef.current.get(`${p.block}-${p.lot}`)) ??
         ({
           property_id: p.propertyId,
           site_id: p.siteId,
@@ -338,11 +364,13 @@ export function SiteMap({
           location: p.siteName,
           area_size: p.areaSize,
           price_per_sqm: p.pricePerSqm,
-          status: p.status as PropertyStatus,
+          status: (p.isRegistered ? p.status : 'Open') as PropertyStatus,
           boundary: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-          client: p.clientName ? { client_id: '', full_name: p.clientName, status: 'Active' } : null,
+          is_archived: false,
+          archived_at: null,
+          client: p.clientName ? { client_id: '', full_name: p.clientName, status: 'Active', address: null } : null,
         } as PropertyLotWithClient);
       onSelectLotPropertyRef.current?.(lotObj);
     },
@@ -357,6 +385,8 @@ export function SiteMap({
         siteId: p.siteId,
         block: p.block,
         lot: p.lot,
+        areaSize: p.areaSize,
+        pricePerSqm: p.pricePerSqm,
       });
     },
     [handleClosePopup]
@@ -536,6 +566,8 @@ export function SiteMap({
               pricePerSqm,
               totalPrice: areaSize * pricePerSqm,
               clientName: lot?.client?.full_name ?? '',
+              titleNumber: lot?.title_number ?? '',
+              forfeitedAt: lot?.forfeited_account?.forfeited_at ?? '',
               centerLng,
               centerLat,
               topLat,
@@ -585,7 +617,10 @@ export function SiteMap({
   useEffect(() => {
     if (!map || !isReady) return;
 
-    // Site boundary sources and layers
+    try {
+      if (!map.getStyle()) return;
+
+      // Site boundary sources and layers
     if (!map.getSource('sites-data')) {
       map.addSource('sites-data', {
         type: 'geojson',
@@ -796,76 +831,90 @@ export function SiteMap({
     } else {
       (map.getSource('draft-plot-data') as GeoJSONSource).setData(draftGeoJson);
     }
-  }, [map, isReady, styleRevision, sitesGeoJson, lotsGeoJson, draftGeoJson]);
+  } catch (err) {
+    console.warn('Map style is reloading, layer mounting deferred:', err);
+  }
+}, [map, isReady, styleRevision, sitesGeoJson, lotsGeoJson, draftGeoJson]);
 
   // Update dynamic lot styles on selection change
   useEffect(() => {
-    if (!map || !map.getLayer('lots-fill') || !map.getLayer('lots-stroke')) return;
+    if (!map || !isReady) return;
 
-    map.setPaintProperty('lots-fill', 'fill-color', [
-      'match',
-      ['get', 'status'],
-      'Open',
-      STATUS_COLOR_MAP.Open,
-      'Reserved',
-      STATUS_COLOR_MAP.Reserved,
-      'Sold',
-      STATUS_COLOR_MAP.Sold,
-      'Forfeited',
-      STATUS_COLOR_MAP.Forfeited,
-      STATUS_COLOR_MAP.Available,
-    ]);
+    try {
+      if (!map.getLayer('lots-fill') || !map.getLayer('lots-stroke')) return;
 
-    map.setPaintProperty('lots-fill', 'fill-opacity', [
-      'case',
-      ['boolean', ['get', 'isSiteArchived'], false],
-      0.25,
-      [
+      map.setPaintProperty('lots-fill', 'fill-color', [
+        'match',
+        ['get', 'status'],
+        'Open',
+        STATUS_COLOR_MAP.Open,
+        'Reserved',
+        STATUS_COLOR_MAP.Reserved,
+        'Sold',
+        STATUS_COLOR_MAP.Sold,
+        'Forfeited',
+        STATUS_COLOR_MAP.Forfeited,
+        STATUS_COLOR_MAP.Available,
+      ]);
+
+      map.setPaintProperty('lots-fill', 'fill-opacity', [
+        'case',
+        ['boolean', ['get', 'isSiteArchived'], false],
+        0.25,
+        [
+          'case',
+          [
+            'any',
+            ['==', ['get', 'id'], activeLotId || '__NONE__'],
+            ['==', ['get', 'propertyId'], activeLotId || '__NONE__'],
+          ],
+          0.85,
+          ['any', ['==', ['get', 'status'], 'Closed'], ['==', ['get', 'status'], 'Available'], ['==', ['get', 'status'], 'Unregistered']],
+          0.35,
+          0.75,
+        ],
+      ]);
+
+      map.setPaintProperty('lots-stroke', 'line-color', [
         'case',
         [
           'any',
           ['==', ['get', 'id'], activeLotId || '__NONE__'],
           ['==', ['get', 'propertyId'], activeLotId || '__NONE__'],
         ],
-        0.85,
-        ['any', ['==', ['get', 'status'], 'Closed'], ['==', ['get', 'status'], 'Available'], ['==', ['get', 'status'], 'Unregistered']],
-        0.35,
-        0.75,
-      ],
-    ]);
+        '#ef4444',
+        ['case', ['boolean', ['get', 'isSiteArchived'], false], '#d97706', '#ffffff'],
+      ]);
 
-    map.setPaintProperty('lots-stroke', 'line-color', [
-      'case',
-      [
-        'any',
-        ['==', ['get', 'id'], activeLotId || '__NONE__'],
-        ['==', ['get', 'propertyId'], activeLotId || '__NONE__'],
-      ],
-      '#ef4444',
-      ['case', ['boolean', ['get', 'isSiteArchived'], false], '#d97706', '#ffffff'],
-    ]);
-
-    map.setPaintProperty('lots-stroke', 'line-width', [
-      'case',
-      [
-        'any',
-        ['==', ['get', 'id'], activeLotId || '__NONE__'],
-        ['==', ['get', 'propertyId'], activeLotId || '__NONE__'],
-      ],
-      3.5,
-      1.5,
-    ]);
-  }, [map, styleRevision, activeLotId]);
+      map.setPaintProperty('lots-stroke', 'line-width', [
+        'case',
+        [
+          'any',
+          ['==', ['get', 'id'], activeLotId || '__NONE__'],
+          ['==', ['get', 'propertyId'], activeLotId || '__NONE__'],
+        ],
+        3.5,
+        1.5,
+      ]);
+    } catch {
+      // Style is reloading; will be reapplied on style.load
+    }
+  }, [map, isReady, styleRevision, activeLotId]);
 
   // Update hover outline filter
   useEffect(() => {
-    if (!map || !map.getLayer('lots-hover-stroke')) return;
-    map.setFilter('lots-hover-stroke', [
-      'any',
-      ['==', ['get', 'lotKey'], hoveredLotKey ?? ''],
-      ['==', ['get', 'siteLotKey'], hoveredLotKey ?? ''],
-    ]);
-  }, [map, styleRevision, hoveredLotKey]);
+    if (!map || !isReady) return;
+    try {
+      if (!map.getLayer('lots-hover-stroke')) return;
+      map.setFilter('lots-hover-stroke', [
+        'any',
+        ['==', ['get', 'lotKey'], hoveredLotKey ?? ''],
+        ['==', ['get', 'siteLotKey'], hoveredLotKey ?? ''],
+      ]);
+    } catch {
+      // Style is reloading; will be reapplied on style.load
+    }
+  }, [map, isReady, styleRevision, hoveredLotKey]);
 
   // Click & hover interactions for house lots
   useEffect(() => {
@@ -875,6 +924,11 @@ export function SiteMap({
 
     async function setupLotInteractions() {
       if (!map) return;
+      try {
+        if (!map.getLayer('lots-fill')) return;
+      } catch {
+        return;
+      }
       const { Popup } = await import('maplibre-gl');
 
       const popupInstance = new Popup({
@@ -1067,6 +1121,12 @@ export function SiteMap({
   useEffect(() => {
     if (!map || !isReady) return;
 
+    // In satellite mode, wait while the initial ArcGIS style check is in flight
+    // so the map stays on its initial dark blue background instead of flashing fallback
+    if (mapMode === 'satellite' && isCheckingArcGIS && !token && !isFallbackActive) {
+      return;
+    }
+
     const targetStyleKey =
       mapMode === 'normal'
         ? 'normal'
@@ -1074,7 +1134,10 @@ export function SiteMap({
           ? 'satellite-fallback'
           : `satellite-arcgis-${token}`;
 
-    if (currentAppliedStyleKeyRef.current === targetStyleKey) {
+    const hasExpectedBackground =
+      mapMode !== 'satellite' || Boolean(map.getLayer('background'));
+
+    if (currentAppliedStyleKeyRef.current === targetStyleKey && hasExpectedBackground) {
       return;
     }
 
@@ -1087,7 +1150,6 @@ export function SiteMap({
 
     async function applyStyle() {
       if (!map) return;
-      isSettingStyleRef.current = true;
       pendingTargetStyleKeyRef.current = null;
 
       try {
@@ -1099,25 +1161,31 @@ export function SiteMap({
             cachedScaledNormalStyle = scaleBasemapSymbolText(styleJson, 1.28);
           }
           if (isCancelled) return;
+          isSettingStyleRef.current = true;
           currentAppliedStyleKeyRef.current = targetStyleKey;
           map.setStyle(cachedScaledNormalStyle, { diff: false });
         } else if (targetStyleKey.startsWith('satellite-arcgis-') && token) {
           if (!cachedScaledArcgisStyle || cachedArcgisToken !== token) {
             const { style, token: freshToken } = await getArcGISHybridStyle();
-            cachedScaledArcgisStyle = scaleBasemapSymbolText(style, 1.28);
+            cachedScaledArcgisStyle = withSatelliteBackground(scaleBasemapSymbolText(style, 1.28));
             cachedArcgisToken = freshToken;
+          } else {
+            cachedScaledArcgisStyle = withSatelliteBackground(cachedScaledArcgisStyle);
           }
           if (isCancelled) return;
+          isSettingStyleRef.current = true;
           currentAppliedStyleKeyRef.current = targetStyleKey;
           map.setStyle(cachedScaledArcgisStyle, { diff: false });
         } else {
           if (isCancelled) return;
+          isSettingStyleRef.current = true;
           currentAppliedStyleKeyRef.current = 'satellite-fallback';
           map.setStyle(SATELLITE_FALLBACK_STYLE as unknown as StyleSpecification, { diff: false });
         }
       } catch {
         if (isCancelled) return;
         setIsFallbackActive(true);
+        isSettingStyleRef.current = true;
         currentAppliedStyleKeyRef.current = 'satellite-fallback';
         map.setStyle(SATELLITE_FALLBACK_STYLE as unknown as StyleSpecification, { diff: false });
       }
@@ -1128,7 +1196,7 @@ export function SiteMap({
     return () => {
       isCancelled = true;
     };
-  }, [map, isReady, styleRevision, mapMode, isFallbackActive, token]);
+  }, [map, isReady, styleRevision, mapMode, isFallbackActive, isCheckingArcGIS, token]);
 
   // Handle tile loading errors by falling back to free alternative
   useEffect(() => {
@@ -1141,7 +1209,6 @@ export function SiteMap({
       };
       const status = err.status ?? err.error?.status;
       const msg = err.error?.message?.toLowerCase() ?? '';
-      const sourceId = err.sourceId?.toLowerCase() ?? '';
 
       if (
         mapMode === 'satellite' &&
@@ -1149,10 +1216,10 @@ export function SiteMap({
         (status === 401 ||
           status === 403 ||
           status === 429 ||
-          sourceId.includes('arcgis') ||
-          sourceId.includes('esri') ||
-          msg.includes('arcgis') ||
-          msg.includes('esri'))
+          msg.includes('token') ||
+          msg.includes('unauthorized') ||
+          msg.includes('quota') ||
+          msg.includes('forbidden'))
       ) {
         setIsFallbackActive(true);
       }
@@ -1168,9 +1235,14 @@ export function SiteMap({
     <div
       className={cn('relative flex flex-1 h-full min-h-0 w-full flex-col overflow-hidden bg-background', className)}
       data-engine="maplibre"
+      style={mapMode === 'satellite' ? { backgroundColor: SATELLITE_BACKGROUND_COLOR } : undefined}
     >
       {/* MapLibre WebGL canvas */}
-      <div ref={containerRef} className="h-full w-full z-0" />
+      <div
+        ref={containerRef}
+        className="flex-1 h-full w-full z-0"
+        style={mapMode === 'satellite' ? { backgroundColor: SATELLITE_BACKGROUND_COLOR } : undefined}
+      />
 
       {/* Floating map controls (top-right) */}
       {!preview && (

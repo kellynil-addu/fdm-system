@@ -1,14 +1,49 @@
 import type { PropertyLot } from './property';
 
-export type DocType = 'Valid ID' | 'Deed of Sale' | 'Contract' | 'eCAR' | 'Other';
+/** Every kind of client document, in the order the upload menu lists them. */
+export const DOC_TYPES = [
+  'Valid ID',
+  'Contract',
+  'Deed of Sale',
+  'SOA',
+  'Payment History',
+  'Certificate of Ownership',
+  'Title Copy',
+  'eCAR',
+  'Other',
+] as const;
 
-export const REQUIRED_CLIENT_DOCUMENTS: DocType[] = ['Valid ID', 'Contract', 'Deed of Sale'];
+export type DocType = (typeof DOC_TYPES)[number];
+
+/** How each type reads on screen. The only contract FDM signs with buyers is the Contract to Sell. */
+export const DOC_TYPE_LABEL: Record<DocType, string> = {
+  'Valid ID': 'Valid ID',
+  Contract: 'Contract to Sell',
+  'Deed of Sale': 'Deed of Sale',
+  SOA: 'Statement of Account (SOA)',
+  'Payment History': 'Payment history',
+  'Certificate of Ownership': 'Certificate of Ownership',
+  'Title Copy': 'Copy of the title',
+  eCAR: 'eCAR',
+  Other: 'Other',
+};
+
+export const REQUIRED_CLIENT_DOCUMENTS: DocType[] = ['Valid ID'];
+
+export const CIVIL_STATUSES = ['Single', 'Married', 'Widowed', 'Separated'] as const;
+export type CivilStatus = (typeof CIVIL_STATUSES)[number];
+
+export const GENDERS = ['Male', 'Female', 'Other'] as const;
+export type Gender = (typeof GENDERS)[number];
 
 export interface Client {
   client_id: string;
   full_name: string;
   address: string | null;
   tin_number: string | null;
+  civil_status?: CivilStatus | null;
+  spouse_name?: string | null;
+  gender?: Gender | null;
   status: string;
   created_at: string;
   updated_at: string;
@@ -30,6 +65,8 @@ export interface ClientDocument {
   client_id: string;
   document_type: DocType;
   file_path: string;
+  /** The lot this document belongs to. Null means it applies to the client as a whole. */
+  property_id?: string | null;
   uploaded_at: string;
   uploaded_by: string | null;
 }
@@ -47,7 +84,17 @@ export interface ClientWithDetails extends Client {
   contact_info: ContactInfo[];
   client_document: ClientDocument[];
   client_log: ClientLog[];
-  properties?: PropertyLot[];
+  properties?: ClientProperty[];
+}
+
+/** A lot on a client's profile, with where its sale stands. */
+export interface ClientProperty extends PropertyLot {
+  /** The client's active account for this lot, if any. */
+  account_id?: string | null;
+  /** When Billing cleared that account as fully paid. */
+  cleared_at?: string | null;
+  /** Whether Legal has created the land title for this lot. */
+  has_title?: boolean;
 }
 
 export interface ClientActivitySummary {
@@ -77,6 +124,9 @@ export interface CreateClientInput {
   full_name: string;
   address?: string | null;
   tin_number?: string | null;
+  civil_status?: CivilStatus | null;
+  spouse_name?: string | null;
+  gender?: Gender | null;
   status?: string;
   contacts?: CreateContactInfoInput[];
 }
@@ -85,6 +135,9 @@ export interface UpdateClientInput {
   full_name?: string;
   address?: string | null;
   tin_number?: string | null;
+  civil_status?: CivilStatus | null;
+  spouse_name?: string | null;
+  gender?: Gender | null;
   status?: string;
 }
 

@@ -177,6 +177,37 @@ Standard container for icon rings, thumbnails, and avatar placeholders.
 </IconBox>
 ```
 
+### 6. FilterToolbar (`components/ui/filter-toolbar.tsx`)
+Declarative filter bar primitive unifying status tabs, clearable search inputs, dropdown/searchable/toggle filters (`single-select`, `multi-select`, `searchable`, `toggle`, `custom`), sort controls (`sort`), view mode toggles, and filter reset buttons. Also exports sub-parts (`FilterToolbarTabs`, `FilterToolbarSearch`, `FilterToolbarFilterControl`, `FilterToolbarSort`, `FilterToolbarViewToggle`) for custom layouts. Pairs with `useListController` (`lib/hooks/use-list-controller.ts`).
+- **Variants**: `default` (horizontal responsive bar built on `CardToolbar`), `stacked` (compact multi-row layout for narrow sidebars like the map panel).
+
+```tsx
+<FilterToolbar
+  tabs={{
+    value: statusFilter,
+    onChange: setStatusFilter,
+    items: [
+      { value: 'all', label: 'All', count: statusCounts.all },
+      { value: 'Active', label: 'Active', count: statusCounts.Active },
+    ],
+  }}
+  search={{
+    value: search,
+    onChange: setSearch,
+    placeholder: 'Search records...',
+  }}
+  sort={{
+    value: sortKey,
+    order: sortOrder,
+    onChange: setSort,
+    onToggleOrder: toggleSortOrder,
+    options: sortOptions,
+  }}
+  isFiltered={isFiltered}
+  onClear={clearFilters}
+/>
+```
+
 ## Historical UI Patterns
 
 These patterns were established in past refactoring commits and should be preserved:
@@ -198,9 +229,10 @@ These patterns were established in past refactoring commits and should be preser
   </FormField>
   ```
 
-### 3. Clearable Search & Filter Bar UX
+### 3. Clearable Search, Filter & Truncation Controller Pattern
+- Prefer `useListController` (`lib/hooks/use-list-controller.ts`) paired with `<FilterToolbar controller={controller} />`, `<ListPaginationFooter controller={controller} />`, and `<ListShowMoreButton controller={controller} />` (`components/ui/filter-toolbar.tsx`).
+- **Pass the controller as a whole**: Do not unpack and re-thread individual `search`, `setSearch`, `statusFilter`, `sortKey`, `page`, or `setPage` props across context providers and child components. Define UI metadata (`ui.variant: 'tabs' | 'single-select' | 'toggle' | 'searchable' | 'multi-select'`) inside `useListController` and pass `controller` directly.
 - Provide instant clear affordances (`SearchX` or `X` icon button) inside search inputs when query is non-empty.
-- Combine search inputs with segmented status tab controls inside `<CardToolbar>`.
 
 ### 4. Dense Pane Action Invariant (Floating Popovers over Accordions)
 - Never use inline expanding accordion forms for creating or recording entries inside narrow sidebars or scrollable timeline containers.

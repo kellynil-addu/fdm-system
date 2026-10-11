@@ -52,7 +52,7 @@ export function useLoginForm() {
  * Interactive part of the login page.
  *
  * Reads the `next` query param via `useSearchParams`, which opts this subtree
- * out of prerendering — it must stay inside a <Suspense> boundary so the rest
+ * out of prerendering. It must stay inside a <Suspense> boundary so the rest
  * of the page can still be prerendered. See app/(auth)/login/page.tsx.
  */
 export function LoginForm() {
@@ -139,7 +139,7 @@ export function LoginForm() {
           <Link href="/auth/forgot-password">
             <Button
               variant="ghost"
-              className="w-full text-secondary hover:bg-[color-mix(in_srgb,var(--secondary)_15%,white)] font-medium"
+              className="w-full text-muted-foreground hover:text-foreground hover:bg-row-hover font-medium"
             >
               Forgot Password?
             </Button>

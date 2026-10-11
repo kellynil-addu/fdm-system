@@ -43,19 +43,17 @@ import {
   Trash2,
   MapPin,
   FileText,
+  Users,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { formatActivityTime } from '@/lib/format-activity-time';
-import {
-  updateClient,
-  addContactInfo,
-  deleteContactInfo,
-  updateContactInfo,
-  createClientLog,
-} from '@/lib/actions/clients';
+import { useClientDetail } from '@/lib/hooks/use-client-detail';
 import { ClientFloatingEditor } from './client-floating-editor';
-import type { ClientWithDetails } from '@/lib/types/client';
+import {
+  GENDERS,
+  type CivilStatus,
+  type Gender,
+} from '@/lib/types/client';
 
 const ACTIVITY_TYPES = ['Call', 'Meeting', 'Email', 'Note', 'Follow-up'];
 
@@ -73,13 +71,19 @@ function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-interface ClientDetailSidebarProps {
-  client: ClientWithDetails;
-  onClientChange: (client: ClientWithDetails | ((prev: ClientWithDetails) => ClientWithDetails)) => void;
-}
-
-export function ClientDetailSidebar({ client, onClientChange }: ClientDetailSidebarProps) {
-  const router = useRouter();
+export function ClientDetailSidebar() {
+  const {
+    client,
+    updateAddress,
+    updateTin,
+    updateCivilStatus,
+    updateGender,
+    addContact,
+    updateContact,
+    deleteContact,
+    setPrimaryContact,
+    addActivity,
+  } = useClientDetail();
 
   // Activity state
   const [isAddingActivity, setIsAddingActivity] = useState(false);
@@ -89,85 +93,71 @@ export function ClientDetailSidebar({ client, onClientChange }: ClientDetailSide
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   async function handleUpdateAddress(address: string) {
-    const trimmed = address.trim() || null;
-    const result = await updateClient(client.client_id, { address: trimmed });
-    if (!result.success) {
-      toast.error(result.error);
-      throw new Error(result.error);
+    try {
+      await updateAddress(address);
+      toast.success('Address updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update address');
+      throw err;
     }
-    onClientChange((prev) => ({ ...prev, address: result.data.address }));
-    toast.success('Address updated');
-    router.refresh();
   }
 
-  async function handleUpdateTin(tin_number: string) {
-    const trimmed = tin_number.trim() || null;
-    const result = await updateClient(client.client_id, { tin_number: trimmed });
-    if (!result.success) {
-      toast.error(result.error);
-      throw new Error(result.error);
+  async function handleUpdateTin(tinNumber: string) {
+    try {
+      await updateTin(tinNumber);
+      toast.success('TIN number updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update TIN number');
+      throw err;
     }
-    onClientChange((prev) => ({ ...prev, tin_number: result.data.tin_number }));
-    toast.success('TIN number updated');
-    router.refresh();
+  }
+
+  async function handleUpdateCivilStatus(civilStatus: string, spouseName?: string) {
+    try {
+      await updateCivilStatus(civilStatus as CivilStatus, spouseName);
+      toast.success('Civil status updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update civil status');
+      throw err;
+    }
+  }
+
+  async function handleUpdateGender(gender: string) {
+    try {
+      await updateGender(gender as Gender);
+      toast.success('Gender updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update gender');
+      throw err;
+    }
   }
 
   async function handleAddContact(type: string, value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-
-    const result = await addContactInfo(client.client_id, {
-      type,
-      value: trimmed,
-      is_primary: client.contact_info.length === 0,
-    });
-
-    if (!result.success) {
-      toast.error(result.error);
-      throw new Error(result.error);
+    if (!value.trim()) return;
+    try {
+      await addContact(type, value);
+      toast.success('Contact added');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to add contact');
+      throw err;
     }
-
-    onClientChange((prev) => ({
-      ...prev,
-      contact_info: [result.data, ...prev.contact_info],
-    }));
-    toast.success('Contact added');
-    router.refresh();
   }
 
   async function handleUpdateContact(contactId: string, type: string, value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-
-    const result = await updateContactInfo(contactId, { type, value: trimmed });
-    if (!result.success) {
-      toast.error(result.error);
-      throw new Error(result.error);
+    if (!value.trim()) return;
+    try {
+      await updateContact(contactId, type, value);
+      toast.success('Contact updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update contact');
+      throw err;
     }
-
-    onClientChange((prev) => ({
-      ...prev,
-      contact_info: prev.contact_info.map((c) =>
-        c.contact_id === contactId ? { ...c, type: result.data.type, value: result.data.value } : c
-      ),
-    }));
-    toast.success('Contact updated');
-    router.refresh();
   }
 
   async function handleDeleteContact(contactId: string) {
     try {
-      const result = await deleteContactInfo(contactId);
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-
-      onClientChange((prev) => ({
-        ...prev,
-        contact_info: prev.contact_info.filter((c) => c.contact_id !== contactId),
-      }));
+      await deleteContact(contactId);
       toast.success('Contact removed');
-      router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete contact');
     }
@@ -175,20 +165,8 @@ export function ClientDetailSidebar({ client, onClientChange }: ClientDetailSide
 
   async function handleSetPrimaryContact(contactId: string) {
     try {
-      const result = await updateContactInfo(contactId, { is_primary: true });
-      if (!result.success) {
-        throw new Error(result.error);
-      }
-
-      onClientChange((prev) => ({
-        ...prev,
-        contact_info: prev.contact_info.map((c) => ({
-          ...c,
-          is_primary: c.contact_id === contactId,
-        })),
-      }));
+      await setPrimaryContact(contactId);
       toast.success('Primary contact updated');
-      router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to set primary contact');
     }
@@ -200,19 +178,13 @@ export function ClientDetailSidebar({ client, onClientChange }: ClientDetailSide
 
     setIsSubmittingActivity(true);
     try {
-      const created = await createClientLog(client.client_id, {
+      await addActivity({
         event_type: activityType,
         description: activityDescription.trim(),
       });
-
-      onClientChange((prev) => ({
-        ...prev,
-        client_log: [created, ...prev.client_log],
-      }));
       setActivityDescription('');
       setIsAddingActivity(false);
       toast.success('Activity logged');
-      router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to record activity');
     } finally {
@@ -227,40 +199,69 @@ export function ClientDetailSidebar({ client, onClientChange }: ClientDetailSide
     setTimeout(() => setCopiedId(null), 2000);
   }
 
+  const civilStatusDisplay = client.civil_status ? (
+    client.civil_status === 'Married' ? (
+      client.spouse_name ? (
+        <span>
+          Married <span className="text-muted-foreground">• Spouse:</span> {client.spouse_name}
+        </span>
+      ) : (
+        <span>
+          Married <span className="text-muted-foreground">• Spouse:</span>{' '}
+          <span className="italic text-destructive">Required</span>
+        </span>
+      )
+    ) : (
+      client.civil_status
+    )
+  ) : (
+    <span className="italic text-muted-foreground">Not provided</span>
+  );
+
+  const copyCivilStatusText =
+    client.civil_status === 'Married' && client.spouse_name
+      ? `Married • Spouse: ${client.spouse_name}`
+      : client.civil_status || '';
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      {/* Top back navigation */}
-      <div className="flex shrink-0 items-center pb-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          asChild
-          className="-ml-2 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <Link href="/dashboard/clients">
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to clients
-          </Link>
-        </Button>
+      {/* Sticky top region */}
+      <div className="sticky top-0 z-10 shrink-0 bg-background pb-3">
+        {/* Top back navigation */}
+        <div className="flex items-center pb-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            asChild
+            className="gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Link href="/dashboard/clients">
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Back to clients
+            </Link>
+          </Button>
+        </div>
+
+        {/* Client Identity Header */}
+        <Card variant="canvas" padding="sm" className="flex items-start gap-3">
+          <IconBox variant="canvas" size="lg" shape="rounded-xl" className="shrink-0 font-semibold">
+            {initials(client.full_name) || <UserRound className="h-5 w-5" />}
+          </IconBox>
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="truncate text-base font-bold text-foreground">{client.full_name}</h2>
+              <Badge variant="outline-warm" shape="pill" className="text-[10px] uppercase tracking-wider">
+                {client.status}
+              </Badge>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* Client Identity Header */}
-      <Card variant="canvas" padding="sm" className="flex items-start gap-3">
-        <IconBox variant="canvas" size="lg" shape="rounded-xl" className="shrink-0 font-semibold">
-          {initials(client.full_name) || <UserRound className="h-5 w-5" />}
-        </IconBox>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="truncate text-base font-bold text-foreground">{client.full_name}</h2>
-            <Badge variant="outline-warm" shape="pill" className="text-[10px] uppercase tracking-wider">
-              {client.status}
-            </Badge>
-          </div>
-        </div>
-      </Card>
-
-      {/* Structured Details and Contacts Card */}
-      <Card variant="canvas" className="mt-3 overflow-hidden">
+      {/* Scrollable body region */}
+      <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+        {/* Structured Details and Contacts Card */}
+        <Card variant="canvas" className="overflow-hidden">
         <div className="space-y-0.5 p-1.5">
           {/* Address Row */}
           <div className="group flex items-center justify-between gap-2 rounded-lg p-2 transition-colors hover:bg-row-hover">
@@ -333,6 +334,84 @@ export function ClientDetailSidebar({ client, onClientChange }: ClientDetailSide
               />
             </div>
           </div>
+
+          {/* Separator between [Address, TIN] and [Civil status, Gender] */}
+          <div className="my-1 border-t border-border-warm-subtle" />
+
+          {/* Civil Status Row (with integrated Spouse details) */}
+          <div className="group flex items-center justify-between gap-2 rounded-lg p-2 transition-colors hover:bg-row-hover">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+              <Users className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-medium text-muted-foreground">Civil status</p>
+                <p className="truncate text-sm text-foreground">
+                  {civilStatusDisplay}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                disabled={!client.civil_status}
+                onClick={() => copyCivilStatusText && handleCopy(copyCivilStatusText, 'civil_status')}
+                aria-label="Copy civil status"
+              >
+                {copiedId === 'civil_status' ? (
+                  <Check className="h-3.5 w-3.5 text-success" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              <ClientFloatingEditor
+                mode="civil-status"
+                title="Edit civil status"
+                initialCivilStatus={client.civil_status || 'Single'}
+                initialSpouseName={client.spouse_name || ''}
+                onSave={handleUpdateCivilStatus}
+              />
+            </div>
+          </div>
+
+          {/* Gender Row */}
+          <div className="group flex items-center justify-between gap-2 rounded-lg p-2 transition-colors hover:bg-row-hover">
+            <div className="flex min-w-0 flex-1 items-center gap-2.5">
+              <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-medium text-muted-foreground">Gender</p>
+                <p className="truncate text-sm text-foreground">
+                  {client.gender || <span className="italic text-muted-foreground">Not provided</span>}
+                </p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-0.5 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                disabled={!client.gender}
+                onClick={() => client.gender && handleCopy(client.gender, 'gender')}
+                aria-label="Copy gender"
+              >
+                {copiedId === 'gender' ? (
+                  <Check className="h-3.5 w-3.5 text-success" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              <ClientFloatingEditor
+                mode="select"
+                title="Edit gender"
+                initialValue={client.gender || 'Male'}
+                options={GENDERS}
+                onSave={handleUpdateGender}
+              />
+            </div>
+          </div>
+
+          {/* Separator between [Civil status, Gender] and [Contacts] */}
+          <div className="my-1 border-t border-border-warm-subtle" />
 
           {/* Contact Items */}
           {client.contact_info.map((contact) => {
@@ -437,143 +516,144 @@ export function ClientDetailSidebar({ client, onClientChange }: ClientDetailSide
         </div>
       </Card>
 
-      {/* Divider line before Activity History */}
-      <div className="my-3 border-t border-border-warm" />
+        {/* Divider line before Activity History */}
+        <div className="my-3 border-t border-border-warm" />
 
-      {/* Activity History Section */}
-      <div className="flex flex-1 min-h-0 flex-col overflow-hidden pt-0.5">
-        <div className="flex items-center justify-between gap-3 pb-2.5">
-          <h3 className="text-xs font-semibold text-foreground">Activity history</h3>
-          <Popover open={isAddingActivity} onOpenChange={setIsAddingActivity}>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                size="sm"
-                variant="canvas"
-                className="h-7 gap-1.5 text-xs"
+        {/* Activity History Section */}
+        <div className="flex flex-col pb-6 pt-0.5">
+          <div className="flex items-center justify-between gap-3 pb-2.5">
+            <h3 className="text-xs font-semibold text-foreground">Activity history</h3>
+            <Popover open={isAddingActivity} onOpenChange={setIsAddingActivity}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="canvas"
+                  className="h-7 gap-1.5 text-xs"
+                >
+                  <Plus className="h-3 w-3" />
+                  Record
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                side="right"
+                align="start"
+                sideOffset={8}
+                className="w-80 space-y-3 p-3 border-border-warm shadow-md"
               >
-                <Plus className="h-3 w-3" />
-                Record
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              side="right"
-              align="start"
-              sideOffset={8}
-              className="w-80 space-y-3 p-3 border-border-warm shadow-md"
-            >
-              <div className="flex items-center justify-between gap-2 border-b border-border-warm pb-2">
-                <p className="text-xs font-semibold text-foreground">Record activity</p>
-                <PopoverClose asChild>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                    aria-label="Close editor"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
-                </PopoverClose>
-              </div>
-
-              <form onSubmit={handleAddActivity} className="space-y-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-muted-foreground">
-                    Type
-                  </label>
-                  <Select value={activityType} onValueChange={setActivityType}>
-                    <SelectTrigger className="h-8 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ACTIVITY_TYPES.map((type) => (
-                        <SelectItem key={type} value={type} className="text-xs">
-                          {type}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[11px] font-medium text-muted-foreground">
-                    Description
-                  </label>
-                  <Input
-                    autoFocus
-                    placeholder="What was discussed or done?"
-                    value={activityDescription}
-                    onChange={(e) => setActivityDescription(e.target.value)}
-                    className="h-8 text-xs"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddActivity(e);
-                      }
-                    }}
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-1">
+                <div className="flex items-center justify-between gap-2 border-b border-border-warm pb-2">
+                  <p className="text-xs font-semibold text-foreground">Record activity</p>
                   <PopoverClose asChild>
                     <Button
-                      type="button"
+                      size="icon"
                       variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      disabled={isSubmittingActivity}
+                      className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                      aria-label="Close editor"
                     >
-                      Cancel
+                      <X className="h-3.5 w-3.5" />
                     </Button>
                   </PopoverClose>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="h-7 gap-1.5 text-xs"
-                    disabled={isSubmittingActivity || !activityDescription.trim()}
-                  >
-                    {isSubmittingActivity ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Plus className="h-3.5 w-3.5" />
-                    )}
-                    Save activity
-                  </Button>
                 </div>
-              </form>
-            </PopoverContent>
-          </Popover>
-        </div>
 
-        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
-          {client.client_log.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-border-warm bg-muted/40 px-3 py-6 text-center text-xs text-muted-foreground">
-              No activity recorded yet
-            </p>
-          ) : (
-            <ol className="relative space-y-3.5 border-l-2 border-border-warm pl-4 ml-1.5">
-              {client.client_log.map((log) => (
-                <li key={log.log_id} className="relative">
-                  <span
-                    aria-hidden="true"
-                    className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-border-warm ring-2 ring-background"
-                  />
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span className="text-xs font-semibold text-foreground">
-                      {log.event_type}
-                    </span>
-                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      {formatActivityTime(log.time)}
-                    </span>
+                <form onSubmit={handleAddActivity} className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-muted-foreground">
+                      Type
+                    </label>
+                    <Select value={activityType} onValueChange={setActivityType}>
+                      <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ACTIVITY_TYPES.map((type) => (
+                          <SelectItem key={type} value={type} className="text-xs">
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                    {log.description || 'No description provided'}
-                  </p>
-                </li>
-              ))}
-            </ol>
-          )}
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-muted-foreground">
+                      Description
+                    </label>
+                    <Input
+                      autoFocus
+                      placeholder="What was discussed or done?"
+                      value={activityDescription}
+                      onChange={(e) => setActivityDescription(e.target.value)}
+                      className="h-8 text-xs"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddActivity(e);
+                        }
+                      }}
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <PopoverClose asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        disabled={isSubmittingActivity}
+                      >
+                        Cancel
+                      </Button>
+                    </PopoverClose>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      className="h-7 gap-1.5 text-xs"
+                      disabled={isSubmittingActivity || !activityDescription.trim()}
+                    >
+                      {isSubmittingActivity ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="h-3.5 w-3.5" />
+                      )}
+                      Save activity
+                    </Button>
+                  </div>
+                </form>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          <div>
+            {client.client_log.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border-warm bg-muted/40 px-3 py-6 text-center text-xs text-muted-foreground">
+                No activity recorded yet
+              </p>
+            ) : (
+              <ol className="relative space-y-3.5 border-l-2 border-border-warm pl-4 ml-1.5">
+                {client.client_log.map((log) => (
+                  <li key={log.log_id} className="relative">
+                    <span
+                      aria-hidden="true"
+                      className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-border-warm ring-2 ring-background"
+                    />
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span className="text-xs font-semibold text-foreground">
+                        {log.event_type}
+                      </span>
+                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        {formatActivityTime(log.time)}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                      {log.description || 'No description provided'}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
         </div>
       </div>
     </div>

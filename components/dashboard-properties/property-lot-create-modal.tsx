@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Button } from '@/components/ui/button';
@@ -8,13 +8,7 @@ import { FormField } from '@/components/ui/form-field';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 import {
   Dialog,
   DialogContent,
@@ -26,7 +20,11 @@ import { usePropertyLots } from '@/lib/hooks/use-property-lots';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
 import type { Site } from '@/lib/types/property';
-import { createPropertyLotSchema, type CreatePropertyLotFormData } from '@/lib/validations/property';
+import {
+  createPropertyLotSchema,
+  LOT_LIMITS,
+  type CreatePropertyLotFormData,
+} from '@/lib/validations/property';
 
 const PESO = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -36,6 +34,7 @@ const PESO = new Intl.NumberFormat('en-PH', {
 
 export interface CreatePropertyLotModalProps {
   open: boolean;
+  onOpenChange?: (open: boolean) => void;
   sites: Site[];
   initialValues?: {
     site_id?: string;
@@ -43,11 +42,32 @@ export interface CreatePropertyLotModalProps {
     lot_number?: number;
     area_size?: number;
     price_per_sqm?: number;
+    title_number?: string;
   };
 }
 
-export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePropertyLotModalProps) {
+export function CreatePropertyLotModal({
+  open,
+  onOpenChange,
+  sites,
+  initialValues,
+}: CreatePropertyLotModalProps) {
   const { createLot, closeDialog } = usePropertyLots();
+
+  function handleDismiss() {
+    onOpenChange?.(false);
+    closeDialog();
+  }
+
+  const siteOptions = useMemo(
+    () =>
+      sites.map((s) => ({
+        value: s.site_id,
+        label: s.name,
+        description: s.description ?? undefined,
+      })),
+    [sites]
+  );
 
   const form = useForm<CreatePropertyLotFormData>({
     resolver: zodResolver(createPropertyLotSchema),
@@ -57,13 +77,14 @@ export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePro
       lot_number: initialValues?.lot_number ?? undefined,
       area_size: initialValues?.area_size ?? undefined,
       price_per_sqm: initialValues?.price_per_sqm ?? undefined,
+      title_number: initialValues?.title_number ?? '',
     },
   });
 
   const { state, execute } = useMutation(createLot, {
     setError: form.setError,
     onSuccess: () => {
-      closeDialog();
+      handleDismiss();
       toast.success('Property lot created successfully');
     },
   });
@@ -77,6 +98,7 @@ export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePro
         lot_number: initialValues?.lot_number ?? undefined,
         area_size: initialValues?.area_size ?? undefined,
         price_per_sqm: initialValues?.price_per_sqm ?? undefined,
+        title_number: initialValues?.title_number ?? '',
       });
     }
   }, [open, initialValues, form]);
@@ -93,24 +115,28 @@ export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePro
       lot_number: data.lot_number,
       area_size: data.area_size,
       price_per_sqm: data.price_per_sqm,
+      title_number: data.title_number ? data.title_number.trim() : undefined,
     });
   });
 
   const area = watch('area_size');
   const rate = watch('price_per_sqm');
-  const total = Number(area) > 0 && Number(rate) > 0 ? Number(area) * Number(rate) : null;
+  const total =
+    Number(area) > 0 && Number(rate) > 0 && Number.isFinite(Number(area) * Number(rate))
+      ? Number(area) * Number(rate)
+      : null;
 
   const isPending = state.status === 'pending';
   const serverError = state.status === 'error' ? state.error : null;
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && closeDialog()}>
-      <DialogContent className="max-w-md bg-card">
+    <Dialog open={open} onOpenChange={(next) => !next && handleDismiss()}>
+      <DialogContent className="max-w-md sm:max-w-md bg-card">
         <DialogHeader>
           <DialogTitle>New Property Lot</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={onSubmit} className="space-y-4">
+        <form onSubmit={onSubmit} noValidate className="min-w-0 space-y-4">
           {serverError && (
             <Alert variant="destructive">
               <AlertDescription>{serverError}</AlertDescription>
@@ -126,22 +152,15 @@ export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePro
               name="site_id"
               control={form.control}
               render={({ field }) => (
-                <Select
+                <SearchableSelect
+                  id="site_id"
+                  options={siteOptions}
                   value={field.value}
                   onValueChange={field.onChange}
                   disabled={isPending || sites.length === 0}
-                >
-                  <SelectTrigger id="site_id" className="w-full">
-                    <SelectValue placeholder={sites.length === 0 ? 'No sites available' : 'Select a site'} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sites.map((s) => (
-                      <SelectItem key={s.site_id} value={s.site_id}>
-                        {s.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder={sites.length === 0 ? 'No sites available' : 'Select a site'}
+                  searchPlaceholder="Search site name or address..."
+                />
               )}
             />
             {errors.site_id && (
@@ -156,6 +175,7 @@ export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePro
               label="Block No."
               type="number"
               min={1}
+              max={LOT_LIMITS.blockOrLotNumber}
               step={1}
               placeholder="1"
               disabled={isPending}
@@ -167,6 +187,7 @@ export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePro
               label="Lot No."
               type="number"
               min={1}
+              max={LOT_LIMITS.blockOrLotNumber}
               step={1}
               placeholder="1"
               disabled={isPending}
@@ -181,6 +202,7 @@ export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePro
               label="Area (sqm)"
               type="number"
               min={0}
+              max={LOT_LIMITS.areaSqm}
               step="0.01"
               placeholder="250.00"
               disabled={isPending}
@@ -192,6 +214,7 @@ export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePro
               label="Price / sqm"
               type="number"
               min={0}
+              max={LOT_LIMITS.pricePerSqm}
               step="0.01"
               placeholder="3500.00"
               disabled={isPending}
@@ -200,12 +223,25 @@ export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePro
             />
           </div>
 
-          <div className="flex items-center justify-between rounded-lg bg-row-hover px-3 py-2.5">
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <FormField
+            id="title_number"
+            label="Title No. (Optional)"
+            type="text"
+            placeholder="e.g. T-123456"
+            disabled={isPending}
+            error={errors.title_number?.message}
+            {...register('title_number')}
+          />
+
+          <div className="flex min-w-0 w-full items-center justify-between gap-3 rounded-lg bg-row-hover px-3 py-2.5">
+            <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               Total contract price
             </span>
-            <span className="text-sm font-semibold text-foreground">
-              {total === null ? '—' : PESO.format(total)}
+            <span
+              className="min-w-0 max-w-[60%] truncate text-right text-sm font-semibold text-foreground"
+              title={total === null ? undefined : PESO.format(total)}
+            >
+              {total === null ? 'Not set' : PESO.format(total)}
             </span>
           </div>
 
@@ -218,7 +254,7 @@ export function CreatePropertyLotModal({ open, sites, initialValues }: CreatePro
             <Button
               type="button"
               variant="outline"
-              onClick={closeDialog}
+              onClick={handleDismiss}
               disabled={isPending}
               className="border-border bg-card text-foreground hover:bg-row-hover hover:text-foreground"
             >

@@ -7,10 +7,16 @@ import { uuidSchema } from "@/lib/validations/client";
 import {
   createLandTitleSchema,
   updateLandTitleSchema,
+  updatePropertyTitleNumberSchema,
   getLandTitlesParamsSchema,
+  recordLandTitleReleaseSchema,
 } from "@/lib/validations/title";
-import type { LandTitle } from "@/lib/types/title";
+import type { AccountAwaitingTitle, CreateLandTitleInput, LandTitle } from "@/lib/types/title";
 import type { PaginatedResult } from "@/lib/types/client";
+
+// The client's documents ride along so title lists can show release packet progress.
+const TITLE_SELECT =
+  "*, client:client_id(client_id, full_name, status, address, civil_status, spouse_name, tin_number, documents:client_document(document_type, property_id)), property:property_id(property_id, location, block_number, lot_number, title_number, area_size, price_per_sqm), history:land_title_status_history(history_id, title_id, status, changed_at, changed_by), release_attachment:release_attachment_id(attachment_id, file_path, file_name, file_size, mime_type, uploaded_at)";
 
 const titleBase = createScope();
 const titleCreate = createScope(["legal.create"]);
@@ -33,7 +39,7 @@ export async function getLandTitles(
 
       let query = supabase
         .from("land_title")
-        .select("*, client:client_id(client_id, full_name, status, address)", { count: "exact" });
+        .select(TITLE_SELECT, { count: "exact" });
 
       if (validatedParams?.client_id) {
         query = query.eq("client_id", validatedParams.client_id);
@@ -43,9 +49,6 @@ export async function getLandTitles(
       }
       if (validatedParams?.status) {
         query = query.eq("status", validatedParams.status);
-      }
-      if (validatedParams?.search) {
-        query = query.ilike("title_number", `%${validatedParams.search}%`);
       }
 
       const sortBy = validatedParams?.sortBy ?? "created_at";
@@ -80,7 +83,7 @@ export async function getLandTitleByPropertyId(
 
       const { data, error } = await supabase
         .from("land_title")
-        .select("*, client:client_id(client_id, full_name, status, address)")
+        .select(TITLE_SELECT)
         .eq("property_id", validPropertyId)
         .maybeSingle<LandTitle>();
 
@@ -93,24 +96,124 @@ export async function getLandTitleByPropertyId(
   });
 }
 
+interface RawClearedAccount {
+  account_id: string;
+  cleared_at: string;
+  property: {
+    property_id: string;
+    location: string;
+    block_number: number;
+    lot_number: number;
+    title_number?: string | null;
+    land_title: { title_id: string }[] | { title_id: string } | null;
+  } | null;
+  parties: { is_primary: boolean; client: { client_id: string; full_name: string } | null }[];
+}
+
+/**
+ * Accounts Billing has cleared whose lot has no land title yet. This is the
+ * Legal page's work queue: each one needs a title record.
+ */
+export async function getAccountsAwaitingTitle(): Promise<AccountAwaitingTitle[]> {
+  return titleBase.query(async ({ supabase }) => {
+    await requireAnyPermission(["legal.read"]);
+
+    const { data, error } = await supabase
+      .from("ledger_account")
+      .select(
+        "account_id, cleared_at, property:property_id(property_id, location, block_number, lot_number, title_number, land_title(title_id)), parties:account_party(is_primary, client:client_id(client_id, full_name))"
+      )
+      .eq("status", "Active")
+      .not("cleared_at", "is", null)
+      .order("cleared_at", { ascending: false })
+      .returns<RawClearedAccount[]>();
+
+    if (error) {
+      throw new Error(`Failed to fetch cleared accounts: ${error.message}`);
+    }
+
+    return (data ?? []).flatMap((row) => {
+      const property = row.property;
+      if (!property) return [];
+
+      const title = Array.isArray(property.land_title) ? property.land_title[0] : property.land_title;
+      if (title) return [];
+
+      const party = row.parties.find((p) => p.is_primary) ?? row.parties[0];
+      const coBuyers = row.parties
+        .filter((p) => p !== party && p.client)
+        .map((p) => p.client!.full_name);
+      return [
+        {
+          account_id: row.account_id,
+          cleared_at: row.cleared_at,
+          property: {
+            property_id: property.property_id,
+            location: property.location,
+            block_number: property.block_number,
+            lot_number: property.lot_number,
+            title_number: property.title_number ?? null,
+          },
+          client: party?.client ?? null,
+          co_buyers: coBuyers,
+        },
+      ];
+    });
+  });
+}
+
+/**
+ * Legal creates the title for a lot whose account Billing has cleared. The
+ * client comes from that account, so the title is always linked to the buyer
+ * of record for the lot. New titles start at "Cleared by Billing".
+ */
 export async function createLandTitle(
-  input: unknown
+  input: CreateLandTitleInput
 ): Promise<ActionResult<LandTitle>> {
   return titleCreate.run({
     schema: createLandTitleSchema,
     input,
-    handler: async (validatedInput, { supabase }) => {
+    handler: async ({ property_id, is_legacy_transferred, status }, { supabase }) => {
+      const { data: account, error: accountError } = await supabase
+        .from("ledger_account")
+        .select("account_id, cleared_at, parties:account_party(client_id, is_primary)")
+        .eq("property_id", property_id)
+        .eq("status", "Active")
+        .maybeSingle<{
+          account_id: string;
+          cleared_at: string | null;
+          parties: { client_id: string; is_primary: boolean }[];
+        }>();
+
+      if (accountError) {
+        throw new Error(`Failed to check the lot's account: ${accountError.message}`);
+      }
+      if (!account) {
+        throw new Error("This lot has no active account, so there is nothing for Billing to clear.");
+      }
+      if (!account.cleared_at) {
+        throw new Error("Billing has not cleared this account yet. A title can only be created once it is cleared.");
+      }
+
+      const buyer = account.parties.find((p) => p.is_primary) ?? account.parties[0];
+      if (!buyer) {
+        throw new Error("This account has no client on record.");
+      }
+
       const { data, error } = await supabase
         .from("land_title")
         .insert({
-          property_id: validatedInput.property_id,
-          client_id: validatedInput.client_id,
-          title_number: validatedInput.title_number ?? null,
-          status: validatedInput.status ?? "Processing",
+          property_id,
+          client_id: buyer.client_id,
+          is_legacy_transferred: Boolean(is_legacy_transferred),
+          status: status ?? "Document Preparation",
         })
-        .select("*, client:client_id(client_id, full_name, status, address)")
+        .select(TITLE_SELECT)
         .single<LandTitle>();
 
+      if (error?.code === "23505") {
+        throw new Error("This lot already has a title record.");
+      }
       if (error || !data) {
         throw new Error(`Failed to create land title: ${error?.message ?? "Unknown error"}`);
       }
@@ -128,15 +231,106 @@ export async function updateLandTitle(
     schema: updateLandTitleSchema,
     input,
     handler: async (validatedUpdates, { supabase }) => {
+      // Prevent reversing status once title is released
+      if (validatedUpdates.status) {
+        const { data: current, error: checkError } = await supabase
+          .from("land_title")
+          .select("status")
+          .eq("title_id", titleId)
+          .single<{ status: string }>();
+
+        if (checkError) {
+          throw new Error(`Failed to check current title status: ${checkError.message}`);
+        }
+        if (current?.status === "Released" && validatedUpdates.status !== "Released") {
+          throw new Error("Released titles cannot be reverted to a previous status.");
+        }
+      }
+
       const { data, error } = await supabase
         .from("land_title")
         .update(validatedUpdates)
         .eq("title_id", titleId)
-        .select("*, client:client_id(client_id, full_name, status, address)")
+        .select(TITLE_SELECT)
         .single<LandTitle>();
 
       if (error || !data) {
         throw new Error(`Failed to update land title: ${error?.message ?? "Unknown error"}`);
+      }
+
+      return data;
+    },
+  });
+}
+
+export async function recordLandTitleRelease(
+  input: unknown
+): Promise<ActionResult<LandTitle>> {
+  return titleUpdate.run({
+    schema: recordLandTitleReleaseSchema,
+    input,
+    handler: async (
+      { title_id, released_to_name, released_to_id, release_remarks, release_attachment_id },
+      { supabase }
+    ) => {
+      // Verify title is currently ready for release
+      const { data: current, error: checkError } = await supabase
+        .from("land_title")
+        .select("status")
+        .eq("title_id", title_id)
+        .single<{ status: string }>();
+
+      if (checkError || !current) {
+        throw new Error("Land title not found.");
+      }
+      if (current.status === "Released") {
+        throw new Error("Title has already been released.");
+      }
+      if (current.status !== "Ready for Claim") {
+        throw new Error("Only titles in 'Ready for Claim' can be marked as Released.");
+      }
+
+      const { data, error } = await supabase
+        .from("land_title")
+        .update({
+          status: "Released",
+          released_at: new Date().toISOString(),
+          released_to_name,
+          released_to_id,
+          release_remarks: release_remarks ?? null,
+          release_attachment_id: release_attachment_id ?? null,
+        })
+        .eq("title_id", title_id)
+        .select(TITLE_SELECT)
+        .single<LandTitle>();
+
+      if (error || !data) {
+        throw new Error(`Failed to record title release: ${error?.message ?? "Unknown error"}`);
+      }
+
+      return data;
+    },
+  });
+}
+
+/** Updates the TCT number directly on the property lot. */
+export async function updatePropertyTitleNumber(
+  propertyId: string,
+  titleNumber: string
+): Promise<ActionResult<{ property_id: string; title_number: string }>> {
+  return titleUpdate.run({
+    schema: updatePropertyTitleNumberSchema,
+    input: { property_id: propertyId, title_number: titleNumber },
+    handler: async ({ property_id, title_number }, { supabase }) => {
+      const { data, error } = await supabase
+        .from("property_lot")
+        .update({ title_number })
+        .eq("property_id", property_id)
+        .select("property_id, title_number")
+        .single<{ property_id: string; title_number: string }>();
+
+      if (error || !data) {
+        throw new Error(`Failed to update title number: ${error?.message ?? "Unknown error"}`);
       }
 
       return data;

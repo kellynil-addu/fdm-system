@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardToolbar, CardTableFooter } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
+import { Card, CardStickyHeader } from '@/components/ui/card';
+import {
+  FilterToolbar,
+  ListPaginationFooter,
+} from '@/components/ui/filter-toolbar';
 import Link from 'next/link';
 import {
   Plus,
-  Search,
   X,
   LandPlot,
   SearchX,
@@ -16,7 +17,6 @@ import {
   FileDown,
 } from 'lucide-react';
 import { getPropertyReportData } from '@/lib/actions/reports';
-import { generatePropertyPdfReport } from '@/lib/reports/pdf-property-report';
 import {
   Table,
   TableBody,
@@ -42,20 +42,16 @@ import {
   usePropertyLots,
   lotLabel,
   totalPrice,
-  type StatusFilter,
 } from '@/lib/hooks/use-property-lots';
 import type { PropertyLotWithClient, PropertyStatus, Site } from '@/lib/types/property';
-import { STATUSES, PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
+import { PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
 import { Badge } from '@/components/ui/badge';
 import { IconBox } from '@/components/ui/icon-box';
-
-/** Matches the `duration-200` exit transition on DialogContent. */
-const DIALOG_EXIT_MS = 200;
+import { useDialogPresence } from '@/lib/hooks/use-dialog-presence';
 
 const GUTTER = 'px-4 sm:px-6';
 const GUTTER_L = 'pl-4 sm:pl-6';
 const GUTTER_R = 'pr-4 sm:pr-6';
-
 
 const PESO = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -76,6 +72,8 @@ function StatusPill({ status }: { status: PropertyStatus }) {
 async function handleExportLotPdf(lot: PropertyLotWithClient) {
   try {
     const data = await getPropertyReportData(lot.property_id);
+    // Loaded on demand so jsPDF stays out of the page bundle.
+    const { generatePropertyPdfReport } = await import('@/lib/reports/pdf-property-report');
     generatePropertyPdfReport(data);
     toast.success('Property PDF report generated');
   } catch (err) {
@@ -92,7 +90,14 @@ function LotRow({ lot }: { lot: PropertyLotWithClient }) {
             <LandPlot className="h-4 w-4 text-muted-foreground" />
           </IconBox>
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-foreground">{lotLabel(lot)}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="truncate text-sm font-medium text-foreground">{lotLabel(lot)}</p>
+              {lot.is_archived && (
+                <Badge variant="muted" className="shrink-0 text-[10px]">
+                  Archived
+                </Badge>
+              )}
+            </div>
             <p className="truncate text-xs text-muted-foreground">{lot.location}</p>
             <p className="mt-1 truncate text-xs text-muted-foreground md:hidden">
               {AREA.format(lot.area_size)} sqm
@@ -147,58 +152,31 @@ function LotRow({ lot }: { lot: PropertyLotWithClient }) {
   );
 }
 
-function StatusTabs({
-  value,
-  onChange,
-  counts,
+function EmptyState({
+  controller,
+  onCreate,
 }: {
-  value: StatusFilter;
-  onChange: (v: StatusFilter) => void;
-  counts: Record<StatusFilter, number>;
+  controller: { isFiltered: boolean; clearAll: () => void };
+  onCreate: () => void;
 }) {
-  const tabs: StatusFilter[] = ['all', ...STATUSES];
+  const Icon = controller.isFiltered ? SearchX : LandPlot;
   return (
-    <div role="group" aria-label="Filter by status" className="inline-flex max-w-full flex-wrap items-center gap-1 rounded-lg bg-row-hover p-1">
-      {tabs.map((tab) => {
-        const isActive = value === tab;
-        return (
-          <button
-            key={tab}
-            type="button"
-            aria-pressed={isActive}
-            onClick={() => onChange(tab)}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
-              isActive ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab === 'all' ? 'All' : tab}
-            <span className="text-xs tabular-nums text-muted-foreground">{counts[tab]}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function EmptyState({ isFiltered, onClear, onCreate }: { isFiltered: boolean; onClear: () => void; onCreate: () => void }) {
-  const Icon = isFiltered ? SearchX : LandPlot;
-  return (
-    <div className="flex flex-col items-center justify-center gap-4 px-6 py-20 text-center">
+    <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-row-hover">
         <Icon className="h-5 w-5 text-muted-foreground" />
       </div>
       <div className="space-y-1.5">
         <p className="text-sm font-semibold text-foreground">
-          {isFiltered ? 'No matching lots' : 'No property lots yet'}
+          {controller.isFiltered ? 'No matching lots' : 'No property lots yet'}
         </p>
         <p className="max-w-sm text-sm text-muted-foreground">
-          {isFiltered
+          {controller.isFiltered
             ? 'Try a different search term, or clear the filters to see every lot.'
             : 'Add the first lot to start tracking property availability and inventory.'}
         </p>
       </div>
-      {isFiltered ? (
-        <Button variant="quiet" onClick={onClear} className="gap-1.5">
+      {controller.isFiltered ? (
+        <Button variant="quiet" onClick={controller.clearAll} className="gap-1.5">
           <X className="h-3.5 w-3.5" />
           Clear filters
         </Button>
@@ -214,161 +192,109 @@ function EmptyState({ isFiltered, onClear, onCreate }: { isFiltered: boolean; on
 
 function PropertyLotsContent() {
   const {
-    lots,
-    visibleLots,
+    controller,
     isLoading,
     error,
     activeDialog,
     openDialog,
-    search,
-    setSearch,
-    statusFilter,
-    setStatusFilter,
     sites,
   } = usePropertyLots();
 
-  // TODO: could use a refactor; or move it for the hook to manage
-  const [renderedDialog, setRenderedDialog] = useState(activeDialog);
-  useEffect(() => {
-    if (activeDialog) {
-      setRenderedDialog(activeDialog);
-      return;
-    }
-    const timer = setTimeout(() => setRenderedDialog(null), DIALOG_EXIT_MS);
-    return () => clearTimeout(timer);
-  }, [activeDialog]);
-
-  const isFiltered = search.trim() !== '' || statusFilter !== 'all';
-  const counts = {
-    all: lots.length,
-    Open: lots.filter((l) => l.status === 'Open').length,
-    Reserved: lots.filter((l) => l.status === 'Reserved').length,
-    Sold: lots.filter((l) => l.status === 'Sold').length,
-    Forfeited: lots.filter((l) => l.status === 'Forfeited').length,
-  } satisfies Record<StatusFilter, number>;
-
-  function clearFilters() {
-    setSearch('');
-    setStatusFilter('all');
-  }
+  const { rendered: renderedDialog, isOpen: isDialogOpen } = useDialogPresence(activeDialog);
 
   return (
     <>
       <Card variant="section">
-        <div className={`flex flex-wrap items-start justify-between gap-4 pb-5 pt-6 ${GUTTER}`}>
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold leading-none tracking-tight text-foreground">
-              Property Lots
-            </h2>
-            <p className="text-sm text-muted-foreground">
-              Record raw land inventory and keep lot availability accurate.
-            </p>
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <Button
-              asChild
-              variant="quiet"
-              className="gap-2"
-            >
-              <Link href="/dashboard/properties/map">
-                <Map className="h-4 w-4" />
-                Site map
-              </Link>
-            </Button>
-            <Button
-              onClick={() => openDialog({ type: 'create' })}
-              className="gap-2"
-            >
-              <Plus className="h-4 w-4" />
-              New Lot
-            </Button>
-          </div>
-        </div>
-
-        <CardToolbar>
-          <StatusTabs value={statusFilter} onChange={setStatusFilter} counts={counts} />
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-0 flex-1 sm:flex-none">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search location, block or lot"
-                aria-label="Search property lots"
-                className="w-full pl-9 sm:w-72"
-              />
+        <CardStickyHeader>
+          <div className={`flex flex-wrap items-start justify-between gap-4 pb-5 pt-6 ${GUTTER}`}>
+            <div className="space-y-1">
+              <h2 className="text-lg font-semibold leading-none tracking-tight text-foreground">
+                Property Lots
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Record raw land inventory and keep lot availability accurate.
+              </p>
             </div>
-            {isFiltered && (
-              <Button variant="ghost" onClick={clearFilters} className="gap-1.5 text-muted-foreground hover:bg-row-hover hover:text-foreground">
-                <X className="h-3.5 w-3.5" />
-                Clear
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <Button
+                asChild
+                variant="quiet"
+                className="gap-2"
+              >
+                <Link href="/dashboard/properties/map">
+                  <Map className="h-4 w-4" />
+                  Site map
+                </Link>
               </Button>
-            )}
-          </div>
-        </CardToolbar>
-
-        <div className="min-h-0 flex-1 overflow-y-auto border-t border-border">
-          {error ? (
-            <div role="alert" className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
-              <p className="text-sm font-medium text-destructive">Could not load property lots</p>
-              <p className="max-w-sm text-sm text-muted-foreground">{error}</p>
+              <Button
+                onClick={() => openDialog({ type: 'create' })}
+                className="gap-2"
+              >
+                <Plus className="h-4 w-4" />
+                New Lot
+              </Button>
             </div>
-          ) : isLoading ? (
-            <PropertyRowsSkeleton />
-          ) : visibleLots.length === 0 ? (
-            <EmptyState
-              isFiltered={isFiltered}
-              onClear={clearFilters}
-              onCreate={() => openDialog({ type: 'create' })}
-            />
-          ) : (
-            <Table>
-              <TableHeader className="sticky top-0 z-10">
-                <TableRow className="bg-card hover:bg-card">
-                  <TableHead className={`h-11 pr-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${GUTTER_L}`}>
-                    Lot
-                  </TableHead>
-                  <TableHead className="hidden h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:table-cell">
-                    Area
-                  </TableHead>
-                  <TableHead className="hidden h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground lg:table-cell">
-                    Contract Price
-                  </TableHead>
-                  <TableHead className="hidden h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground lg:table-cell">
-                    Client
-                  </TableHead>
-                  <TableHead className="h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Status
-                  </TableHead>
-                  <TableHead className={`h-11 pl-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground ${GUTTER_R}`}>
-                    Actions
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visibleLots.map((lot) => <LotRow key={lot.property_id} lot={lot} />)}
-              </TableBody>
-            </Table>
-          )}
-        </div>
+          </div>
+
+          <FilterToolbar controller={controller} />
+        </CardStickyHeader>
+
+        {error ? (
+          <div role="alert" className="flex flex-col items-center justify-center gap-2 px-6 py-20 text-center">
+            <p className="text-sm font-medium text-destructive">Could not load property lots</p>
+            <p className="max-w-sm text-sm text-muted-foreground">{error}</p>
+          </div>
+        ) : isLoading ? (
+          <PropertyRowsSkeleton />
+        ) : controller.matchedItems.length === 0 ? (
+          <EmptyState
+            controller={controller}
+            onCreate={() => openDialog({ type: 'create' })}
+          />
+        ) : (
+          <Table>
+            <TableHeader className="bg-card">
+              <TableRow className="bg-card hover:bg-card">
+                <TableHead className={`h-11 pr-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground ${GUTTER_L}`}>
+                  Lot
+                </TableHead>
+                <TableHead className="hidden h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground md:table-cell">
+                  Area
+                </TableHead>
+                <TableHead className="hidden h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground lg:table-cell">
+                  Contract Price
+                </TableHead>
+                <TableHead className="hidden h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground lg:table-cell">
+                  Client
+                </TableHead>
+                <TableHead className="h-11 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Status
+                </TableHead>
+                <TableHead className={`h-11 pl-3 text-right text-xs font-semibold uppercase tracking-wider text-muted-foreground ${GUTTER_R}`}>
+                  Actions
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {controller.truncatedItems.map((lot) => <LotRow key={lot.property_id} lot={lot} />)}
+            </TableBody>
+          </Table>
+        )}
 
         {!error && (
-          <CardTableFooter>
-            <p className="text-xs text-muted-foreground" aria-live="polite">
-              {isLoading
-                ? 'Loading property lots…'
-                : isFiltered
-                  ? `Showing ${visibleLots.length} of ${lots.length} lot${lots.length === 1 ? '' : 's'}`
-                  : `${lots.length} lot${lots.length === 1 ? '' : 's'}`}
-            </p>
-          </CardTableFooter>
+          <ListPaginationFooter
+            controller={controller}
+            isLoading={isLoading}
+            singularLabel="lot"
+            pluralLabel="lots"
+            loadingText="Loading property lots…"
+          />
         )}
       </Card>
 
-      {renderedDialog?.type === 'create' && <CreatePropertyLotModal open={activeDialog !== null} sites={sites} />}
+      {renderedDialog?.type === 'create' && <CreatePropertyLotModal open={isDialogOpen} sites={sites} />}
       {renderedDialog?.type === 'assign' && (
-        <AssignLotClientDialog lot={renderedDialog.lot} open={activeDialog !== null} />
+        <AssignLotClientDialog lot={renderedDialog.lot} open={isDialogOpen} />
       )}
     </>
   );

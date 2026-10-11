@@ -23,6 +23,7 @@ import {
   runTrackedCleanups,
 } from "../framework/session";
 import { unwrap } from "../framework/action-helper";
+import { fakePhMobile, uniqueNameSuffix } from "../framework/fake-data";
 
 function fakeTin(): string {
   const d = faker.string.numeric(9);
@@ -57,7 +58,7 @@ describe("Client Management Actions", () => {
   it("createClient creates client with contact records", async () => {
     const fullName = faker.person.fullName();
     const email = faker.internet.email();
-    const phone = faker.phone.number();
+    const phone = fakePhMobile();
     const address = `${faker.location.streetAddress()}, ${faker.location.city()}`;
     const tinNumber = fakeTin();
 
@@ -102,7 +103,7 @@ describe("Client Management Actions", () => {
   });
 
   it("getClients filters by search term across name and TIN", async () => {
-    const uniqueTag = `FakerTag-${Date.now()}`;
+    const uniqueTag = `FakerTag-${uniqueNameSuffix()}`;
     const fullName = `${faker.person.fullName()} ${uniqueTag}`;
     const tinNumber = fakeTin();
 
@@ -123,7 +124,7 @@ describe("Client Management Actions", () => {
   });
 
   it("getClients filters by status and supports pagination", async () => {
-    const uniqueSuffix = Date.now();
+    const uniqueSuffix = uniqueNameSuffix();
     const activeClient = unwrap(await createClient({
       full_name: `${faker.person.fullName()} Active ${uniqueSuffix}`,
       status: "Active",
@@ -170,7 +171,7 @@ describe("Client Management Actions", () => {
   it("addContactInfo enforces single primary contact exclusivity", async () => {
     const client = unwrap(await createClient({
       full_name: faker.person.fullName(),
-      contacts: [{ type: "Phone", value: faker.phone.number(), is_primary: true }],
+      contacts: [{ type: "Phone", value: fakePhMobile(), is_primary: true }],
     }));
     testClientIds.push(client.client_id);
 
@@ -193,7 +194,7 @@ describe("Client Management Actions", () => {
   it("updateContactInfo and deleteContactInfo manage contact records", async () => {
     const client = unwrap(await createClient({
       full_name: faker.person.fullName(),
-      contacts: [{ type: "Phone", value: faker.phone.number(), is_primary: false }],
+      contacts: [{ type: "Phone", value: fakePhMobile(), is_primary: false }],
     }));
     testClientIds.push(client.client_id);
 
@@ -201,7 +202,7 @@ describe("Client Management Actions", () => {
     const contactId = initialDetails.contact_info[0].contact_id;
 
     // Update contact value
-    const updatedPhone = faker.phone.number();
+    const updatedPhone = fakePhMobile();
     const updated = unwrap(await updateContactInfo(contactId, { value: updatedPhone }));
     expect(updated.value).toBe(updatedPhone);
 
@@ -285,6 +286,58 @@ describe("Client Management Actions", () => {
     const restored = unwrap(await unarchiveClient(client.client_id));
     expect(restored.status).toBe("Active");
     expect(restored.archived_at).toBeNull();
+  });
+
+  it("creates and updates client with civil_status, spouse_name, and gender", async () => {
+    const fullName = faker.person.fullName();
+    const spouseName = faker.person.fullName();
+
+    const client = unwrap(
+      await createClient({
+        full_name: fullName,
+        civil_status: "Married",
+        spouse_name: spouseName,
+        gender: "Female",
+        status: "Active",
+      })
+    );
+    testClientIds.push(client.client_id);
+
+    expect(client.civil_status).toBe("Married");
+    expect(client.spouse_name).toBe(spouseName);
+    expect(client.gender).toBe("Female");
+
+    const fetched = await getClientById(client.client_id);
+    expect(fetched.civil_status).toBe("Married");
+    expect(fetched.spouse_name).toBe(spouseName);
+    expect(fetched.gender).toBe("Female");
+
+    const updated = unwrap(
+      await updateClient(client.client_id, {
+        civil_status: "Single",
+      })
+    );
+
+    expect(updated.civil_status).toBe("Single");
+    expect(updated.spouse_name).toBeNull();
+
+    const fetchedAfter = await getClientById(client.client_id);
+    expect(fetchedAfter.civil_status).toBe("Single");
+    expect(fetchedAfter.spouse_name).toBeNull();
+  });
+
+  it("rejects client creation when status is Married without spouse name", async () => {
+    const result = await createClient({
+      full_name: faker.person.fullName(),
+      civil_status: "Married",
+      spouse_name: "",
+      status: "Active",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error).toContain("Spouse name is required for married clients");
+    }
   });
 });
 

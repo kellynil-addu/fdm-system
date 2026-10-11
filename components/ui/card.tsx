@@ -10,7 +10,7 @@ const cardVariants = cva(
     variants: {
       variant: {
         default: "",
-        section: "flex flex-1 flex-col overflow-hidden",
+        section: "flex flex-col",
         interactive: "transition-shadow hover:shadow-md cursor-pointer",
         prominent: "rounded-2xl shadow-lg",
         dashed:
@@ -137,20 +137,76 @@ const CardToolbar = React.forwardRef<
 ));
 CardToolbar.displayName = "CardToolbar";
 
-const CardTableFooter = React.forwardRef<
+const CardStickyHeader = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
     className={cn(
+      "sticky top-0 z-20 bg-card rounded-t-xl border-b border-border shadow-xs",
+      className,
+    )}
+    {...props}
+  />
+));
+CardStickyHeader.displayName = "CardStickyHeader";
+
+export interface CardTableFooterProps
+  extends React.HTMLAttributes<HTMLDivElement> {
+  sticky?: boolean;
+}
+
+const CardTableFooter = React.forwardRef<
+  HTMLDivElement,
+  CardTableFooterProps
+>(({ className, sticky = true, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(
       "flex shrink-0 items-center justify-between gap-3 border-t border-border px-4 py-3 sm:px-6",
+      sticky && "sticky bottom-0 z-20 bg-card rounded-b-xl shadow-[0_-4px_12px_rgba(0,0,0,0.05)]",
       className,
     )}
     {...props}
   />
 ));
 CardTableFooter.displayName = "CardTableFooter";
+
+const cardScrollContainerVariants = cva(
+  "min-h-0 flex-1 overflow-auto border-t border-border",
+  {
+    variants: {
+      padding: {
+        none: "",
+        sm: "p-3",
+        default: "p-4 sm:p-6",
+        lg: "p-6 sm:p-8",
+      },
+    },
+    defaultVariants: {
+      padding: "none",
+    },
+  },
+);
+
+export interface CardScrollContainerProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof cardScrollContainerVariants> {}
+
+const CardScrollContainer = React.forwardRef<
+  HTMLDivElement,
+  CardScrollContainerProps
+>(({ className, padding, ...props }, ref) => (
+  <div
+    ref={ref}
+    className={cn(cardScrollContainerVariants({ padding, className }))}
+    {...props}
+  />
+));
+CardScrollContainer.displayName = "CardScrollContainer";
+
+const CardTableBody = CardScrollContainer;
 
 export {
   Card,
@@ -160,7 +216,11 @@ export {
   CardDescription,
   CardContent,
   CardToolbar,
+  CardStickyHeader,
   CardTableFooter,
+  CardScrollContainer,
+  CardTableBody,
   cardVariants,
   cardTitleVariants,
+  cardScrollContainerVariants,
 };

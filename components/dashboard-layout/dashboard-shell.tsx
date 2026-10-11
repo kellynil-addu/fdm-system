@@ -1,11 +1,13 @@
 'use client';
 
 import * as React from 'react';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { PanelLeftClose } from 'lucide-react';
 import { SidebarNav } from '@/components/dashboard-layout/sidebar-nav';
 import { DashboardTopBar } from '@/components/dashboard-layout/top-bar';
 import { FdmLogo } from '@/components/shared/fdm-logo';
 import { Button } from '@/components/ui/button';
+
+const MOBILE_QUERY = '(max-width: 1023px)';
 
 interface DashboardShellProps {
   children: React.ReactNode;
@@ -23,19 +25,34 @@ export function DashboardShell({
 
   React.useEffect(() => {
     // NOTE: Could be fine for now, in the future we could use some kind of class/hook to manage local configs
-    const savedPreference = window.localStorage.getItem('dashboard-sidebar-open');
-    if (savedPreference !== null) {
-      setIsSidebarOpen(savedPreference === 'true');
-    } else if (window.matchMedia('(max-width: 1023px)').matches) {
+    // On small screens the sidebar is an overlay drawer, so it always starts
+    // closed. The saved preference only applies to the desktop layout.
+    if (window.matchMedia(MOBILE_QUERY).matches) {
       setIsSidebarOpen(false);
+    } else {
+      const savedPreference = window.localStorage.getItem('dashboard-sidebar-open');
+      if (savedPreference !== null) {
+        setIsSidebarOpen(savedPreference === 'true');
+      }
     }
     hasLoadedSidebarPreference.current = true;
   }, []);
 
   React.useEffect(() => {
-    if (hasLoadedSidebarPreference.current) {
+    if (hasLoadedSidebarPreference.current && !window.matchMedia(MOBILE_QUERY).matches) {
       window.localStorage.setItem('dashboard-sidebar-open', String(isSidebarOpen));
     }
+  }, [isSidebarOpen]);
+
+  // Close mobile sidebar on Escape key press
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isSidebarOpen && window.matchMedia(MOBILE_QUERY).matches) {
+        setIsSidebarOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isSidebarOpen]);
 
   return (
@@ -46,6 +63,16 @@ export function DashboardShell({
       >
         Skip to main content
       </a>
+
+      {/* Dismissible mobile backdrop overlay */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-xs transition-opacity duration-200 lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
       <aside
         id="dashboard-navigation"
         className={`fixed bottom-0 left-0 top-0 z-40 flex flex-col border-r border-border bg-card transition-[width,transform] duration-200 ${
@@ -55,7 +82,18 @@ export function DashboardShell({
         inert={!isSidebarOpen}
       >
         <div className="shrink-0 border-b border-border p-2 lg:p-4">
-          <div className="flex flex-col items-center space-y-2">
+          <div className="relative flex flex-col items-center space-y-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="absolute right-0 top-0 h-8 w-8 text-muted-foreground hover:text-foreground lg:hidden"
+              onClick={() => setIsSidebarOpen(false)}
+              aria-label="Close navigation menu"
+              title="Close navigation menu"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </Button>
             <FdmLogo className="h-12 w-12 shrink-0 object-contain lg:h-24 lg:w-40" />
             <span className="hidden text-center font-bold text-foreground lg:block">
               First Davao Millennium
@@ -72,29 +110,12 @@ export function DashboardShell({
           isSidebarOpen ? 'ml-0 lg:ml-60' : 'ml-0'
         }`}
       >
-        <div className="relative">
-          <DashboardTopBar user={user} />
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className={`fixed top-3 z-50 h-10 w-10 text-muted-foreground hover:bg-background hover:text-foreground ${
-              isSidebarOpen ? 'left-[calc(min(18rem,_100vw_-_2rem)_-_3rem)] lg:left-52' : 'left-2 sm:left-4'
-            }`}
-            onClick={() => setIsSidebarOpen((open) => !open)}
-            aria-label={isSidebarOpen ? 'Hide navigation menu' : 'Show navigation menu'}
-            aria-expanded={isSidebarOpen}
-            aria-controls="dashboard-navigation"
-            title={isSidebarOpen ? 'Hide navigation menu' : 'Show navigation menu'}
-          >
-            {isSidebarOpen ? (
-              <PanelLeftClose className="h-5 w-5" />
-            ) : (
-              <PanelLeftOpen className="h-5 w-5" />
-            )}
-          </Button>
-        </div>
-        <main id="main-content" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <DashboardTopBar
+          user={user}
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
+        />
+        <main id="main-content" className="flex min-h-0 flex-1 flex-col overflow-clip">
           {children}
         </main>
       </div>

@@ -18,9 +18,14 @@ export interface RawPartyRow {
 export interface RawLedgerRow {
   account_id: string;
   property_id: string;
-  status: "Active" | "Matured" | "Delinquent" | "Cancelled";
+  status: "Active" | "Matured" | "Delinquent" | "Cancelled" | "Forfeited";
   total_contract_price: number;
   remaining_balance: number;
+  cleared_at: string | null;
+  cleared_by: string | null;
+  forfeited_at: string | null;
+  forfeiture_reason: string | null;
+  reopened_at: string | null;
   created_at: string;
   updated_at: string;
   parties: RawPartyRow[];
@@ -30,8 +35,9 @@ export interface RawLandTitleRow {
   title_id: string;
   property_id: string;
   client_id: string;
-  title_number: string | null;
   status: string;
+  is_legacy_transferred: boolean;
+  created_by: string | null;
   created_at: string;
   updated_at: string;
   client?: { client_id: string; full_name: string; status: string; address: string | null } | null;
@@ -50,6 +56,11 @@ export const LOT_WITH_CLIENT_SELECT = `
     status,
     total_contract_price,
     remaining_balance,
+    cleared_at,
+    cleared_by,
+    forfeited_at,
+    forfeiture_reason,
+    reopened_at,
     created_at,
     updated_at,
     parties:account_party(
@@ -66,8 +77,9 @@ export const LOT_WITH_CLIENT_SELECT = `
     title_id,
     property_id,
     client_id,
-    title_number,
     status,
+    is_legacy_transferred,
+    created_by,
     created_at,
     updated_at,
     client:client_id(client_id, full_name, status, address)
@@ -76,7 +88,11 @@ export const LOT_WITH_CLIENT_SELECT = `
 
 export function mapLotWithAccount(lot: RawLotRow): PropertyLotWithClient {
   const activeAccount = lot.ledger_accounts?.find((a) => a.status === "Active") ?? null;
-  const primaryParty = activeAccount?.parties?.find((p) => p.is_primary) ?? activeAccount?.parties?.[0] ?? null;
+  const forfeitedAccount = lot.ledger_accounts?.find((a) => a.status === "Forfeited" && !a.reopened_at) ?? null;
+  const pastAccounts = (lot.ledger_accounts?.filter((a) => a.status === "Forfeited" || a.status === "Cancelled") ?? []) as LedgerAccountWithParties[];
+
+  const relevantAccount = activeAccount ?? (lot.status === "Forfeited" ? forfeitedAccount : null);
+  const primaryParty = relevantAccount?.parties?.find((p) => p.is_primary) ?? relevantAccount?.parties?.[0] ?? null;
 
   const rawTitle = Array.isArray(lot.land_title) ? lot.land_title[0] : lot.land_title;
   const resolvedClient = primaryParty?.client ?? rawTitle?.client ?? null;
@@ -92,6 +108,7 @@ export function mapLotWithAccount(lot: RawLotRow): PropertyLotWithClient {
     area_size: lot.area_size,
     price_per_sqm: lot.price_per_sqm,
     status: lot.status,
+    title_number: lot.title_number ?? null,
     created_at: lot.created_at,
     updated_at: lot.updated_at,
     is_archived: Boolean(lot.is_archived),
@@ -99,6 +116,8 @@ export function mapLotWithAccount(lot: RawLotRow): PropertyLotWithClient {
     client: resolvedClient,
     client_id: resolvedClientId,
     active_account: activeAccount as LedgerAccountWithParties | null,
+    forfeited_account: forfeitedAccount as LedgerAccountWithParties | null,
+    past_accounts: pastAccounts,
     title: (rawTitle as LandTitle) ?? null,
   };
 }

@@ -3,7 +3,7 @@ import type { LandTitle } from './title';
 
 export type PropertyStatus = 'Open' | 'Reserved' | 'Sold' | 'Forfeited';
 export type SubdivisionDisplayStatus = PropertyStatus | 'Closed';
-export type AccountStatus = 'Active' | 'Matured' | 'Delinquent' | 'Cancelled';
+export type AccountStatus = 'Active' | 'Matured' | 'Delinquent' | 'Cancelled' | 'Forfeited';
 
 export interface AccountParty {
   account_id: string;
@@ -21,6 +21,12 @@ export interface LedgerAccount {
   status: AccountStatus;
   total_contract_price: number;
   remaining_balance: number;
+  /** When Billing cleared the account as fully paid. Null while payments are ongoing. */
+  cleared_at?: string | null;
+  cleared_by?: string | null;
+  forfeited_at?: string | null;
+  forfeiture_reason?: string | null;
+  reopened_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -30,7 +36,7 @@ export interface LedgerAccountWithParties extends LedgerAccount {
 }
 
 /**
- * Site geometry comes back from JSONB as `unknown` — the database CHECK only
+ * Site geometry comes back from JSONB as `unknown`. The database CHECK only
  * proves it is an array of length >= 3, not that its elements are vertex
  * pairs. Run it through `parseRing()` in lib/geometry.ts before use.
  */
@@ -56,6 +62,7 @@ export interface PropertyLot {
   area_size: number;
   price_per_sqm: number;
   status: PropertyStatus;
+  title_number?: string | null;
   created_at: string;
   updated_at: string;
   is_archived: boolean;
@@ -66,7 +73,20 @@ export interface PropertyLotWithClient extends PropertyLot {
   client: Pick<Client, 'client_id' | 'full_name' | 'status' | 'address'> | null;
   client_id?: string | null;
   active_account?: LedgerAccountWithParties | null;
+  forfeited_account?: LedgerAccountWithParties | null;
+  past_accounts?: LedgerAccountWithParties[];
   title?: LandTitle | null;
+}
+
+export interface ForfeitPropertyLotInput {
+  property_id: string;
+  reason?: string;
+  forfeited_at?: string;
+}
+
+export interface ReopenPropertyLotForSaleInput {
+  property_id: string;
+  allowEarlyReopen?: boolean;
 }
 
 /** A pre-planned lot division on a site, drawn from the plat before any property is created. */
@@ -86,13 +106,14 @@ export interface SiteWithLots extends Site {
 
 export interface CreatePropertyLotInput {
   location: string;
-  /** Required via the UI — every lot must link to a pre-existing site. Optional here for direct action callers (e.g. tests). */
+  /** Required via the UI: every lot must link to a pre-existing site. Optional here for direct action callers (e.g. tests). */
   site_id?: string | null;
   block_number: number;
   lot_number: number;
   area_size: number;
   price_per_sqm: number;
   status?: PropertyStatus;
+  title_number?: string | null;
 }
 
 export interface UpdatePropertyLotInput {
@@ -101,6 +122,7 @@ export interface UpdatePropertyLotInput {
   lot_number?: number;
   area_size?: number;
   price_per_sqm?: number;
+  title_number?: string | null;
 }
 
 export interface AssignPartyInput {

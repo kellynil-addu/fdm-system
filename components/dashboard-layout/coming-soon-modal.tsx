@@ -1,6 +1,7 @@
 'use client';
 
 import { Clock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,7 @@ interface ComingSoonModalProps {
  * Built on the shadcn/Radix Dialog rather than a hand-rolled `createPortal`
  * overlay. The previous version opened a bare portal while a Radix dropdown was
  * closing, which could leave `pointer-events: none` on <body> and make the
- * whole page unclickable — testers reported the UI "crashing" after opening
+ * whole page unclickable. Testers reported the UI "crashing" after opening
  * Profile/Settings or the notification bell. Radix owns that lock and releases
  * it correctly.
  *
@@ -48,12 +49,12 @@ export function ComingSoonModal({ isOpen, onClose, title = 'This feature' }: Com
           </DialogDescription>
 
           {/* Close Button */}
-          <button
+          <Button
             onClick={onClose}
-            className="px-6 py-2 bg-primary hover:bg-[color-mix(in_srgb,var(--primary)_90%,black)] text-primary-foreground text-sm font-medium rounded-lg transition-colors"
+            className="px-6 font-medium"
           >
             Got it!
-          </button>
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { DOC_TYPE_LABEL } from '@/lib/types/client';
 import type { ClientReportData } from '@/lib/types/report';
 import {
   PDF_COLORS,
@@ -41,12 +42,19 @@ export function generateClientPdfReport(data: ClientReportData): void {
     body: [
       ['Full Name', data.client.full_name, 'Client ID', data.client.client_id],
       ['Account Status', data.client.status, 'TIN Number', data.client.tin_number || 'None recorded'],
-      ['Address', data.client.address || 'None recorded', 'Registered Date', formatDate(data.client.created_at)],
+      ['Civil Status', data.client.civil_status || 'None recorded', 'Gender', data.client.gender || 'None recorded'],
+      [
+        'Spouse Name',
+        data.client.spouse_name || (data.client.civil_status === 'Married' ? 'Required / Unrecorded' : 'N/A'),
+        'Registered Date',
+        formatDate(data.client.created_at),
+      ],
+      ['Address', data.client.address || 'None recorded', 'Last Profile Update', formatDate(data.client.updated_at)],
       [
         'Primary Contact',
         primaryContact ? `${primaryContact.type}: ${primaryContact.value}` : 'None recorded',
-        'Last Profile Update',
-        formatDate(data.client.updated_at),
+        '',
+        '',
       ],
     ],
   });
@@ -117,10 +125,10 @@ export function generateClientPdfReport(data: ClientReportData): void {
   // Document Compliance & Financial Status Summary
   const isComplete = data.documentChecklist.isComplete;
   const missingList = data.documentChecklist.missing.length > 0
-    ? data.documentChecklist.missing.join(', ')
+    ? data.documentChecklist.missing.map((type) => DOC_TYPE_LABEL[type]).join(', ')
     : 'None (All mandatory documents on file)';
   const presentList = data.documentChecklist.present.length > 0
-    ? data.documentChecklist.present.join(', ')
+    ? data.documentChecklist.present.map((type) => DOC_TYPE_LABEL[type]).join(', ')
     : 'None submitted yet';
 
   const settledAmount = Math.max(0, data.financials.totalPortfolioValue - data.financials.totalRemainingBalance);
@@ -140,8 +148,8 @@ export function generateClientPdfReport(data: ClientReportData): void {
       [
         'Documentation Status',
         isComplete
-          ? 'VERIFIED COMPLETE — Ready for Deed of Absolute Sale & Title processing'
-          : `PENDING REQUIREMENTS — Missing mandatory documents: ${missingList}`,
+          ? 'VERIFIED COMPLETE: Ready for Deed of Absolute Sale & Title processing'
+          : `PENDING REQUIREMENTS. Missing mandatory documents: ${missingList}`,
       ],
       ['Submitted Documents', presentList],
       ['Total Portfolio Value', formatCurrency(data.financials.totalPortfolioValue)],

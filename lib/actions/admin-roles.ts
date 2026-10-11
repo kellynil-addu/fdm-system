@@ -13,11 +13,12 @@ export interface RbacRole {
 
 export type SetUserRolesResult = { success: true };
 
-const admin = createScope(["system.create"], { admin: true });
+const adminRead = createScope(["system.read"]);
+const adminUpdate = adminRead.extend(["system.update"], { admin: true });
 
 export async function getActiveRoles(): Promise<RbacRole[]> {
-  return admin.query(async ({ supabase: adminClient }) => {
-    const { data, error } = await adminClient
+  return adminRead.query(async ({ supabase }) => {
+    const { data, error } = await supabase
       .schema("rbac")
       .from("role")
       .select("id, name, description")
@@ -36,7 +37,7 @@ export async function setUserRoles(
   userId: string,
   roleIds: string[]
 ): Promise<ActionResult<SetUserRolesResult>> {
-  return admin.run({
+  return adminUpdate.run({
     schema: setUserRolesActionSchema,
     input: { userId, roleIds },
     handler: async ({ userId: targetUserId, roleIds: ids }, { supabase: adminClient, userId: callerId }) => {

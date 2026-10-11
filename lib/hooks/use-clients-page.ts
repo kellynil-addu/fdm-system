@@ -3,7 +3,12 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useStatusFilter } from '@/lib/hooks/use-status-filter';
+import { ShieldAlert } from 'lucide-react';
+import {
+  useListController,
+  type ListControllerValue,
+} from '@/lib/hooks/use-list-controller';
+import { getClientRequirements } from '@/lib/utils/client-requirements';
 import {
   getClients,
   getClientById,
@@ -48,9 +53,23 @@ import type {
 } from '@/lib/types/client';
 
 export type ClientStatusFilter = 'all-records' | 'all' | 'Active' | 'Inactive' | 'Archived';
+export type ClientSortKey = 'full_name' | 'created_at' | 'latest_activity';
+
+export const CLIENT_STATUS_FILTERS: readonly ClientStatusFilter[] = [
+  'all',
+  'all-records',
+  'Active',
+  'Inactive',
+  'Archived',
+];
 
 /** Status that takes a client out of the working list. Set by `archiveClient`. */
 export const ARCHIVED_STATUS = 'Archived';
+
+export type ClientFilters = {
+  status: ClientStatusFilter;
+  incompleteOnly: boolean;
+};
 
 export type ClientDialog =
   | { type: 'create' }
@@ -62,13 +81,9 @@ export type ClientDialog =
 
 interface ClientsContextValue {
   clients: ClientListItem[];
-  visibleClients: ClientListItem[];
+  controller: ListControllerValue<ClientListItem, ClientFilters, ClientSortKey>;
   isLoading: boolean;
   error: string | null;
-  search: string;
-  setSearch: (query: string) => void;
-  statusFilter: ClientStatusFilter;
-  setStatusFilter: (status: ClientStatusFilter) => void;
   activeDialog: ClientDialog;
   openDialog: (dialog: ClientDialog) => void;
   closeDialog: () => void;
@@ -106,19 +121,12 @@ export function useClients() {
   return ctx;
 }
 
-function matchesSearch(client: ClientListItem, query: string): boolean {
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return true;
-
-  const contactValues = client.contact_info.map((c) => c.value);
-  const fields = [
-    client.full_name,
-    client.address ?? '',
-    client.tin_number ?? '',
-    ...contactValues,
-  ].map((field) => field.toLowerCase());
-
-  return words.every((word) => fields.some((field) => field.includes(word)));
+function isClientIncomplete(
+  client: ClientListItem,
+  missingDocClientIds: ReadonlySet<string>
+): boolean {
+  const requirements = getClientRequirements(client, []);
+  return !requirements.profileComplete || missingDocClientIds.has(client.client_id);
 }
 
 export function ClientsProvider({
@@ -135,9 +143,17 @@ export function ClientsProvider({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeDialog, setActiveDialog] = useState<ClientDialog>(null);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useStatusFilter<ClientStatusFilter>(['all', 'all-records', 'Active', 'Inactive', 'Archived'], 'all');
   const [missingDocumentAlerts, setMissingDocumentAlerts] = useState<ClientDocumentNotification[]>([]);
+
+  const missingDocClientIds = useMemo(
+    () =>
+      new Set(
+        missingDocumentAlerts
+          .filter((a) => a.missing_documents.length > 0)
+          .map((a) => a.client_id)
+      ),
+    [missingDocumentAlerts]
+  );
 
   // Dashboard follow-ups can open any permitted record, even outside the first list page.
   useEffect(() => {
@@ -151,28 +167,106 @@ export function ClientsProvider({
     return () => { cancelled = true; };
   }, [requestedClient]);
 
-
-  /**
-   * The working tabs exclude archived clients. The explicit All records tab
-   * includes them so the dashboard total opens the matching set of records.
-   */
-  const visibleClients = useMemo(() => {
-    return clients.filter((client) => {
-      if (statusFilter === 'all-records') return matchesSearch(client, search);
-      const isArchived = client.status === ARCHIVED_STATUS;
-
-      if (statusFilter === 'Archived') {
-        if (!isArchived) return false;
-      } else {
-        if (isArchived) return false;
-        if (statusFilter !== 'all' && client.status.toLowerCase() !== statusFilter.toLowerCase()) {
-          return false;
-        }
-      }
-
-      return matchesSearch(client, search);
-    });
-  }, [clients, search, statusFilter]);
+  const controller = useListController<ClientListItem, ClientFilters, ClientSortKey>({
+    items: clients,
+    search: {
+      fields: (client) => [
+        client.full_name,
+        client.address,
+        client.tin_number,
+        ...client.contact_info.map((c) => c.value),
+      ],
+      placeholder: 'Search name, address, or contact',
+      ariaLabel: 'Search clients',
+    },
+    filters: {
+      status: {
+        defaultValue: 'all',
+        urlParam: 'status',
+        parseUrlParam: (raw) =>
+          CLIENT_STATUS_FILTERS.find((s) => s === raw),
+        predicate: (client, statusFilter) => {
+          if (statusFilter === 'all-records') return true;
+          const isArchived = client.status === ARCHIVED_STATUS || Boolean(client.is_archived);
+          if (statusFilter === 'Archived') return isArchived;
+          if (isArchived) return false;
+          if (
+            statusFilter !== 'all' &&
+            client.status.toLowerCase() !== statusFilter.toLowerCase()
+          ) {
+            return false;
+          }
+          return true;
+        },
+        ui: {
+          variant: 'tabs',
+          ariaLabel: 'Filter clients by status',
+          items: [
+            { value: 'all', label: 'Current' },
+            { value: 'all-records', label: 'All records' },
+            { value: 'Active', label: 'Active' },
+            { value: 'Inactive', label: 'Inactive' },
+            { value: 'Archived', label: 'Archived' },
+          ],
+        },
+      },
+      incompleteOnly: {
+        defaultValue: false,
+        urlParam: 'incomplete',
+        predicate: (client, incompleteOnly) =>
+          !incompleteOnly || isClientIncomplete(client, missingDocClientIds),
+        ui: {
+          variant: 'toggle',
+          id: 'incomplete-only',
+          label: 'Incomplete only',
+          icon: createElement(ShieldAlert, { className: 'h-3.5 w-3.5' }),
+          countPredicate: (client) => isClientIncomplete(client, missingDocClientIds),
+          hidden: true,
+        },
+      },
+    },
+    sort: {
+      defaultKey: 'full_name',
+      defaultOrder: 'asc',
+      options: {
+        full_name: {
+          label: 'Name',
+          defaultOrder: 'asc',
+          compare: (a, b) =>
+            a.full_name.localeCompare(b.full_name, undefined, { sensitivity: 'base' }),
+        },
+        created_at: {
+          label: 'Date Added',
+          defaultOrder: 'desc',
+          compare: (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+        },
+        latest_activity: {
+          label: 'Latest Activity',
+          defaultOrder: 'desc',
+          compare: (a, b) => {
+            const aTime = a.latest_activity?.time
+              ? new Date(a.latest_activity.time).getTime()
+              : 0;
+            const bTime = b.latest_activity?.time
+              ? new Date(b.latest_activity.time).getTime()
+              : 0;
+            return aTime - bTime;
+          },
+        },
+      },
+    },
+    truncation: {
+      mode: 'paged',
+      pageSize: 20,
+    },
+    poolPredicate: (client, currentFilters) => {
+      if (currentFilters.status === 'all-records') return true;
+      const isArchived = client.status === ARCHIVED_STATUS || Boolean(client.is_archived);
+      if (currentFilters.status === 'Archived') return isArchived;
+      return !isArchived;
+    },
+  });
 
   const openDialog = useCallback((dialog: ClientDialog) => setActiveDialog(dialog), []);
   const closeDialog = useCallback(() => {
@@ -188,7 +282,7 @@ export function ClientsProvider({
     setIsLoading(true);
     setError(null);
     try {
-      // `includeArchived` fetches both sets in one query; `visibleClients`
+      // `includeArchived` fetches both sets in one query; `controller`
       // decides which of them the current tab shows.
       const result = await getClients({
         limit: 200,
@@ -453,13 +547,9 @@ export function ClientsProvider({
     {
       value: {
         clients,
-        visibleClients,
+        controller,
         isLoading,
         error,
-        search,
-        setSearch,
-        statusFilter,
-        setStatusFilter,
         activeDialog,
         openDialog,
         closeDialog,
