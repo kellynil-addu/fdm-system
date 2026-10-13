@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useRouter } from 'next/navigation';
+import { notifyActivityUpdated } from '@/lib/activity-events';
 import { useStatusFilter } from '@/lib/hooks/use-status-filter';
 import { useSession } from '@/lib/hooks/use-session';
 import { undoBillingClearance } from '@/lib/actions/billing';
@@ -53,20 +54,20 @@ import type { ClientDocument } from '@/lib/types/client';
 import type { LedgerAccount } from '@/lib/types/property';
 
 export type LegalTab =
-  | 'unselected'
   | 'intake'
   | 'preparation'
   | 'review'
+  | 'signature'
   | 'clearance'
   | 'ready'
   | 'released'
   | 'all';
 
 const TABS: LegalTab[] = [
-  'unselected',
   'intake',
   'preparation',
   'review',
+  'signature',
   'clearance',
   'ready',
   'released',
@@ -102,6 +103,7 @@ export interface LandTitlesContextValue {
     intake: number;
     preparation: number;
     review: number;
+    signature: number;
     clearance: number;
     ready: number;
     released: number;
@@ -185,7 +187,8 @@ export function LandTitlesProvider({
   const [titles, setTitles] = useState(initialTitles);
   const [awaiting, setAwaiting] = useState(initialAwaiting);
   const [search, setSearch] = useState('');
-  const [tab, setTab] = useStatusFilter<LegalTab>(TABS, 'unselected');
+  const defaultTab: LegalTab = initialAwaiting.length > 0 ? 'intake' : 'all';
+  const [tab, setTab] = useStatusFilter<LegalTab>(TABS, defaultTab);
   const [activeDialog, setActiveDialog] = useState<TitleDialogState>(null);
 
   useEffect(() => setTitles(initialTitles), [initialTitles]);
@@ -208,7 +211,8 @@ export function LandTitlesProvider({
       all: awaiting.length + titles.length,
       intake: awaiting.length,
       preparation: titles.filter((t) => t.status === 'Document Preparation').length,
-      review: titles.filter((t) => t.status === 'For Review' || t.status === 'For Signature').length,
+      review: titles.filter((t) => t.status === 'For Review').length,
+      signature: titles.filter((t) => t.status === 'For Signature').length,
       clearance: titles.filter((t) => t.status === 'Clearance Period').length,
       ready: titles.filter((t) => t.status === 'Ready for Claim').length,
       released: titles.filter((t) => t.status === 'Released').length,
@@ -250,15 +254,12 @@ export function LandTitlesProvider({
   );
 
   const filteredAwaiting = useMemo(() => {
-    if (tab === 'unselected') return [];
     if (tab === 'all' || tab === 'intake') return visibleAwaiting;
     return [];
   }, [tab, visibleAwaiting]);
 
   const filteredTitles = useMemo(() => {
     switch (tab) {
-      case 'unselected':
-        return [];
       case 'all':
         return visibleTitles;
       case 'intake':
@@ -266,9 +267,9 @@ export function LandTitlesProvider({
       case 'preparation':
         return visibleTitles.filter((t) => t.status === 'Document Preparation');
       case 'review':
-        return visibleTitles.filter(
-          (t) => t.status === 'For Review' || t.status === 'For Signature'
-        );
+        return visibleTitles.filter((t) => t.status === 'For Review');
+      case 'signature':
+        return visibleTitles.filter((t) => t.status === 'For Signature');
       case 'clearance':
         return visibleTitles.filter((t) => t.status === 'Clearance Period');
       case 'ready':
@@ -299,6 +300,7 @@ export function LandTitlesProvider({
           }
           return prev;
         });
+        notifyActivityUpdated();
         router.refresh();
       }
       return result;
@@ -320,6 +322,7 @@ export function LandTitlesProvider({
           }
           return prev;
         });
+        notifyActivityUpdated();
         router.refresh();
       }
       return result;
@@ -338,6 +341,7 @@ export function LandTitlesProvider({
           }
           return prev;
         });
+        notifyActivityUpdated();
         router.refresh();
       }
       return result;
@@ -376,6 +380,7 @@ export function LandTitlesProvider({
           }
           return prev;
         });
+        notifyActivityUpdated();
         router.refresh();
       }
       return result;
@@ -422,6 +427,7 @@ export function LandTitlesProvider({
         }
         return prev;
       });
+      notifyActivityUpdated();
       router.refresh();
     },
     [router]
@@ -438,6 +444,8 @@ export function LandTitlesProvider({
       const result = await uploadReleaseDocument(titleId, formData);
       if (!result.success) throw new Error(result.error);
 
+      notifyActivityUpdated();
+
       router.refresh();
       return result.data;
     },
@@ -448,6 +456,8 @@ export function LandTitlesProvider({
     async (document: ClientDocument): Promise<void> => {
       const result = await deleteReleaseDocument(document.document_id);
       if (!result.success) throw new Error(result.error);
+
+      notifyActivityUpdated();
 
       router.refresh();
     },
@@ -462,6 +472,7 @@ export function LandTitlesProvider({
     async (titleId: string, noticeNumber: number): Promise<LandTitleNotice> => {
       const result = await recordTitleNotice({ titleId, notice_number: noticeNumber });
       if (!result.success) throw new Error(result.error);
+      notifyActivityUpdated();
       router.refresh();
       return result.data;
     },
@@ -483,6 +494,7 @@ export function LandTitlesProvider({
 
       const result = await resolveTitleNotice(titleId, noticeNumber, formData);
       if (!result.success) throw new Error(result.error);
+      notifyActivityUpdated();
       router.refresh();
       return result.data;
     },
@@ -493,6 +505,7 @@ export function LandTitlesProvider({
     async (titleId: string, noticeNumber: number): Promise<void> => {
       const result = await deleteTitleNoticeRts(titleId, noticeNumber);
       if (!result.success) throw new Error(result.error);
+      notifyActivityUpdated();
       router.refresh();
     },
     [router]
@@ -511,6 +524,7 @@ export function LandTitlesProvider({
 
       const result = await uploadTitleNoticeRts(titleId, noticeNumber, formData);
       if (!result.success) throw new Error(result.error);
+      notifyActivityUpdated();
       router.refresh();
       return result.data;
     },
@@ -528,6 +542,7 @@ export function LandTitlesProvider({
     async (titleId: string, noticeNumber: number): Promise<void> => {
       const result = await deleteTitleNoticeRts(titleId, noticeNumber);
       if (!result.success) throw new Error(result.error);
+      notifyActivityUpdated();
       router.refresh();
     },
     [router]
