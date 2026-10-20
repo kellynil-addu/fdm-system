@@ -370,7 +370,7 @@ export function SiteMap({
           updated_at: new Date().toISOString(),
           is_archived: false,
           archived_at: null,
-          client: p.clientName ? { client_id: '', full_name: p.clientName, status: 'Active', address: null } : null,
+          client: p.clientName ? { client_id: p.clientId || '', full_name: p.clientName, status: 'Active', address: null } : null,
         } as PropertyLotWithClient);
       onSelectLotPropertyRef.current?.(lotObj);
     },
@@ -566,6 +566,7 @@ export function SiteMap({
               pricePerSqm,
               totalPrice: areaSize * pricePerSqm,
               clientName: lot?.client?.full_name ?? '',
+              clientId: lot?.client?.client_id ?? '',
               titleNumber: lot?.title_number ?? '',
               forfeitedAt: lot?.forfeited_account?.forfeited_at ?? '',
               centerLng,

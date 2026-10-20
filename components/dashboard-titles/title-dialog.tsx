@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, ClipboardCheck, FileText, PenLine, Wallet } from 'lucide-react';
+import Link from 'next/link';
+import { Check, ClipboardCheck, ExternalLink, FileText, PenLine, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -310,8 +311,10 @@ export function TitleDialog({
   }
 
   const clientName = activeTitle?.client?.full_name ?? activeAwaiting?.client?.full_name ?? 'Client Account';
+  const clientId = activeTitle?.client_id ?? activeAwaiting?.client?.client_id ?? null;
   const propertyRef = lotRefLabel(activeTitle?.property ?? activeAwaiting?.property);
   const propertyLocation = activeTitle?.property?.location ?? activeAwaiting?.property?.location ?? '';
+  const propertyId = activeTitle?.property_id ?? activeAwaiting?.property?.property_id ?? null;
 
   const activeContent = (() => {
     if (selectedStage === 'Cleared by Billing') {
@@ -371,9 +374,22 @@ export function TitleDialog({
           <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
-                <DialogTitle className="text-base font-bold text-foreground sm:text-lg leading-tight">
-                  {propertyRef}
-                </DialogTitle>
+                {propertyId ? (
+                  <Link
+                    href={`/dashboard/properties/map?lot=${encodeURIComponent(propertyId)}`}
+                    className="group/prop flex items-center gap-1.5 hover:opacity-85"
+                    title="View lot on subdivision map"
+                  >
+                    <DialogTitle className="text-base font-bold text-foreground sm:text-lg leading-tight group-hover/prop:text-primary transition-colors">
+                      {propertyRef}
+                    </DialogTitle>
+                    <ExternalLink className="h-3.5 w-3.5 opacity-60 group-hover/prop:opacity-100" />
+                  </Link>
+                ) : (
+                  <DialogTitle className="text-base font-bold text-foreground sm:text-lg leading-tight">
+                    {propertyRef}
+                  </DialogTitle>
+                )}
                 <span className="text-xs text-muted-foreground hidden sm:inline">• {propertyLocation}</span>
                 <Badge
                   variant={TITLE_STATUS_VARIANT[currentStageStatus] ?? 'muted'}
@@ -389,9 +405,21 @@ export function TitleDialog({
                   </Badge>
                 )}
               </div>
-              <DialogDescription className="text-xs text-muted-foreground">
-                Client: <span className="font-medium text-foreground">{clientName}</span>
-                <span className="sm:hidden"> • {propertyLocation}</span>
+              <DialogDescription className="text-xs text-muted-foreground flex flex-wrap items-center gap-1">
+                <span>Client:</span>
+                {clientId ? (
+                  <Link
+                    href={`/dashboard/clients/${encodeURIComponent(clientId)}`}
+                    className="font-medium text-foreground hover:text-primary hover:underline inline-flex items-center gap-1"
+                    title="Open client profile"
+                  >
+                    <span>{clientName}</span>
+                    <ExternalLink className="h-3 w-3 opacity-60" />
+                  </Link>
+                ) : (
+                  <span className="font-medium text-foreground">{clientName}</span>
+                )}
+                <span className="text-muted-foreground sm:hidden"> • {propertyLocation}</span>
               </DialogDescription>
             </div>
 

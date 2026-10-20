@@ -1,6 +1,7 @@
 'use client';
 
-import { LandPlot, MapPin, DollarSign, Plus } from 'lucide-react';
+import Link from 'next/link';
+import { LandPlot, MapPin, DollarSign, Plus, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { IconBox } from '@/components/ui/icon-box';
@@ -73,20 +74,24 @@ export function ClientDetailProperties({
                   className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-row-hover"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <IconBox size="default" shape="rounded-md">
-                        <LandPlot className="h-4 w-4 text-muted-foreground" />
+                    <Link
+                      href={`/dashboard/properties/map?lot=${encodeURIComponent(property.property_id)}`}
+                      className="group/lot flex items-start gap-3 min-w-0 flex-1 hover:opacity-90"
+                    >
+                      <IconBox size="default" shape="rounded-md" className="group-hover/lot:bg-primary group-hover/lot:text-primary-foreground transition-colors">
+                        <LandPlot className="h-4 w-4 text-muted-foreground group-hover/lot:text-primary-foreground" />
                       </IconBox>
                       <div className="min-w-0">
-                        <p className="font-semibold text-foreground">
-                          Block {property.block_number} Lot {property.lot_number}
+                        <p className="font-semibold text-foreground group-hover/lot:text-primary transition-colors flex items-center gap-1.5">
+                          <span>Block {property.block_number} Lot {property.lot_number}</span>
+                          <ExternalLink className="h-3.5 w-3.5 opacity-60 group-hover/lot:opacity-100" />
                         </p>
                         <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                           <MapPin className="h-3 w-3" />
                           {property.location}
                         </p>
                       </div>
-                    </div>
+                    </Link>
                     <Badge
                       variant={PROPERTY_STATUS_VARIANT[property.status]}
                       shape="pill"

@@ -125,7 +125,7 @@ export async function getRecentActivity(): Promise<RecentActivityItem[]> {
           detail: `${title.client?.full_name ?? "Client account"} · ${lotLabel}`,
           timestamp: row.changed_at,
           actor: row.changed_by ? names.get(row.changed_by) ?? "Staff member" : "System",
-          href: `/dashboard/legal?status=${statusTab}`,
+          href: `/dashboard/legal?status=${statusTab}&titleId=${encodeURIComponent(title.title_id)}`,
         }];
       });
 

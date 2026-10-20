@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -18,14 +19,27 @@ export function ClientDetailTabs({
   assignPropertyId,
 }: ClientDetailTabsProps) {
   const { client } = useClientDetail();
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+
   // Inactive and archived clients keep their records but cannot take new lots.
   const canAssign = client.status === 'Active';
   const [activeTab, setActiveTab] = useState<string>(
-    assignPropertyId && canAssign ? 'assign-property' : 'documents'
+    assignPropertyId && canAssign
+      ? 'assign-property'
+      : requestedTab && ['documents', 'properties'].includes(requestedTab)
+        ? requestedTab
+        : 'documents'
   );
   const [isAssignTabRevealed, setIsAssignTabRevealed] = useState<boolean>(
     Boolean(assignPropertyId) && canAssign
   );
+
+  useEffect(() => {
+    if (requestedTab && ['documents', 'properties'].includes(requestedTab)) {
+      setActiveTab(requestedTab);
+    }
+  }, [requestedTab]);
 
   function handleOpenAssign() {
     setIsAssignTabRevealed(true);

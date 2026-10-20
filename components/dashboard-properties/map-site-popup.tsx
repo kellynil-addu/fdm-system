@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Plus, Trash2, RotateCcw, Loader2 } from 'lucide-react';
+import { ArrowRight, Plus, Trash2, RotateCcw, Loader2, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -33,6 +34,7 @@ export interface LotPlotProperties {
   pricePerSqm: number;
   totalPrice: number;
   clientName: string;
+  clientId?: string;
   titleNumber?: string;
   forfeitedAt?: string;
   isSiteArchived?: boolean;
@@ -146,9 +148,26 @@ export function MapSitePopup({
               <dt className="text-muted-foreground">Title No:</dt>
               <dd className="font-mono text-foreground">{plot.titleNumber || 'Pending'}</dd>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <dt className="text-muted-foreground">Client:</dt>
-              <dd className="font-medium text-foreground">{plot.clientName || 'Unassigned'}</dd>
+              <dd className="font-medium text-foreground">
+                {plot.clientName ? (
+                  plot.clientId ? (
+                    <Link
+                      href={`/dashboard/clients/${encodeURIComponent(plot.clientId)}`}
+                      className="inline-flex items-center gap-1 text-primary hover:underline"
+                      title="Open client profile"
+                    >
+                      <span>{plot.clientName}</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  ) : (
+                    <span>{plot.clientName}</span>
+                  )
+                ) : (
+                  'Unassigned'
+                )}
+              </dd>
             </div>
             {plot.status === 'Forfeited' && (
               <div className="flex justify-between">

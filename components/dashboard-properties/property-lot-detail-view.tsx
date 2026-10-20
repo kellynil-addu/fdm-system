@@ -1019,9 +1019,16 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   <span>Land Title</span>
                 </div>
                 {lot.title ? (
-                  <Badge variant="info" shape="pill">
-                    {lot.title.status}
-                  </Badge>
+                  <Link
+                    href={`/dashboard/legal?titleId=${encodeURIComponent(lot.title.title_id)}`}
+                    className="flex items-center gap-1 transition-opacity hover:opacity-80"
+                    title="Open title workflow in Legal"
+                  >
+                    <Badge variant="info" shape="pill" className="cursor-pointer">
+                      {lot.title.status}
+                    </Badge>
+                    <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                  </Link>
                 ) : currentTitle ? (
                   <Badge variant="outline" shape="pill" className="text-[10px]">
                     TCT Recorded
@@ -1066,6 +1073,21 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   />
                 </div>
               </div>
+
+              {lot.title && (
+                <div className="border-t border-border bg-row-hover/60 px-3 py-2">
+                  <Link
+                    href={`/dashboard/legal?titleId=${encodeURIComponent(lot.title.title_id)}`}
+                    className="group/link flex items-center justify-between text-xs font-medium text-primary hover:underline"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Award className="h-3.5 w-3.5" />
+                      <span>Open Title Record in Legal</span>
+                    </span>
+                    <ExternalLink className="h-3.5 w-3.5 opacity-70 group-hover/link:opacity-100" />
+                  </Link>
+                </div>
+              )}
             </Card>
           )}
         </div>

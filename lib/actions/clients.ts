@@ -190,7 +190,7 @@ async function resolveClientProperties(
       .eq("ledger_account.status", "Active"),
     supabase
       .from("land_title")
-      .select("property_id")
+      .select("title_id, property_id, status")
       .eq("client_id", clientId),
   ]);
 
@@ -209,13 +209,14 @@ async function resolveClientProperties(
     const account = Array.isArray(embedded) ? embedded[0] : embedded;
     if (account?.property_id) accounts.set(account.property_id, account);
   }
-  const titlePropertyIds = new Set(
-    (titleResult.data ?? [])
-      .map((row) => row.property_id)
-      .filter((id): id is string => Boolean(id))
-  );
 
-  const propertyIds = Array.from(new Set([...accounts.keys(), ...titlePropertyIds]));
+  type TitleRef = { title_id: string; property_id: string; status: string };
+  const titleMap = new Map<string, TitleRef>();
+  for (const row of (titleResult.data ?? []) as TitleRef[]) {
+    if (row.property_id) titleMap.set(row.property_id, row);
+  }
+
+  const propertyIds = Array.from(new Set([...accounts.keys(), ...titleMap.keys()]));
 
   if (propertyIds.length === 0) return [];
 
@@ -232,11 +233,14 @@ async function resolveClientProperties(
 
   return (data ?? []).map((lot) => {
     const account = accounts.get(lot.property_id);
+    const title = titleMap.get(lot.property_id);
     return {
       ...lot,
       account_id: account?.account_id ?? null,
       cleared_at: account?.cleared_at ?? null,
-      has_title: titlePropertyIds.has(lot.property_id),
+      has_title: Boolean(title),
+      title_id: title?.title_id ?? null,
+      title_status: title?.status ?? null,
     };
   });
 }

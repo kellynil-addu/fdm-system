@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertOctagon, BadgeCheck, FileCheck, Loader2, Undo2 } from 'lucide-react';
+import Link from 'next/link';
+import { AlertOctagon, ArrowUpRight, BadgeCheck, FileCheck, Loader2, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -64,11 +65,21 @@ export function ClientPropertyClearance({ property }: ClientPropertyClearancePro
   );
 
   if (property.has_title) {
+    const titleHref = property.title_id
+      ? `/dashboard/legal?titleId=${encodeURIComponent(property.title_id)}`
+      : `/dashboard/legal?lotId=${encodeURIComponent(property.property_id)}`;
+
     return (
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <FileCheck className="h-3.5 w-3.5" />
-        Title record created by Legal
-      </p>
+      <Link
+        href={titleHref}
+        className="group flex items-center justify-between gap-1.5 rounded-md p-1 -m-1 text-xs text-foreground transition-colors hover:bg-row-hover hover:text-primary"
+      >
+        <span className="flex items-center gap-1.5">
+          <FileCheck className="h-3.5 w-3.5 text-primary" />
+          <span>Title record in Legal{property.title_status ? ` (${property.title_status})` : ''}</span>
+        </span>
+        <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
+      </Link>
     );
   }
 
@@ -86,10 +97,14 @@ export function ClientPropertyClearance({ property }: ClientPropertyClearancePro
   if (property.cleared_at) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-xs text-foreground">
+        <Link
+          href="/dashboard/legal?status=intake"
+          className="group flex items-center gap-1.5 text-xs text-foreground hover:text-primary transition-colors"
+        >
           <BadgeCheck className="h-3.5 w-3.5 text-success" />
-          Cleared by Billing {DATE.format(new Date(property.cleared_at))}. Awaiting title from Legal.
-        </p>
+          <span>Cleared by Billing {DATE.format(new Date(property.cleared_at))}. Awaiting title from Legal.</span>
+          <ArrowUpRight className="h-3 w-3 text-muted-foreground group-hover:text-primary" />
+        </Link>
         {canClear && (
           <Button
             size="sm"

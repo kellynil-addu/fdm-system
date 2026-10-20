@@ -33,29 +33,40 @@ export async function runTrackedCleanups() {
   }
 }
 
-export async function hardDeleteTestClient(clientId: string) {
+export async function hardDeleteTestClients(clientIds: string[]) {
+  if (clientIds.length === 0) return;
   const admin = getTestAdminClient();
-  // Clean dependent rows safely in reverse dependency order
-  await admin.from("land_title").delete().eq("client_id", clientId);
-  await admin.from("account_party").delete().eq("client_id", clientId);
-  await admin.from("client_document").delete().eq("client_id", clientId);
-  await admin.from("client_log").delete().eq("client_id", clientId);
-  await admin.from("contact_info").delete().eq("client_id", clientId);
-  await admin.from("search_index").delete().eq("entity_type", "client_document").eq("entity_id", clientId);
-  await admin.from("client").delete().eq("client_id", clientId);
+  await admin.from("land_title").delete().in("client_id", clientIds);
+  await admin.from("account_party").delete().in("client_id", clientIds);
+  await admin.from("client_document").delete().in("client_id", clientIds);
+  await admin.from("client_log").delete().in("client_id", clientIds);
+  await admin.from("contact_info").delete().in("client_id", clientIds);
+  await admin.from("search_index").delete().eq("entity_type", "client_document").in("entity_id", clientIds);
+  await admin.from("client").delete().in("client_id", clientIds);
+}
+
+export async function hardDeleteTestClient(clientId: string) {
+  return hardDeleteTestClients([clientId]);
+}
+
+export async function hardDeleteTestProperties(propertyIds: string[]) {
+  if (propertyIds.length === 0) return;
+  const admin = getTestAdminClient();
+  await admin.from("land_title").delete().in("property_id", propertyIds);
+  const { data: accounts } = await admin.from("ledger_account").select("account_id").in("property_id", propertyIds);
+  if (accounts && accounts.length > 0) {
+    const accountIds = accounts.map((a) => a.account_id);
+    await admin.from("ledger_payment").delete().in("account_id", accountIds);
+    await admin.from("ledger_compromise").delete().in("account_id", accountIds);
+    await admin.from("ledger_account_notice").delete().in("account_id", accountIds);
+    await admin.from("account_party").delete().in("account_id", accountIds);
+    await admin.from("ledger_account").delete().in("property_id", propertyIds);
+  }
+  await admin.from("property_lot").delete().in("property_id", propertyIds);
 }
 
 export async function hardDeleteTestProperty(propertyId: string) {
-  const admin = getTestAdminClient();
-  // Clean associated ledger accounts, titles, and parties before lot deletion
-  await admin.from("land_title").delete().eq("property_id", propertyId);
-  const { data: accounts } = await admin.from("ledger_account").select("account_id").eq("property_id", propertyId);
-  if (accounts && accounts.length > 0) {
-    const accountIds = accounts.map((a) => a.account_id);
-    await admin.from("account_party").delete().in("account_id", accountIds);
-    await admin.from("ledger_account").delete().eq("property_id", propertyId);
-  }
-  await admin.from("property_lot").delete().eq("property_id", propertyId);
+  return hardDeleteTestProperties([propertyId]);
 }
 
 export async function hardDeleteTestSite(siteId: string) {

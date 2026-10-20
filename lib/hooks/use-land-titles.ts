@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { notifyActivityUpdated } from '@/lib/activity-events';
 import { useStatusFilter } from '@/lib/hooks/use-status-filter';
 import { useSession } from '@/lib/hooks/use-session';
@@ -179,6 +179,10 @@ export function LandTitlesProvider({
   children: ReactNode;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const titleIdParam = searchParams.get('titleId');
+  const lotIdParam = searchParams.get('lotId');
+
   const { hasPermission } = useSession();
   const canCreate = hasPermission('legal.create');
   const canEdit = hasPermission('legal.update');
@@ -189,10 +193,46 @@ export function LandTitlesProvider({
   const [search, setSearch] = useState('');
   const defaultTab: LegalTab = initialAwaiting.length > 0 ? 'intake' : 'all';
   const [tab, setTab] = useStatusFilter<LegalTab>(TABS, defaultTab);
-  const [activeDialog, setActiveDialog] = useState<TitleDialogState>(null);
+  const [activeDialog, setActiveDialog] = useState<TitleDialogState>(() => {
+    if (titleIdParam) {
+      const match = initialTitles.find((t) => t.title_id === titleIdParam);
+      if (match) return { type: 'detail', item: { type: 'title', data: match } };
+    }
+    if (lotIdParam) {
+      const matchTitle = initialTitles.find((t) => t.property_id === lotIdParam);
+      if (matchTitle) return { type: 'detail', item: { type: 'title', data: matchTitle } };
+      const matchAwaiting = initialAwaiting.find((a) => a.property.property_id === lotIdParam);
+      if (matchAwaiting) return { type: 'detail', item: { type: 'awaiting', data: matchAwaiting } };
+    }
+    return null;
+  });
 
   useEffect(() => setTitles(initialTitles), [initialTitles]);
   useEffect(() => setAwaiting(initialAwaiting), [initialAwaiting]);
+
+  // Synchronize URL title or lot parameter with active modal
+  useEffect(() => {
+    if (!titleIdParam && !lotIdParam) return;
+    if (titleIdParam) {
+      const match = titles.find((t) => t.title_id === titleIdParam);
+      if (match) {
+        setActiveDialog({ type: 'detail', item: { type: 'title', data: match } });
+        return;
+      }
+    }
+    if (lotIdParam) {
+      const matchTitle = titles.find((t) => t.property_id === lotIdParam);
+      if (matchTitle) {
+        setActiveDialog({ type: 'detail', item: { type: 'title', data: matchTitle } });
+        return;
+      }
+      const matchAwaiting = awaiting.find((a) => a.property.property_id === lotIdParam);
+      if (matchAwaiting) {
+        setActiveDialog({ type: 'detail', item: { type: 'awaiting', data: matchAwaiting } });
+        return;
+      }
+    }
+  }, [titleIdParam, lotIdParam, titles, awaiting]);
 
   const openDialog = useCallback((dialog: TitleDialogState) => {
     setActiveDialog(dialog);

@@ -42,12 +42,20 @@ export function ClientFollowUps({ items }: { items: ClientFollowUp[] | null }) {
             {current.length === 0 ? <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><CheckCircle2 className="h-5 w-5 shrink-0" />{view === 'documents' ? 'No missing required documents found.' : 'All current clients have a contact value recorded.'}</p> : <>
               <p className="mb-2 text-xs text-muted-foreground">Showing {Math.min(limit, current.length)} of {current.length} clients · alphabetical order</p>
               <ul className="divide-y divide-border">
-                {current.slice(0, limit).map(item => <li key={item.clientId}>
-                  <Link href={`/dashboard/clients/${item.clientId}`} className="flex items-center justify-between gap-3 rounded-md py-3 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <span className="min-w-0"><span className="block break-words text-sm font-medium">{item.name}</span><span className="mt-1 block text-xs text-muted-foreground">{view === 'documents' ? `Missing: ${item.missingDocuments.map((type) => DOC_TYPE_LABEL[type]).join(', ')}` : 'Open profile to review contact details'}</span></span>
-                    <ArrowUpRight aria-hidden="true" className="h-4 w-4 shrink-0" />
-                  </Link>
-                </li>)}
+                {current.slice(0, limit).map((item, idx) => {
+                  const href = view === 'documents'
+                    ? `/dashboard/clients/${encodeURIComponent(item.clientId)}?tab=documents`
+                    : `/dashboard/clients/${encodeURIComponent(item.clientId)}`;
+
+                  return (
+                    <li key={`${item.clientId}-${idx}`}>
+                      <Link href={href} className="flex items-center justify-between gap-3 rounded-md py-3 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                        <span className="min-w-0"><span className="block break-words text-sm font-medium">{item.name}</span><span className="mt-1 block text-xs text-muted-foreground">{view === 'documents' ? `Missing: ${item.missingDocuments.map((type) => DOC_TYPE_LABEL[type]).join(', ')}` : 'Open profile to review contact details'}</span></span>
+                        <ArrowUpRight aria-hidden="true" className="h-4 w-4 shrink-0" />
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
               {limit < current.length && <Button variant="outline" className="mt-3 w-full" onClick={() => setLimit(value => value + 10)}>Show more clients</Button>}
             </>}

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { PanelLeftOpen } from 'lucide-react';
@@ -27,9 +27,19 @@ export interface SiteMapUnifiedViewProps {
 /** Interactive site map, floating property lots sidebar, and integrated map editor. */
 export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const targetLotId = searchParams.get('lot');
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [hoveredLotKey, setHoveredLotKey] = useState<string | null>(null);
-  const [selectedPropertyLot, setSelectedPropertyLot] = useState<PropertyLotWithClient | null>(null);
+  const [selectedPropertyLot, setSelectedPropertyLot] = useState<PropertyLotWithClient | null>(() => {
+    if (!targetLotId) return null;
+    for (const site of sites) {
+      const match = site.lots.find((l) => l.property_id === targetLotId);
+      if (match) return match;
+    }
+    return null;
+  });
   const [createInitialValues, setCreateInitialValues] = useState<{
     site_id?: string;
     block_number?: number;
@@ -40,9 +50,29 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
 
   // Editor states
   const [isEditorActive, setIsEditorActive] = useState(false);
-  const [activeSiteId, setActiveSiteId] = useState<string | null>(
-    () => sites.find((s) => !s.is_archived)?.site_id ?? sites[0]?.site_id ?? null
-  );
+  const [activeSiteId, setActiveSiteId] = useState<string | null>(() => {
+    if (targetLotId) {
+      for (const site of sites) {
+        if (site.lots.some((l) => l.property_id === targetLotId)) {
+          return site.site_id;
+        }
+      }
+    }
+    return sites.find((s) => !s.is_archived)?.site_id ?? sites[0]?.site_id ?? null;
+  });
+
+  useEffect(() => {
+    if (!targetLotId) return;
+    for (const site of sites) {
+      const match = site.lots.find((l) => l.property_id === targetLotId);
+      if (match) {
+        setSelectedPropertyLot(match);
+        setIsSidebarOpen(true);
+        setActiveSiteId(site.site_id);
+        break;
+      }
+    }
+  }, [targetLotId, sites]);
   const [plotType, setPlotType] = useState<'lot' | 'site' | null>(null);
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const [selectedPlotToDelete, setSelectedPlotToDelete] = useState<SelectedPlotInfo | null>(null);
