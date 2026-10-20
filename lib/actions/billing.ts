@@ -41,6 +41,113 @@ const clearanceInputSchema = z.preprocess(
   })
 );
 
+interface RawBillingAccountRow {
+  account_id: string;
+  property_id: string;
+  status: "Active" | "Matured" | "Delinquent" | "Cancelled" | "Forfeited";
+  total_contract_price: number;
+  remaining_balance: number;
+  monthly_amortization: number;
+  terms_months: number;
+  amortization_day: number;
+  penalty_rate_percent: number;
+  titling_fee: number;
+  titling_fee_paid: number;
+  storage_fee_rate: number;
+  cts_date: string | null;
+  first_due_date: string | null;
+  contract_end_date: string | null;
+  baseline_date: string | null;
+  baseline_principal_paid: number;
+  baseline_penalties_accrued: number;
+  baseline_notes: string | null;
+  cleared_at: string | null;
+  cleared_by: string | null;
+  property: BillingAccountSummary["property"];
+  parties: Array<{
+    role: string;
+    is_primary: boolean;
+    client: BillingAccountSummary["client"];
+  }> | null;
+  payments: LedgerPayment[] | null;
+  compromises: LedgerCompromise[] | null;
+  notices: LedgerAccountNotice[] | null;
+}
+
+const BILLING_ACCOUNT_SELECT = `
+  account_id,
+  property_id,
+  status,
+  total_contract_price,
+  remaining_balance,
+  monthly_amortization,
+  terms_months,
+  amortization_day,
+  penalty_rate_percent,
+  titling_fee,
+  titling_fee_paid,
+  storage_fee_rate,
+  cts_date,
+  first_due_date,
+  contract_end_date,
+  baseline_date,
+  baseline_principal_paid,
+  baseline_penalties_accrued,
+  baseline_notes,
+  cleared_at,
+  cleared_by,
+  property:property_lot (
+    property_id,
+    location,
+    block_number,
+    lot_number,
+    area_size,
+    price_per_sqm,
+    status,
+    title_number
+  ),
+  parties:account_party (
+    role,
+    is_primary,
+    client:client (
+      client_id,
+      full_name,
+      tin_number,
+      address,
+      civil_status,
+      spouse_name
+    )
+  ),
+  payments:ledger_payment (*),
+  compromises:ledger_compromise (*),
+  notices:ledger_account_notice (*)
+`;
+
+function mapRawAccountToSummary(account: RawBillingAccountRow): BillingAccountSummary {
+  const parties = account.parties;
+  const primaryParty = parties?.find((p) => p.is_primary) ?? parties?.[0];
+  const compromises = account.compromises || [];
+  const activeCompromise = compromises.find((c) => c.status === "Approved") ?? null;
+  const payments = account.payments || [];
+  const notices = account.notices || [];
+
+  const totalPrincipal = payments.reduce((sum, p) => sum + Number(p.principal_amount), 0);
+  const totalPenalty = payments.reduce((sum, p) => sum + Number(p.penalty_amount), 0);
+  const totalStorage = payments.reduce((sum, p) => sum + Number(p.storage_fee_amount), 0);
+
+  return {
+    ...account,
+    client: primaryParty?.client ?? null,
+    property: account.property,
+    total_principal_paid: totalPrincipal,
+    total_penalty_paid: totalPenalty,
+    total_storage_paid: totalStorage,
+    active_compromise: activeCompromise,
+    payments: payments.sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()),
+    notices: notices.sort((a, b) => new Date(b.notice_date).getTime() - new Date(a.notice_date).getTime()),
+  };
+}
+
 /** Fetches full billing account summary with lot, client, payments, compromises, and notices */
 export async function getBillingAccountDetails(accountId: string): Promise<BillingAccountSummary> {
   return billingRead.query({
@@ -49,88 +156,40 @@ export async function getBillingAccountDetails(accountId: string): Promise<Billi
     handler: async (validId, { supabase }) => {
       const { data: account, error: accError } = await supabase
         .from("ledger_account")
-        .select(`
-          account_id,
-          property_id,
-          status,
-          total_contract_price,
-          remaining_balance,
-          monthly_amortization,
-          terms_months,
-          amortization_day,
-          penalty_rate_percent,
-          titling_fee,
-          titling_fee_paid,
-          storage_fee_rate,
-          cts_date,
-          first_due_date,
-          contract_end_date,
-          baseline_date,
-          baseline_principal_paid,
-          baseline_penalties_accrued,
-          baseline_notes,
-          cleared_at,
-          cleared_by,
-          property:property_lot (
-            property_id,
-            location,
-            block_number,
-            lot_number,
-            area_size,
-            price_per_sqm,
-            status,
-            title_number
-          ),
-          parties:account_party (
-            role,
-            is_primary,
-            client:client (
-              client_id,
-              full_name,
-              tin_number,
-              address,
-              civil_status,
-              spouse_name
-            )
-          ),
-          payments:ledger_payment (*),
-          compromises:ledger_compromise (*),
-          notices:ledger_account_notice (*)
-        `)
+        .select(BILLING_ACCOUNT_SELECT)
         .eq("account_id", validId)
-        .single();
+        .single<RawBillingAccountRow>();
 
       if (accError || !account) {
         throw new Error(`Billing account not found: ${accError?.message}`);
       }
 
-      const parties = account.parties as Array<{
-        is_primary?: boolean;
-        client?: BillingAccountSummary["client"];
-      }> | null;
-      const primaryParty = parties?.find((p) => p.is_primary) ?? parties?.[0];
-      const compromises = (account.compromises as LedgerCompromise[]) || [];
-      const activeCompromise = compromises.find((c) => c.status === "Approved") ?? null;
-      const payments = (account.payments as LedgerPayment[]) || [];
-      const notices = (account.notices as LedgerAccountNotice[]) || [];
-
-      // Sum historical payments
-      const totalPrincipal = payments.reduce((sum, p) => sum + Number(p.principal_amount), 0);
-      const totalPenalty = payments.reduce((sum, p) => sum + Number(p.penalty_amount), 0);
-      const totalStorage = payments.reduce((sum, p) => sum + Number(p.storage_fee_amount), 0);
-
-      return {
-        ...account,
-        client: primaryParty?.client ?? null,
-        property: account.property as BillingAccountSummary["property"],
-        total_principal_paid: totalPrincipal,
-        total_penalty_paid: totalPenalty,
-        total_storage_paid: totalStorage,
-        active_compromise: activeCompromise,
-        payments: payments.sort((a, b) => new Date(b.payment_date).getTime() - new Date(a.payment_date).getTime()),
-        notices: notices.sort((a, b) => new Date(b.notice_date).getTime() - new Date(a.notice_date).getTime()),
-      } as BillingAccountSummary;
+      return mapRawAccountToSummary(account);
     },
+  });
+}
+
+/** Fetches all billing accounts with properties, clients, and payment history */
+export async function getBillingAccounts(
+  params?: { limit?: number; search?: string; status?: string }
+): Promise<BillingAccountSummary[]> {
+  return billingRead.query(async ({ supabase }) => {
+    let query = supabase
+      .from("ledger_account")
+      .select(BILLING_ACCOUNT_SELECT)
+      .order("created_at", { ascending: false })
+      .limit(params?.limit ?? 500);
+
+    if (params?.status) {
+      query = query.eq("status", params.status);
+    }
+
+    const { data, error } = await query.returns<RawBillingAccountRow[]>();
+    if (error) {
+      throw new Error(`Failed to fetch billing accounts: ${error.message}`);
+    }
+
+    return (data ?? []).map(mapRawAccountToSummary);
   });
 }
 

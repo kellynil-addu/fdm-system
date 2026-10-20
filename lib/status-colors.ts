@@ -67,3 +67,16 @@ export const TITLE_STATUS_VARIANT: Record<
   'Ready for Claim': 'warning',
   Released: 'success',
 };
+
+/** Badge colour for account billing status */
+export const BILLING_STATUS_VARIANT: Record<
+  'Active' | 'Delinquent' | 'Matured' | 'Cleared' | 'Cancelled' | 'Forfeited',
+  'success' | 'destructive' | 'warning' | 'info' | 'muted' | 'purple'
+> = {
+  Active: 'success',
+  Delinquent: 'destructive',
+  Matured: 'warning',
+  Cleared: 'info',
+  Cancelled: 'muted',
+  Forfeited: 'purple',
+};

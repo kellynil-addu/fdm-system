@@ -58,7 +58,7 @@ const ROUTE_LABELS: Record<string, string> = {
   reports: 'Reports',
   admin: 'Team & access',
   settings: 'Account Settings',
-  billing: 'Invoicing & Billing',
+  billing: 'Billing & ledgers',
   accounting: 'Accounts Payable',
   legal: 'Title releases',
   operations: 'Operations Log',

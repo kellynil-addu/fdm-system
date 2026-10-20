@@ -1,7 +1,8 @@
 export const DASHBOARD_WORKFLOW = [
   { step: '01', title: 'Client records', href: '/dashboard/clients', permission: 'clients.read', description: 'Verify identity and contacts, complete documents, then assign a lot.' },
   { step: '02', title: 'Property inventory', href: '/dashboard/properties/map', permission: 'properties.read', description: 'Locate the lot, check availability, and review its client assignment.' },
-  { step: '03', title: 'Title releases', href: '/dashboard/legal', permission: 'legal.read', description: 'Start with a billing-cleared account and follow the release stages.' },
+  { step: '03', title: 'Billing & ledgers', href: '/dashboard/billing', permission: 'billing.read', description: 'Manage buyer installment accounts, receipts, penalties, and clearances.' },
+  { step: '04', title: 'Title releases', href: '/dashboard/legal', permission: 'legal.read', description: 'Start with a billing-cleared account and follow the release stages.' },
 ] as const;
 
 export const TITLE_WORKFLOW = [

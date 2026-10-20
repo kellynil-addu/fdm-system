@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { faker } from "@faker-js/faker";
 import {
+  getBillingAccounts,
   getBillingAccountDetails,
   recordLedgerPayment,
   createCompromiseAgreement,
@@ -316,6 +317,13 @@ Reservation Fee,,,2017-03-10,,3000,,,500,195000,CR#42146
       const details2 = await getBillingAccountDetails(accountId);
       expect(Number(details2.remaining_balance)).toBe(75000);
       expect(Number(details2.total_principal_paid)).toBe(25000);
+
+      // Verify getBillingAccounts portfolio list returns account with relations
+      const accounts = await getBillingAccounts({ limit: 100 });
+      const found = accounts.find((a) => a.account_id === accountId);
+      expect(found).toBeDefined();
+      expect(Number(found!.remaining_balance)).toBe(75000);
+      expect(found!.payments.length).toBe(2);
     });
 
     it("sets legacy cut-off baseline snapshot and accurately calculates adjusted balance", async () => {

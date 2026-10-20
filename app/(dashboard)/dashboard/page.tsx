@@ -43,7 +43,7 @@ const ROLE_FOCUS: Record<string, { description: string }> = {
   },
   billing_staff: {
     description:
-      'Review client profiles and property assignments as you prepare for billing work.',
+      'Manage buyer installment schedules, official receipts, penalty computations, and clearances.',
   },
   accounting_staff: {
     description:
@@ -218,11 +218,12 @@ async function DashboardContent() {
       return <PageError message="Please log in to access the dashboard" />;
     }
 
-    const [isSystemAdmin, stats, roles, canReadTitles, activity] = await Promise.all([
+    const [isSystemAdmin, stats, roles, canReadTitles, canReadBilling, activity] = await Promise.all([
       checkIsSystemAdmin(user.id),
       getDashboardOverview(),
       getCurrentUserRoleNames(),
       hasPermission('legal.read', user.id),
+      hasPermission('billing.read', user.id),
       getRecentActivity(),
     ]);
 
@@ -324,6 +325,7 @@ async function DashboardContent() {
         <QuickLinks
           canViewProperties={stats.canReadProperties}
           canViewClients={stats.canReadClients}
+          canViewBilling={canReadBilling}
           canViewTitles={canReadTitles}
         />
 
