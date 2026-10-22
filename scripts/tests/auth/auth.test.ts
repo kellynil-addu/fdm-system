@@ -198,4 +198,29 @@ describe("Authentication & User Session Functions", () => {
       verifyResetCode({ email: tempUser.email, token: "000000" })
     ).rejects.toThrow();
   });
+
+  it("root Home page passes isLoggedIn=false when logged out and true when logged in", async () => {
+    const { default: Home } = await import("@/app/page");
+    const { Navbar } = await import("@/components/landing/navbar");
+    const { Hero } = await import("@/components/landing/hero");
+
+    // Unauthenticated
+    const loggedOutPage = await Home();
+    expect(loggedOutPage).toBeDefined();
+    const loggedOutChildren = loggedOutPage.props.children;
+    const loggedOutNavbar = loggedOutChildren.find((c: any) => c?.type?.name === "Navbar");
+    expect(loggedOutNavbar?.props.isLoggedIn).toBe(false);
+    const loggedOutHero = loggedOutChildren.find((c: any) => c?.type?.name === "Hero");
+    expect(loggedOutHero?.props.isLoggedIn).toBe(false);
+
+    // Authenticated
+    await login({ email: tempUser.email, password: tempUser.password });
+    const loggedInPage = await Home();
+    expect(loggedInPage).toBeDefined();
+    const loggedInChildren = loggedInPage.props.children;
+    const loggedInNavbar = loggedInChildren.find((c: any) => c?.type?.name === "Navbar");
+    expect(loggedInNavbar?.props.isLoggedIn).toBe(true);
+    const loggedInHero = loggedInChildren.find((c: any) => c?.type?.name === "Hero");
+    expect(loggedInHero?.props.isLoggedIn).toBe(true);
+  });
 });
