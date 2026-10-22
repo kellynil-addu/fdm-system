@@ -212,254 +212,265 @@ export function MapSiteEditor({
 
   return (
     <>
-      {/* Top Center Floating Editor Toolbar */}
-      <div className="absolute left-1/2 top-4 z-30 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2">
-        <div className="flex max-w-full flex-wrap items-center gap-2 rounded-xl border border-border bg-card p-1.5 shadow-xl transition-all">
+      {/* Top-left editor menu and recovery stack */}
+      <div className="absolute top-4 left-4 z-30 flex flex-col items-start gap-2 max-w-[calc(100vw-2rem)]">
+        <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 shadow-xl transition-all">
           {plotType === null ? (
             !activeSiteId ? (
-              /* State: No Site Selected (Must select a site or create a new site) */
-              <div className="flex items-center gap-2 px-1">
-                <span className="text-xs font-semibold text-foreground whitespace-nowrap">
-                  Choose a Site:
-                </span>
-                <Select
-                  value=""
-                  onValueChange={onSelectSite}
-                  disabled={sites.length === 0}
-                >
-                  <SelectTrigger className="h-8 min-w-[180px] border-none bg-row-hover text-xs font-medium focus:ring-0">
-                    <SelectValue placeholder="Select site to edit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sites.map((s) => (
-                      <SelectItem key={s.site_id} value={s.site_id} className="text-xs">
-                        {s.name}
-                        {s.is_archived ? ' (Archived)' : ''}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onStartPlotting('site')}
-                  className="h-8 gap-1.5 border-border bg-card text-xs font-medium text-foreground hover:bg-row-hover hover:text-foreground"
-                  title="Plot a new project area boundary"
-                >
-                  <MapPin className="h-3.5 w-3.5 text-primary" />
-                  <span>+ New Site</span>
-                </Button>
-
-                <div className="h-4 w-[1px] bg-border mx-0.5" />
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onToggleEditor(false)}
-                  className="h-8 px-2.5 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground"
-                >
-                  Exit Editor
-                </Button>
-              </div>
-            ) : (
-              /* State: Site Locked & Selected (Active site editing) */
+              /* State: No Site Selected */
               <>
-                {/* Site badge + Leave Site link */}
-                <div className="flex items-center gap-1.5 min-w-0 bg-row-hover px-2.5 py-1 rounded-lg">
-                  <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
-                  <span className="text-xs font-semibold text-foreground truncate max-w-[150px]">
-                    {activeSite?.name}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={onLeaveSite}
-                    className="ml-1 text-[11px] font-medium text-primary hover:underline cursor-pointer"
-                    title="Leave this site to choose another or create a new site"
+                <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    <span className="text-xs font-semibold text-foreground">Map Editor</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => onToggleEditor(false)}
+                    className="h-6 w-6 text-muted-foreground hover:bg-row-hover hover:text-foreground"
+                    title="Exit Editor"
+                    aria-label="Exit Editor"
                   >
-                    Leave Site
-                  </button>
-
-                  {isSystemAdmin && activeSite && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 ml-0.5 text-muted-foreground hover:bg-row-active hover:text-foreground shrink-0"
-                          aria-label={`Site options for ${activeSite.name}`}
-                        >
-                          <MoreVertical className="h-3 w-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-44">
-                        <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Site Options
-                        </DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          hidden={!activeSite.is_archived}
-                          icon={<ArchiveRestore className="h-4 w-4" />}
-                          disabled={isSaving}
-                          onSelect={() => onUnarchiveSite?.(activeSite.site_id)}
-                        >
-                          Restore Site
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          hidden={activeSite.is_archived}
-                          icon={<Archive className="h-4 w-4" />}
-                          disabled={isSaving}
-                          onSelect={() => onArchiveSite?.(activeSite.site_id)}
-                        >
-                          Archive Site
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          hidden={!activeSite.is_archived || !isSystemAdmin}
-                          disabled={!activeSiteEligibility.isEligibleForDelete}
-                          disabledReason={activeSiteEligibility.tooltipReason}
-                          tooltipSide="right"
-                          variant="destructive"
-                          icon={<Trash2 className="h-4 w-4" />}
-                          onSelect={() => setIsDeleteSiteOpen(true)}
-                        >
-                          Delete Site
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
 
-                {activeSite?.is_archived && (
-                  <span className="flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-destructive shrink-0">
-                    <Archive className="h-3 w-3" />
-                    <span>Archived</span>
-                  </span>
-                )}
+                <div className="flex items-center gap-2 pt-0.5">
+                  <Select
+                    value=""
+                    onValueChange={onSelectSite}
+                    disabled={sites.length === 0}
+                  >
+                    <SelectTrigger className="h-8 min-w-[170px] border-border bg-row-hover text-xs font-medium focus:ring-0">
+                      <SelectValue placeholder="Select site to edit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sites.map((s) => (
+                        <SelectItem key={s.site_id} value={s.site_id} className="text-xs">
+                          {s.name}
+                          {s.is_archived ? ' (Archived)' : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
-                {/* Plot lot button */}
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onStartPlotting('lot')}
-                  disabled={activeSite?.is_archived}
-                  className="h-8 gap-1.5 border-border bg-card text-xs font-medium text-foreground hover:bg-row-hover hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-                  title={
-                    activeSite?.is_archived
-                      ? 'Restore site before plotting new lots'
-                      : 'Plot a new lot polygon on this site'
-                  }
-                >
-                  <LandPlot className="h-3.5 w-3.5 text-primary" />
-                  <span>+ Plot Lot</span>
-                </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onStartPlotting('site')}
+                    className="h-8 gap-1.5 border-border bg-card text-xs font-medium text-foreground hover:bg-row-hover"
+                    title="Plot a new project area boundary"
+                  >
+                    <MapPin className="h-3.5 w-3.5 text-primary" />
+                    <span>+ New Site</span>
+                  </Button>
+                </div>
+              </>
+            ) : (
+              /* State: Site Selected */
+              <>
+                <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <span className="text-xs font-semibold text-foreground truncate max-w-[160px]" title={activeSite?.name}>
+                      {activeSite?.name}
+                    </span>
+                    {activeSite?.is_archived && (
+                      <span className="flex items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-destructive shrink-0">
+                        <Archive className="h-3 w-3" />
+                        <span>Archived</span>
+                      </span>
+                    )}
+                  </div>
 
-                <div className="h-4 w-[1px] bg-border mx-0.5" />
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={onLeaveSite}
+                      className="text-[11px] font-medium text-primary hover:underline cursor-pointer px-1"
+                      title="Leave this site to choose another or create a new site"
+                    >
+                      Leave Site
+                    </button>
 
-                {/* Done button */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onToggleEditor(false)}
-                  className="h-8 px-2.5 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground"
-                >
-                  Done
-                </Button>
+                    {isSystemAdmin && activeSite && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 text-muted-foreground hover:bg-row-active hover:text-foreground shrink-0"
+                            aria-label={`Site options for ${activeSite.name}`}
+                          >
+                            <MoreVertical className="h-3 w-3" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-44">
+                          <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Site Options
+                          </DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            hidden={!activeSite.is_archived}
+                            icon={<ArchiveRestore className="h-4 w-4" />}
+                            disabled={isSaving}
+                            onSelect={() => onUnarchiveSite?.(activeSite.site_id)}
+                          >
+                            Restore Site
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            hidden={activeSite.is_archived}
+                            icon={<Archive className="h-4 w-4" />}
+                            disabled={isSaving}
+                            onSelect={() => onArchiveSite?.(activeSite.site_id)}
+                          >
+                            Archive Site
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            hidden={!activeSite.is_archived || !isSystemAdmin}
+                            disabled={!activeSiteEligibility.isEligibleForDelete}
+                            disabledReason={activeSiteEligibility.tooltipReason}
+                            tooltipSide="right"
+                            variant="destructive"
+                            icon={<Trash2 className="h-4 w-4" />}
+                            onSelect={() => setIsDeleteSiteOpen(true)}
+                          >
+                            Delete Site
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => onToggleEditor(false)}
+                      className="h-6 w-6 text-muted-foreground hover:bg-row-hover hover:text-foreground shrink-0"
+                      title="Exit Editor"
+                      aria-label="Exit Editor"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-0.5">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onStartPlotting('lot')}
+                    disabled={activeSite?.is_archived}
+                    className="h-8 gap-1.5 border-border bg-card text-xs font-medium text-foreground hover:bg-row-hover disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={
+                      activeSite?.is_archived
+                        ? 'Restore site before plotting new lots'
+                        : 'Plot a new lot polygon on this site'
+                    }
+                  >
+                    <LandPlot className="h-3.5 w-3.5 text-primary" />
+                    <span>+ Plot Lot</span>
+                  </Button>
+                </div>
               </>
             )
           ) : (
-            /* Active Plotting Controls */
-            <div className="flex items-center gap-2 px-1">
-              <div className="flex items-center gap-2 pr-1">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-                </span>
-                <span className="min-w-0 max-w-full truncate text-xs font-semibold text-foreground">
-                  {plotType === 'lot'
-                    ? `Plotting Lot on ${activeSite?.name ?? 'Site'}`
-                    : 'Plotting New Site'}
-                </span>
-                <span className="rounded-full bg-sidebar-accent px-2 py-0.5 text-[11px] font-mono text-accent-blue-foreground">
-                  {draftPointsCount} {draftPointsCount === 1 ? 'pt' : 'pts'}
-                </span>
+            /* State: Active Plotting */
+            <>
+              <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+                  </span>
+                  <span className="truncate text-xs font-semibold text-foreground">
+                    {plotType === 'lot' ? 'Plotting Lot' : 'Plotting New Site'}
+                  </span>
+                  <span className="rounded-full bg-sidebar-accent px-2 py-0.5 text-[11px] font-mono text-accent-blue-foreground shrink-0">
+                    {draftPointsCount} {draftPointsCount === 1 ? 'pt' : 'pts'}
+                  </span>
+                </div>
+
                 {hasOutOfBoundsVertex && (
-                  <span className="flex items-center gap-1 rounded-full bg-destructive/15 px-2 py-0.5 text-[11px] font-semibold text-destructive">
+                  <span className="flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--destructive)_15%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-destructive shrink-0">
                     <AlertTriangle className="h-3 w-3" />
                     Outside Boundary
                   </span>
                 )}
               </div>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onUndoPoint}
-                disabled={draftPointsCount === 0}
-                className="h-7 px-2 text-xs text-foreground hover:bg-row-hover"
-                title="Undo last plotted point"
-              >
-                <Undo2 className="h-3.5 w-3.5 mr-1" />
-                Undo
-              </Button>
+              <div className="flex items-center gap-1.5 pt-0.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onUndoPoint}
+                  disabled={draftPointsCount === 0}
+                  className="h-7 px-2 text-xs text-foreground hover:bg-row-hover"
+                  title="Undo last plotted point"
+                >
+                  <Undo2 className="h-3.5 w-3.5 mr-1" />
+                  Undo
+                </Button>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onCancelPlotting}
-                className="h-7 px-2 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground"
-              >
-                <X className="h-3.5 w-3.5 mr-1" />
-                Cancel
-              </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onCancelPlotting}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5 mr-1" />
+                  Cancel
+                </Button>
 
-              <Button
-                size="sm"
-                onClick={onFinishShape}
-                disabled={draftPointsCount < 3 || hasOutOfBoundsVertex}
-                className="h-7 gap-1 bg-primary px-2.5 text-xs font-semibold text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)] disabled:opacity-50 disabled:cursor-not-allowed"
-                title={
-                  hasOutOfBoundsVertex
-                    ? 'All points must be inside the site boundary to finish'
-                    : 'Close shape and enter details'
-                }
-              >
-                <Check className="h-3.5 w-3.5" />
-                Finish Shape
-              </Button>
-            </div>
+                <Button
+                  size="sm"
+                  onClick={onFinishShape}
+                  disabled={draftPointsCount < 3 || hasOutOfBoundsVertex}
+                  className="h-7 gap-1 bg-primary px-2.5 text-xs font-semibold text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)] disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
+                  title={
+                    hasOutOfBoundsVertex
+                      ? 'All points must be inside the site boundary to finish'
+                      : 'Close shape and enter details'
+                  }
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  Finish Shape
+                </Button>
+              </div>
+            </>
           )}
         </div>
-      </div>
 
-      {/* LocalStorage Session Recovery Banner */}
-      {hasStoredDraft && activeSite && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 rounded-xl border border-warning/40 bg-card/95 px-3.5 py-2 shadow-xl backdrop-blur-md">
-          <div className="flex items-center gap-2 text-xs text-foreground">
-            <RotateCcw className="h-3.5 w-3.5 text-warning shrink-0" />
-            <span>
-              Unsaved draft detected for <strong>{activeSite.name}</strong>.
-            </span>
+        {/* LocalStorage Session Recovery Banner */}
+        {hasStoredDraft && activeSite && (
+          <div className="flex items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--warning)_40%,transparent)] bg-card px-3.5 py-2 shadow-xl">
+            <div className="flex items-center gap-2 text-xs text-foreground">
+              <RotateCcw className="h-3.5 w-3.5 text-warning shrink-0" />
+              <span>
+                Unsaved draft for <strong>{activeSite.name}</strong>
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onResumeStoredDraft}
+                className="h-7 px-2 text-xs font-semibold text-primary border-[color-mix(in_srgb,var(--primary)_30%,transparent)] hover:bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]"
+              >
+                Resume
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={onDiscardStoredDraft}
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+              >
+                Discard
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onResumeStoredDraft}
-              className="h-7 px-2 text-xs font-semibold text-primary border-primary/30 hover:bg-primary/10"
-            >
-              Resume
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={onDiscardStoredDraft}
-              className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-            >
-              Discard
-            </Button>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Bottom-Right Inline Lot Details Panel (replaces modal Dialog) */}
       {activeDraft && (
