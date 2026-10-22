@@ -60,6 +60,8 @@ const virtualDoc = {
   getElementsByTagName: () => [],
   currentScript: undefined,
   createElement: () => ({ setAttribute: () => {}, appendChild: () => {} }),
+  createTextNode: () => ({}),
+  head: { appendChild: () => {}, removeChild: () => {} },
   documentElement: { dataset: {} },
 };
 

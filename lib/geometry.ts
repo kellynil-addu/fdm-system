@@ -162,3 +162,31 @@ export function computeSubdivisionAreaSqm(boundary: unknown, fallback = 250): nu
   const rawArea = ringArea(ring) >= 1 ? ringArea(ring) : calculatePolygonAreaSqm(ring);
   return rawArea > 0 ? Math.round(rawArea * 100) / 100 : fallback;
 }
+
+/**
+ * Ray-casting algorithm to test if a 2D coordinate [lng, lat] is inside a polygon ring.
+ * Coordinates are expected in [longitude, latitude] order.
+ */
+export function pointInPolygon(point: readonly [number, number], ring: readonly (readonly [number, number])[]): boolean {
+  const [px, py] = point;
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    const intersect = yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Checks whether all vertices of a shape are contained within the boundary ring.
+ */
+export function isPolygonContained(
+  innerPoints: readonly (readonly [number, number])[],
+  boundaryRing: readonly (readonly [number, number])[]
+): boolean {
+  if (!innerPoints.length || !boundaryRing.length) return false;
+  return innerPoints.every((pt) => pointInPolygon(pt, boundaryRing));
+}
+

@@ -15,6 +15,8 @@ export interface UseMapLibreMapOptions {
   zoom?: number;
   padding?: Partial<MapLibrePadding>;
   backgroundColor?: string;
+  maxBounds?: [[number, number], [number, number]];
+  minZoom?: number;
 }
 
 export function useMapLibreMap(
@@ -44,6 +46,8 @@ export function useMapLibreMap(
         zoom = 11.8,
         padding = {},
         backgroundColor = '#0b1120',
+        maxBounds,
+        minZoom,
       } = optionsRef.current;
 
       const fullPadding: MapLibrePadding = {
@@ -68,6 +72,8 @@ export function useMapLibreMap(
         },
         center,
         zoom,
+        maxBounds,
+        minZoom,
         attributionControl: false,
       });
 

@@ -23,6 +23,8 @@ import {
 import { useMutation } from '@/lib/hooks/use-mutation';
 import type { ClientDocument } from '@/lib/types/client';
 import type { LandTitle, LandTitleNotice, TitleStatus } from '@/lib/types/title';
+import { ClientChip } from '@/components/dashboard-clients/client-chip';
+import { PropertyChip } from '@/components/dashboard-properties/property-chip';
 import {
   TitleTimelineView,
   normalizeLifecycleStage,
@@ -315,6 +317,8 @@ export function TitleDialog({
   const propertyRef = lotRefLabel(activeTitle?.property ?? activeAwaiting?.property);
   const propertyLocation = activeTitle?.property?.location ?? activeAwaiting?.property?.location ?? '';
   const propertyId = activeTitle?.property_id ?? activeAwaiting?.property?.property_id ?? null;
+  const activeProperty = activeTitle?.property ?? activeAwaiting?.property;
+  const activeClient = activeTitle?.client ?? activeAwaiting?.client;
 
   const activeContent = (() => {
     if (selectedStage === 'Cleared by Billing') {
@@ -373,24 +377,32 @@ export function TitleDialog({
         <DialogHeader className="shrink-0 border-b border-border bg-card px-5 py-3 pr-12 sm:px-6 sm:pr-14 text-left sm:text-left gap-0">
           <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0 space-y-1">
+              <DialogTitle className="sr-only">
+                {propertyRef} - {clientName}
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                Title record details for {propertyRef} owned by {clientName}
+              </DialogDescription>
               <div className="flex flex-wrap items-center gap-2">
-                {propertyId ? (
-                  <Link
-                    href={`/dashboard/properties/map?lot=${encodeURIComponent(propertyId)}`}
-                    className="group/prop flex items-center gap-1.5 hover:opacity-85"
-                    title="View lot on subdivision map"
-                  >
-                    <DialogTitle className="text-base font-bold text-foreground sm:text-lg leading-tight group-hover/prop:text-primary transition-colors">
-                      {propertyRef}
-                    </DialogTitle>
-                    <ExternalLink className="h-3.5 w-3.5 opacity-60 group-hover/prop:opacity-100" />
-                  </Link>
+                {activeProperty ? (
+                  <PropertyChip
+                    variant="compact"
+                    property={activeProperty}
+                  />
                 ) : (
-                  <DialogTitle className="text-base font-bold text-foreground sm:text-lg leading-tight">
-                    {propertyRef}
-                  </DialogTitle>
+                  <span className="text-sm font-semibold">{propertyRef}</span>
                 )}
-                <span className="text-xs text-muted-foreground hidden sm:inline">• {propertyLocation}</span>
+                {activeClient ? (
+                  <ClientChip
+                    variant="compact"
+                    client={activeClient}
+                  />
+                ) : (
+                  <ClientChip
+                    variant="compact"
+                    client={{ full_name: clientName, client_id: clientId }}
+                  />
+                )}
                 <Badge
                   variant={TITLE_STATUS_VARIANT[currentStageStatus] ?? 'muted'}
                   shape="pill"
@@ -405,22 +417,6 @@ export function TitleDialog({
                   </Badge>
                 )}
               </div>
-              <DialogDescription className="text-xs text-muted-foreground flex flex-wrap items-center gap-1">
-                <span>Client:</span>
-                {clientId ? (
-                  <Link
-                    href={`/dashboard/clients/${encodeURIComponent(clientId)}`}
-                    className="font-medium text-foreground hover:text-primary hover:underline inline-flex items-center gap-1"
-                    title="Open client profile"
-                  >
-                    <span>{clientName}</span>
-                    <ExternalLink className="h-3 w-3 opacity-60" />
-                  </Link>
-                ) : (
-                  <span className="font-medium text-foreground">{clientName}</span>
-                )}
-                <span className="text-muted-foreground sm:hidden"> • {propertyLocation}</span>
-              </DialogDescription>
             </div>
 
             <div className="shrink-0">

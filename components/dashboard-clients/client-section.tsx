@@ -70,6 +70,7 @@ import { ArchiveClientDialog } from './client-archive-dialog';
 import { DocumentSearchDialog } from './document-search-dialog';
 import { MissingDocumentsDialog } from './missing-documents-dialog';
 import { ClientCompactRow, ClientStatusPill } from './client-compact-row';
+import { getClientInitials } from './client-chip';
 import type { ClientListItem, ContactInfo } from '@/lib/types/client';
 
 const GUTTER = 'px-4 sm:px-6';
@@ -249,8 +250,8 @@ function ClientRow({ client }: { client: ClientListItem }) {
         className="group flex flex-col justify-between p-4 sm:p-5 hover:border-primary"
       >
       <div className="flex items-start gap-3">
-        <IconBox size="md" shape="circle">
-          <UserRound className="h-4 w-4" />
+        <IconBox size="md" shape="rounded-xl" className="shrink-0 font-semibold text-xs bg-card text-foreground">
+          {getClientInitials(client.full_name) || <UserRound className="h-4 w-4" />}
         </IconBox>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -261,7 +262,9 @@ function ClientRow({ client }: { client: ClientListItem }) {
             >
               {client.full_name}
             </Link>
-            <ClientStatusPill status={client.status} />
+            {client.status?.toLowerCase() !== 'active' && (
+              <ClientStatusPill status={client.status} />
+            )}
           </div>
           <p className="mt-1 truncate text-xs text-muted-foreground">
             {client.address || 'No address recorded'}

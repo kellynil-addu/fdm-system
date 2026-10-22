@@ -13,12 +13,18 @@ import {
 } from '@/components/ui/tooltip';
 import { getArcGISHybridStyle } from '@/lib/actions/arcgis';
 import { useMapLibreMap } from '@/lib/hooks/use-maplibre-map';
-import { parseRing, ringBounds, ringCentroid } from '@/lib/geometry';
-import type { PropertyLotWithClient, PropertyStatus, Site, SiteWithLots } from '@/lib/types/property';
+import { parseRing, ringBounds, ringCentroid, pointInPolygon, isPolygonContained, type Ring } from '@/lib/geometry';
+import type { PropertyLotWithClient, PropertyStatus, Site, SiteWithLots, DraftLot, PendingBoundaryUpdate } from '@/lib/types/property';
 import type { ErrorEvent as MapLibreErrorEvent, GeoJSONSource, StyleSpecification, LayerSpecification } from 'maplibre-gl';
 import { cn } from '@/lib/utils';
 import { MapSitePopup, type LotPlotProperties } from '@/components/dashboard-properties/map-site-popup';
 import 'maplibre-gl/dist/maplibre-gl.css';
+
+function notifyWarning(message: string) {
+  if (typeof window !== 'undefined') {
+    void import('sonner').then(({ toast }) => toast.warning(message));
+  }
+}
 
 export interface SiteMapProps {
   site?: SiteWithLots;
@@ -43,14 +49,26 @@ export interface SiteMapProps {
   draftPoints?: [number, number][];
   onAddDraftPoint?: (point: [number, number]) => void;
   onDeletePlot?: (plot: { subdivisionId?: string; siteId: string; siteName: string; block: number; lot: number; status: string }) => void;
+  onEditBoundary?: (plot: LotPlotProperties) => void;
   focusedSiteId?: string | null;
   preview?: boolean;
+  activeSiteRing?: Ring | null;
+  draftLots?: DraftLot[];
+  pendingBoundaryUpdates?: PendingBoundaryUpdate[];
+  onUpdateDraftPoints?: (points: [number, number][]) => void;
+  isAdjustingVertices?: boolean;
 }
 
 const SIDEBAR_WIDTH = 460;
 const REGIONAL_CENTER: [number, number] = [125.7150395, 7.0445282];
 const REGIONAL_ZOOM = 11.8;
 const DETAILS_ZOOM = 14;
+
+const SAMAL_ISLAND_BOUNDS: [[number, number], [number, number]] = [
+  [125.42, 6.82],
+  [125.88, 7.28],
+];
+const MIN_ZOOM = 9;
 
 const STATUS_COLOR_MAP: Record<string, string> = {
   Open: '#22C55E',
@@ -60,6 +78,7 @@ const STATUS_COLOR_MAP: Record<string, string> = {
   Closed: '#6C7E8E',
   Available: '#6C7E8E',
   Unregistered: '#6C7E8E',
+  Draft: '#0284c7',
 };
 
 // Scale numeric and interpolated text-size expressions for basemap labels
@@ -185,8 +204,14 @@ export function SiteMap({
   draftPoints = [],
   onAddDraftPoint,
   onDeletePlot,
+  onEditBoundary,
   focusedSiteId,
   preview = false,
+  activeSiteRing,
+  draftLots = [],
+  pendingBoundaryUpdates = [],
+  onUpdateDraftPoints,
+  isAdjustingVertices = false,
 }: SiteMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hoveredLotKeyRef = useRef<string | null>(hoveredLotKey ?? null);
@@ -201,8 +226,16 @@ export function SiteMap({
   onAddDraftPointRef.current = onAddDraftPoint;
   const onDeletePlotRef = useRef(onDeletePlot);
   onDeletePlotRef.current = onDeletePlot;
+  const onEditBoundaryRef = useRef(onEditBoundary);
+  onEditBoundaryRef.current = onEditBoundary;
   const isEditorModeRef = useRef(isEditorMode);
   isEditorModeRef.current = isEditorMode;
+  const activeSiteRingRef = useRef(activeSiteRing);
+  activeSiteRingRef.current = activeSiteRing;
+  const draftPointsRef = useRef(draftPoints);
+  draftPointsRef.current = draftPoints;
+  const onUpdateDraftPointsRef = useRef(onUpdateDraftPoints);
+  onUpdateDraftPointsRef.current = onUpdateDraftPoints;
   const [token, setToken] = useState<string | null>(() => cachedArcgisToken);
   const [mapMode, setMapMode] = useState<'satellite' | 'normal'>(() => {
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
@@ -236,6 +269,8 @@ export function SiteMap({
     zoom: initialZoom,
     padding: { top: 0, bottom: 0, left: isSidebarOpen ? SIDEBAR_WIDTH : 0, right: 0 },
     backgroundColor: mapMode === 'satellite' ? SATELLITE_BACKGROUND_COLOR : NORMAL_BACKGROUND_COLOR,
+    maxBounds: SAMAL_ISLAND_BOUNDS,
+    minZoom: MIN_ZOOM,
   });
 
   // Track style reload events to mount custom property layers on top
@@ -461,10 +496,19 @@ export function SiteMap({
     const pts = draftPoints ?? [];
     const features: GeoJSON.Feature[] = [];
 
+    const isContained = activeSiteRing && pts.length > 0 ? isPolygonContained(pts, activeSiteRing) : true;
+    const hasError = !isContained;
+
     pts.forEach((p, idx) => {
+      const isOutOfBounds = activeSiteRing ? !pointInPolygon(p, activeSiteRing) : false;
       features.push({
         type: 'Feature',
-        properties: { isFirst: idx === 0, index: idx + 1 },
+        properties: {
+          isFirst: idx === 0,
+          index: idx + 1,
+          isOutOfBounds,
+          isAdjusting: isAdjustingVertices,
+        },
         geometry: { type: 'Point', coordinates: p },
       });
     });
@@ -472,7 +516,7 @@ export function SiteMap({
     if (pts.length >= 2) {
       features.push({
         type: 'Feature',
-        properties: { type: 'line' },
+        properties: { type: 'line', hasError },
         geometry: { type: 'LineString', coordinates: pts },
       });
     }
@@ -480,7 +524,7 @@ export function SiteMap({
     if (pts.length >= 3) {
       features.push({
         type: 'Feature',
-        properties: { type: 'polygon' },
+        properties: { type: 'polygon', hasError },
         geometry: { type: 'Polygon', coordinates: [[...pts, pts[0]]] },
       });
     }
@@ -489,7 +533,7 @@ export function SiteMap({
       type: 'FeatureCollection' as const,
       features,
     };
-  }, [draftPoints]);
+  }, [draftPoints, activeSiteRing, isAdjustingVertices]);
 
   // Set map crosshair cursor when plotting
   useEffect(() => {
@@ -526,14 +570,18 @@ export function SiteMap({
 
   // GeoJSON features for all subdivisions across visible sites
   const lotsGeoJson = useMemo(() => {
+    const pendingUpdatesMap = new Map(pendingBoundaryUpdates.map((u) => [u.subdivisionId, u]));
+
     const features = activeVisibleSites
       .flatMap((s) => {
         const siteLots = 'lots' in s && Array.isArray(s.lots) ? s.lots : [];
         const siteSubs = 'subdivisions' in s && Array.isArray(s.subdivisions) ? s.subdivisions : [];
         const lotMap = new Map(siteLots.map((l) => [`${l.block_number}-${l.lot_number}`, l]));
 
-        return siteSubs.map((sub) => {
-          const ring = parseRing(sub.boundary);
+        const subFeatures = siteSubs.map((sub) => {
+          const pendingUpdate = pendingUpdatesMap.get(sub.subdivision_id);
+          const rawBoundary = pendingUpdate ? pendingUpdate.boundary : sub.boundary;
+          const ring = parseRing(rawBoundary);
           if (!ring) return null;
           const b = ringBounds(ring);
           const centerLng = (b.minX + b.maxX) / 2;
@@ -544,7 +592,7 @@ export function SiteMap({
           const lot = lotMap.get(lotKey);
           const isRegistered = Boolean(lot);
           const status = lot?.status ?? 'Closed';
-          const areaSize = lot?.area_size ?? 252;
+          const areaSize = pendingUpdate ? pendingUpdate.areaSize : (lot?.area_size ?? 252);
           const pricePerSqm = lot?.price_per_sqm ?? 6500;
 
           return {
@@ -579,6 +627,63 @@ export function SiteMap({
             },
           };
         });
+
+        // If in editor mode, also render confirmed draft lots
+        const siteDraftLots = isEditorMode
+          ? draftLots.filter(
+              (d) =>
+                d.siteId === s.site_id &&
+                d.block &&
+                d.lot &&
+                Array.isArray(d.boundary) &&
+                d.boundary.length >= 3
+            )
+          : [];
+
+        const draftFeatures = siteDraftLots.map((d) => {
+          const ring = parseRing(d.boundary);
+          if (!ring) return null;
+          const b = ringBounds(ring);
+          const centerLng = (b.minX + b.maxX) / 2;
+          const centerLat = (b.minY + b.maxY) / 2;
+          const topLat = b.maxY;
+          const lotKey = `${d.block}-${d.lot}`;
+          const siteLotKey = `${s.site_id}:${d.block}-${d.lot}`;
+
+          return {
+            type: 'Feature' as const,
+            properties: {
+              id: d.draftId,
+              lotKey,
+              siteLotKey,
+              propertyId: '',
+              siteId: s.site_id,
+              siteName: s.name,
+              isSiteArchived: false,
+              block: d.block!,
+              lot: d.lot!,
+              name: `Block ${d.block} Lot ${d.lot} (Draft)`,
+              status: 'Draft',
+              isRegistered: false,
+              areaSize: d.areaSize,
+              pricePerSqm: 6500,
+              totalPrice: d.areaSize * 6500,
+              clientName: '',
+              clientId: '',
+              titleNumber: '',
+              forfeitedAt: '',
+              centerLng,
+              centerLat,
+              topLat,
+            },
+            geometry: {
+              type: 'Polygon' as const,
+              coordinates: [[...ring, ring[0]] as [number, number][]],
+            },
+          };
+        });
+
+        return [...subFeatures, ...draftFeatures];
       })
       .filter((f): f is NonNullable<typeof f> => f !== null);
 
@@ -586,7 +691,7 @@ export function SiteMap({
       type: 'FeatureCollection' as const,
       features,
     };
-  }, [activeVisibleSites]);
+  }, [activeVisibleSites, pendingBoundaryUpdates, draftLots, isEditorMode]);
 
   // Focus and fly to the selected property on map viewport
   const prevSelectedLotIdRef = useRef<string | null>(null);
@@ -800,8 +905,18 @@ export function SiteMap({
         source: 'draft-plot-data',
         filter: ['==', ['get', 'type'], 'polygon'],
         paint: {
-          'fill-color': '#0284c7',
-          'fill-opacity': 0.25,
+          'fill-color': [
+            'case',
+            ['boolean', ['get', 'hasError'], false],
+            '#ef4444',
+            '#0284c7',
+          ],
+          'fill-opacity': [
+            'case',
+            ['boolean', ['get', 'hasError'], false],
+            0.4,
+            0.25,
+          ],
         },
       });
 
@@ -811,7 +926,12 @@ export function SiteMap({
         source: 'draft-plot-data',
         filter: ['==', ['get', 'type'], 'line'],
         paint: {
-          'line-color': '#38bdf8',
+          'line-color': [
+            'case',
+            ['boolean', ['get', 'hasError'], false],
+            '#ef4444',
+            '#38bdf8',
+          ],
           'line-width': 2.5,
           'line-dasharray': [3, 2],
         },
@@ -823,8 +943,18 @@ export function SiteMap({
         source: 'draft-plot-data',
         filter: ['has', 'index'],
         paint: {
-          'circle-radius': ['case', ['get', 'isFirst'], 7, 5],
-          'circle-color': ['case', ['get', 'isFirst'], '#22c55e', '#38bdf8'],
+          'circle-radius': [
+            'case',
+            ['boolean', ['get', 'isAdjusting'], false],
+            8,
+            ['case', ['get', 'isFirst'], 7, 5],
+          ],
+          'circle-color': [
+            'case',
+            ['boolean', ['get', 'isOutOfBounds'], false],
+            '#ef4444',
+            ['case', ['get', 'isFirst'], '#22c55e', '#38bdf8'],
+          ],
           'circle-stroke-width': 2,
           'circle-stroke-color': '#ffffff',
         },
@@ -836,6 +966,70 @@ export function SiteMap({
     console.warn('Map style is reloading, layer mounting deferred:', err);
   }
 }, [map, isReady, styleRevision, sitesGeoJson, lotsGeoJson, draftGeoJson]);
+
+  // Vertex dragging interaction when isAdjustingVertices is active
+  useEffect(() => {
+    if (!map || !isReady || !isAdjustingVertices) return;
+
+    let isDragging = false;
+    let draggedIndex = -1;
+
+    const handleMouseEnter = () => {
+      map.getCanvas().style.cursor = 'grab';
+    };
+
+    const handleMouseLeave = () => {
+      if (!isDragging) {
+        map.getCanvas().style.cursor = '';
+      }
+    };
+
+    const handleMouseDown = (e: import('maplibre-gl').MapLayerMouseEvent) => {
+      const feat = e.features?.[0];
+      if (!feat || feat.properties?.index === undefined) return;
+
+      isDragging = true;
+      draggedIndex = Number(feat.properties.index) - 1;
+      map.dragPan.disable();
+      map.getCanvas().style.cursor = 'grabbing';
+      e.preventDefault();
+    };
+
+    const handleMouseMove = (e: import('maplibre-gl').MapMouseEvent) => {
+      if (!isDragging || draggedIndex < 0) return;
+      const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+
+      const currentPts = draftPointsRef.current ? [...draftPointsRef.current] : [];
+      if (draggedIndex < currentPts.length) {
+        currentPts[draggedIndex] = pt;
+        onUpdateDraftPointsRef.current?.(currentPts);
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isDragging) {
+        isDragging = false;
+        draggedIndex = -1;
+        map.dragPan.enable();
+        map.getCanvas().style.cursor = '';
+      }
+    };
+
+    map.on('mouseenter', 'draft-vertices', handleMouseEnter);
+    map.on('mouseleave', 'draft-vertices', handleMouseLeave);
+    map.on('mousedown', 'draft-vertices', handleMouseDown);
+    map.on('mousemove', handleMouseMove);
+    map.on('mouseup', handleMouseUp);
+
+    return () => {
+      map.off('mouseenter', 'draft-vertices', handleMouseEnter);
+      map.off('mouseleave', 'draft-vertices', handleMouseLeave);
+      map.off('mousedown', 'draft-vertices', handleMouseDown);
+      map.off('mousemove', handleMouseMove);
+      map.off('mouseup', handleMouseUp);
+      map.dragPan.enable();
+    };
+  }, [map, isReady, isAdjustingVertices]);
 
   // Update dynamic lot styles on selection change
   useEffect(() => {
@@ -963,7 +1157,12 @@ export function SiteMap({
 
       const handleClick = (e: import('maplibre-gl').MapLayerMouseEvent) => {
         if (isPlottingRef.current) {
-          onAddDraftPointRef.current?.([e.lngLat.lng, e.lngLat.lat]);
+          const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+          if (activeSiteRingRef.current && !pointInPolygon(pt, activeSiteRingRef.current)) {
+            notifyWarning('Plotted point must be inside the site boundary.');
+            return;
+          }
+          onAddDraftPointRef.current?.(pt);
           return;
         }
 
@@ -1009,7 +1208,12 @@ export function SiteMap({
       // Close popup when clicking anywhere on the map outside lots
       const handleMapClick = (e: import('maplibre-gl').MapMouseEvent) => {
         if (isPlottingRef.current) {
-          onAddDraftPointRef.current?.([e.lngLat.lng, e.lngLat.lat]);
+          const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+          if (activeSiteRingRef.current && !pointInPolygon(pt, activeSiteRingRef.current)) {
+            notifyWarning('Plotted point must be inside the site boundary.');
+            return;
+          }
+          onAddDraftPointRef.current?.(pt);
           return;
         }
 
@@ -1362,6 +1566,10 @@ export function SiteMap({
           onViewDetails={() => handleViewDetails(selectedPlot)}
           onRegisterLot={() => handleRegisterLot(selectedPlot)}
           onDeletePlot={() => handleDeletePlot(selectedPlot)}
+          onEditBoundary={() => {
+            handleClosePopup();
+            onEditBoundaryRef.current?.(selectedPlot);
+          }}
         />,
         popupContainerRef.current
       )}

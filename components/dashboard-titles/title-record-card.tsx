@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { ClientChip } from '@/components/dashboard-clients/client-chip';
+import { PropertyChip } from '@/components/dashboard-properties/property-chip';
 import { formatActivityTime } from '@/lib/format-activity-time';
 import { lotRefLabel } from '@/lib/hooks/use-land-titles';
 import { calculateStorageFee } from '@/lib/storage-fee';
@@ -75,37 +77,20 @@ export function TitleRecordCard({ item, onClick }: TitleRecordCardProps) {
         }}
         className="group flex flex-col justify-between p-3.5 transition-all duration-150 hover:border-primary"
       >
-        <div className="space-y-2.5">
-          <div>
-            <h3 className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-              {clientName}
-            </h3>
-            {account.co_buyers.length > 0 && (
-              <p className="truncate text-xs text-muted-foreground mt-0.5">
-                With {account.co_buyers.join(', ')}
-              </p>
-            )}
-          </div>
-
-          <div className="min-w-0">
-            <Badge variant="outline" className="text-xs font-normal gap-1 text-muted-foreground max-w-full">
-              <MapPin className="h-3 w-3 shrink-0" />
-              <span className="truncate">{lotRefLabel(account.property)} • {account.property.location}</span>
-            </Badge>
-          </div>
-
-          <div>
-            {hasTct ? (
-              <Badge variant="outline" className="font-mono text-xs gap-1 text-foreground">
-                <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
-                <span>TCT {account.property.title_number}</span>
-              </Badge>
-            ) : (
-              <Badge variant="warning" className="text-[11px]">
-                No TCT on Lot
-              </Badge>
-            )}
-          </div>
+        <div className="space-y-2">
+          <ClientChip
+            variant="compact"
+            client={account.client ?? { full_name: clientName, client_id: null }}
+          />
+          {account.co_buyers.length > 0 && (
+            <p className="truncate text-[11px] text-muted-foreground px-1 -mt-0.5">
+              With {account.co_buyers.join(', ')}
+            </p>
+          )}
+          <PropertyChip
+            variant="compact"
+            property={account.property}
+          />
         </div>
 
         {/* Consolidated status footer */}
@@ -175,43 +160,28 @@ export function TitleRecordCard({ item, onClick }: TitleRecordCardProps) {
       }}
       className="group flex flex-col justify-between p-3.5 transition-all duration-150 hover:border-primary"
     >
-      <div className="space-y-2.5">
-        <div>
-          <h3 className="truncate text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
-            {clientName}
-          </h3>
-          <p className="truncate text-xs text-muted-foreground mt-0.5">
-            {title.client?.address ?? 'No address recorded'}
-          </p>
-        </div>
+      <div className="space-y-2">
+        <ClientChip
+          variant="compact"
+          client={title.client ?? { full_name: clientName, client_id: null }}
+        />
+        {title.property && (
+          <PropertyChip
+            variant="compact"
+            property={title.property}
+          />
+        )}
 
-        <div className="min-w-0">
-          <Badge variant="outline" className="text-xs font-normal gap-1 text-muted-foreground max-w-full">
-            <MapPin className="h-3 w-3 shrink-0" />
-            <span className="truncate">{lotRefLabel(title.property)} • {title.property?.location ?? ''}</span>
-          </Badge>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          {hasTct ? (
-            <Badge variant="outline" className="font-mono text-xs gap-1 text-foreground">
-              <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
-              <span>TCT {title.property?.title_number}</span>
-            </Badge>
-          ) : (
-            <Badge variant="warning" className="text-[11px]">
-              Needs TCT
-            </Badge>
-          )}
-          {title.is_legacy_transferred && (
+        {title.is_legacy_transferred && (
+          <div className="px-1">
             <Badge variant="outline" className="text-[10px]">
               Legacy Title
             </Badge>
-          )}
-        </div>
+          </div>
+        )}
 
         {showDocumentProgress && (
-          <div className="text-xs text-muted-foreground pt-0.5">
+          <div className="text-xs text-muted-foreground pt-0.5 px-1">
             {isPacketComplete ? (
               <span className="text-success font-medium flex items-center gap-1">
                 <CheckCircle2 className="h-3.5 w-3.5" /> Packet complete
