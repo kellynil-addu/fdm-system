@@ -490,10 +490,6 @@ export function MapSiteEditor({
                 <span className="text-muted-foreground">Calculated Area:</span>
                 <span className="font-semibold text-foreground">{activeDraft.areaSize} sqm</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Draft Status:</span>
-                <span className="font-semibold text-primary">Unsaved Draft</span>
-              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
@@ -707,14 +703,27 @@ export function MapSiteEditor({
               {selectedPlotToDelete?.siteName ? ` in ${selectedPlotToDelete.siteName}` : ''}?
             </p>
 
-            {selectedPlotToDelete?.status && selectedPlotToDelete.status !== 'Open' && (
-              <Alert variant="warning" className="p-2.5 text-xs">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <AlertDescription className="text-xs">
-                  Warning: Lot is currently marked as {selectedPlotToDelete.status}. Deletion may fail if client agreements exist.
-                </AlertDescription>
-              </Alert>
-            )}
+            {selectedPlotToDelete?.status &&
+              selectedPlotToDelete.status !== 'Closed' &&
+              selectedPlotToDelete.status !== 'Open' && (
+                <Alert variant="destructive" className="p-2.5 text-xs">
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
+                  <AlertDescription className="text-xs">
+                    Block {selectedPlotToDelete.block} Lot {selectedPlotToDelete.lot} is currently{' '}
+                    {selectedPlotToDelete.status}. Registered lots can only be deleted while Open, so
+                    this will be refused.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+            <Alert variant="warning" className="p-2.5 text-xs">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <AlertDescription className="text-xs">
+                This deletes the lot&apos;s record and its polygon. Block{' '}
+                {selectedPlotToDelete?.block} Lot {selectedPlotToDelete?.lot} will no longer appear on
+                the map.
+              </AlertDescription>
+            </Alert>
 
             <DialogFooter className="pt-2">
               <Button

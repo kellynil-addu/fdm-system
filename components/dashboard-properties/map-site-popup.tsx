@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Plus, Trash2, RotateCcw, Loader2, ExternalLink, PenTool } from 'lucide-react';
+import { ArrowRight, Plus, RotateCcw, Loader2, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -13,7 +13,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useSession } from '@/lib/hooks/use-session';
 import { reopenPropertyLotForSale } from '@/lib/actions/properties';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -38,6 +37,7 @@ export interface LotPlotProperties {
   titleNumber?: string;
   forfeitedAt?: string;
   isSiteArchived?: boolean;
+  hasUnsavedChange: boolean;
   centerLng: number;
   centerLat: number;
   topLat: number;
@@ -45,11 +45,8 @@ export interface LotPlotProperties {
 
 export interface MapSitePopupProps {
   plot: LotPlotProperties;
-  isEditorMode?: boolean;
   onViewDetails: () => void;
   onRegisterLot: () => void;
-  onDeletePlot: () => void;
-  onEditBoundary?: () => void;
 }
 
 export const STATUS_PILL_MAP: Record<string, string> = {
@@ -64,14 +61,10 @@ export const STATUS_PILL_MAP: Record<string, string> = {
 
 export function MapSitePopup({
   plot,
-  isEditorMode,
   onViewDetails,
   onRegisterLot,
-  onDeletePlot,
-  onEditBoundary,
 }: MapSitePopupProps) {
   const router = useRouter();
-  const { isSystemAdmin } = useSession();
   const [isReopenOpen, setIsReopenOpen] = useState(false);
   const [isReopening, setIsReopening] = useState(false);
 
@@ -233,32 +226,6 @@ export function MapSitePopup({
             <span>Open Lot for Sale</span>
           </Button>
         </div>
-      )}
-
-      {isEditorMode && !plot.isSiteArchived && (
-        <Button
-          size="sm"
-          variant="outline"
-          className="mt-2 w-full cursor-pointer gap-1.5 border-primary text-primary hover:bg-[color-mix(in_srgb,var(--primary)_10%,transparent)]"
-          onClick={onEditBoundary}
-        >
-          <PenTool className="h-3.5 w-3.5" />
-          <span>Edit Boundary</span>
-        </Button>
-      )}
-
-      {!plot.isRegistered && isEditorMode && isSystemAdmin && (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={plot.isSiteArchived}
-          title={plot.isSiteArchived ? 'Restore site before deleting plots' : undefined}
-          onClick={plot.isSiteArchived ? undefined : onDeletePlot}
-          className="mt-2 w-full cursor-pointer gap-1.5 border-[color-mix(in_srgb,var(--destructive)_40%,white)] bg-[color-mix(in_srgb,var(--destructive)_10%,white)] text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_18%,white)] disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Trash2 className="h-3 w-3" />
-          <span>Delete Plot</span>
-        </Button>
       )}
 
       <AlertDialog

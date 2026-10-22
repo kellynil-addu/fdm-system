@@ -15,9 +15,16 @@ import { getArcGISHybridStyle } from '@/lib/actions/arcgis';
 import { useMapLibreMap } from '@/lib/hooks/use-maplibre-map';
 import { parseRing, ringBounds, ringCentroid, pointInPolygon, isPolygonContained, type Ring } from '@/lib/geometry';
 import type { PropertyLotWithClient, PropertyStatus, Site, SiteWithLots, DraftLot, PendingBoundaryUpdate } from '@/lib/types/property';
-import type { ErrorEvent as MapLibreErrorEvent, GeoJSONSource, StyleSpecification, LayerSpecification } from 'maplibre-gl';
+import type {
+  ErrorEvent as MapLibreErrorEvent,
+  GeoJSONSource,
+  StyleSpecification,
+  LayerSpecification,
+  ExpressionSpecification,
+} from 'maplibre-gl';
 import { cn } from '@/lib/utils';
 import { MapSitePopup, type LotPlotProperties } from '@/components/dashboard-properties/map-site-popup';
+import { MapSiteEditorPopup } from '@/components/dashboard-properties/map-site-editor-popup';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 function notifyWarning(message: string) {
@@ -65,8 +72,8 @@ const REGIONAL_ZOOM = 11.8;
 const DETAILS_ZOOM = 14;
 
 const SAMAL_ISLAND_BOUNDS: [[number, number], [number, number]] = [
-  [125.42, 6.82],
-  [125.88, 7.28],
+  [125.2301694, 6.5481584],
+  [126.2301694, 7.5481584],
 ];
 const MIN_ZOOM = 9;
 
@@ -80,6 +87,105 @@ const STATUS_COLOR_MAP: Record<string, string> = {
   Unregistered: '#6C7E8E',
   Draft: '#0284c7',
 };
+
+// Neutral lot palette for editor mode (status colors hidden while editing geometry)
+const EDITOR_LOT_COLORS = {
+  fill: '#ffffff',
+  stroke: '#ffffff',
+  unsavedFill: '#0284c7',
+  unsavedStroke: '#38bdf8',
+  archivedStroke: '#d97706',
+  selectedStroke: '#ffffff',
+} as const;
+
+type Expr = ExpressionSpecification;
+
+function isActiveLotExpr(activeLotId: string | null): Expr {
+  const key = activeLotId || '__NONE__';
+  return ['any', ['==', ['get', 'id'], key], ['==', ['get', 'propertyId'], key]];
+}
+
+function buildLotFillColor(isEditorMode: boolean): Expr {
+  if (isEditorMode) {
+    return ['case', ['boolean', ['get', 'hasUnsavedChange'], false], EDITOR_LOT_COLORS.unsavedFill, EDITOR_LOT_COLORS.fill];
+  }
+  return [
+    'match',
+    ['get', 'status'],
+    'Open',
+    STATUS_COLOR_MAP.Open,
+    'Reserved',
+    STATUS_COLOR_MAP.Reserved,
+    'Sold',
+    STATUS_COLOR_MAP.Sold,
+    'Forfeited',
+    STATUS_COLOR_MAP.Forfeited,
+    STATUS_COLOR_MAP.Available,
+  ];
+}
+
+function buildLotFillOpacity(activeLotId: string | null, isEditorMode: boolean): Expr {
+  if (isEditorMode) {
+    return [
+      'case',
+      ['boolean', ['get', 'isSiteArchived'], false],
+      0.06,
+      isActiveLotExpr(activeLotId),
+      0.3,
+      ['boolean', ['get', 'hasUnsavedChange'], false],
+      0.3,
+      0.1,
+    ];
+  }
+  return [
+    'case',
+    ['boolean', ['get', 'isSiteArchived'], false],
+    0.25,
+    [
+      'case',
+      isActiveLotExpr(activeLotId),
+      0.85,
+      ['any', ['==', ['get', 'status'], 'Closed'], ['==', ['get', 'status'], 'Available'], ['==', ['get', 'status'], 'Unregistered']],
+      0.35,
+      0.75,
+    ],
+  ];
+}
+
+function buildLotStrokeColor(activeLotId: string | null, isEditorMode: boolean): Expr {
+  if (isEditorMode) {
+    return [
+      'case',
+      isActiveLotExpr(activeLotId),
+      EDITOR_LOT_COLORS.selectedStroke,
+      ['boolean', ['get', 'hasUnsavedChange'], false],
+      EDITOR_LOT_COLORS.unsavedStroke,
+      ['boolean', ['get', 'isSiteArchived'], false],
+      EDITOR_LOT_COLORS.archivedStroke,
+      EDITOR_LOT_COLORS.stroke,
+    ];
+  }
+  return [
+    'case',
+    isActiveLotExpr(activeLotId),
+    '#ef4444',
+    ['case', ['boolean', ['get', 'isSiteArchived'], false], '#d97706', '#ffffff'],
+  ];
+}
+
+function buildLotStrokeWidth(activeLotId: string | null, isEditorMode: boolean): Expr {
+  if (isEditorMode) {
+    return [
+      'case',
+      isActiveLotExpr(activeLotId),
+      3.5,
+      ['boolean', ['get', 'hasUnsavedChange'], false],
+      2.5,
+      1.5,
+    ];
+  }
+  return ['case', isActiveLotExpr(activeLotId), 3.5, 1.5];
+}
 
 // Scale numeric and interpolated text-size expressions for basemap labels
 function scaleTextSize(expr: unknown, factor: number = 1.28): unknown {
@@ -382,6 +488,16 @@ export function SiteMap({
     onSelectLot?.(null);
   }, [onSelectLot]);
 
+  // Close any open lot popup when switching between view and editor modes
+  const isFirstModeSwitchRef = useRef(true);
+  useEffect(() => {
+    if (isFirstModeSwitchRef.current) {
+      isFirstModeSwitchRef.current = false;
+      return;
+    }
+    handleClosePopup();
+  }, [isEditorMode, handleClosePopup]);
+
   // Navigate to property details for registered or closed lots
   const handleViewDetails = useCallback(
     (p: LotPlotProperties) => {
@@ -610,6 +726,7 @@ export function SiteMap({
               name: `Block ${sub.block_number} Lot ${sub.lot_number}`,
               status,
               isRegistered,
+              hasUnsavedChange: Boolean(pendingUpdate),
               areaSize,
               pricePerSqm,
               totalPrice: areaSize * pricePerSqm,
@@ -665,6 +782,7 @@ export function SiteMap({
               name: `Block ${d.block} Lot ${d.lot} (Draft)`,
               status: 'Draft',
               isRegistered: false,
+              hasUnsavedChange: true,
               areaSize: d.areaSize,
               pricePerSqm: 6500,
               totalPrice: d.areaSize * 6500,
@@ -785,36 +903,8 @@ export function SiteMap({
         source: 'lots-data',
         minzoom: DETAILS_ZOOM,
         paint: {
-          'fill-color': [
-            'match',
-            ['get', 'status'],
-            'Open',
-            STATUS_COLOR_MAP.Open,
-            'Reserved',
-            STATUS_COLOR_MAP.Reserved,
-            'Sold',
-            STATUS_COLOR_MAP.Sold,
-            'Forfeited',
-            STATUS_COLOR_MAP.Forfeited,
-            STATUS_COLOR_MAP.Available,
-          ],
-          'fill-opacity': [
-            'case',
-            ['boolean', ['get', 'isSiteArchived'], false],
-            0.25,
-            [
-              'case',
-              [
-                'any',
-                ['==', ['get', 'id'], activeLotIdRef.current || '__NONE__'],
-                ['==', ['get', 'propertyId'], activeLotIdRef.current || '__NONE__'],
-              ],
-              0.85,
-              ['any', ['==', ['get', 'status'], 'Closed'], ['==', ['get', 'status'], 'Available'], ['==', ['get', 'status'], 'Unregistered']],
-              0.35,
-              0.75,
-            ],
-          ],
+          'fill-color': buildLotFillColor(isEditorModeRef.current),
+          'fill-opacity': buildLotFillOpacity(activeLotIdRef.current, isEditorModeRef.current),
         },
       });
 
@@ -824,26 +914,8 @@ export function SiteMap({
         source: 'lots-data',
         minzoom: DETAILS_ZOOM,
         paint: {
-          'line-color': [
-            'case',
-            [
-              'any',
-              ['==', ['get', 'id'], activeLotIdRef.current || '__NONE__'],
-              ['==', ['get', 'propertyId'], activeLotIdRef.current || '__NONE__'],
-            ],
-            '#ef4444',
-            ['case', ['boolean', ['get', 'isSiteArchived'], false], '#d97706', '#ffffff'],
-          ],
-          'line-width': [
-            'case',
-            [
-              'any',
-              ['==', ['get', 'id'], activeLotIdRef.current || '__NONE__'],
-              ['==', ['get', 'propertyId'], activeLotIdRef.current || '__NONE__'],
-            ],
-            3.5,
-            1.5,
-          ],
+          'line-color': buildLotStrokeColor(activeLotIdRef.current, isEditorModeRef.current),
+          'line-width': buildLotStrokeWidth(activeLotIdRef.current, isEditorModeRef.current),
         },
       });
 
@@ -1038,63 +1110,17 @@ export function SiteMap({
     try {
       if (!map.getLayer('lots-fill') || !map.getLayer('lots-stroke')) return;
 
-      map.setPaintProperty('lots-fill', 'fill-color', [
-        'match',
-        ['get', 'status'],
-        'Open',
-        STATUS_COLOR_MAP.Open,
-        'Reserved',
-        STATUS_COLOR_MAP.Reserved,
-        'Sold',
-        STATUS_COLOR_MAP.Sold,
-        'Forfeited',
-        STATUS_COLOR_MAP.Forfeited,
-        STATUS_COLOR_MAP.Available,
-      ]);
+      map.setPaintProperty('lots-fill', 'fill-color', buildLotFillColor(isEditorMode));
 
-      map.setPaintProperty('lots-fill', 'fill-opacity', [
-        'case',
-        ['boolean', ['get', 'isSiteArchived'], false],
-        0.25,
-        [
-          'case',
-          [
-            'any',
-            ['==', ['get', 'id'], activeLotId || '__NONE__'],
-            ['==', ['get', 'propertyId'], activeLotId || '__NONE__'],
-          ],
-          0.85,
-          ['any', ['==', ['get', 'status'], 'Closed'], ['==', ['get', 'status'], 'Available'], ['==', ['get', 'status'], 'Unregistered']],
-          0.35,
-          0.75,
-        ],
-      ]);
+      map.setPaintProperty('lots-fill', 'fill-opacity', buildLotFillOpacity(activeLotId, isEditorMode));
 
-      map.setPaintProperty('lots-stroke', 'line-color', [
-        'case',
-        [
-          'any',
-          ['==', ['get', 'id'], activeLotId || '__NONE__'],
-          ['==', ['get', 'propertyId'], activeLotId || '__NONE__'],
-        ],
-        '#ef4444',
-        ['case', ['boolean', ['get', 'isSiteArchived'], false], '#d97706', '#ffffff'],
-      ]);
+      map.setPaintProperty('lots-stroke', 'line-color', buildLotStrokeColor(activeLotId, isEditorMode));
 
-      map.setPaintProperty('lots-stroke', 'line-width', [
-        'case',
-        [
-          'any',
-          ['==', ['get', 'id'], activeLotId || '__NONE__'],
-          ['==', ['get', 'propertyId'], activeLotId || '__NONE__'],
-        ],
-        3.5,
-        1.5,
-      ]);
+      map.setPaintProperty('lots-stroke', 'line-width', buildLotStrokeWidth(activeLotId, isEditorMode));
     } catch {
       // Style is reloading; will be reapplied on style.load
     }
-  }, [map, isReady, styleRevision, activeLotId]);
+  }, [map, isReady, styleRevision, activeLotId, isEditorMode]);
 
   // Update hover outline filter
   useEffect(() => {
@@ -1560,17 +1586,22 @@ export function SiteMap({
 
       {/* Interactive plot popup mounted inside MapLibre container */}
       {selectedPlot && popupContainerRef.current && createPortal(
-        <MapSitePopup
-          plot={selectedPlot}
-          isEditorMode={isEditorMode}
-          onViewDetails={() => handleViewDetails(selectedPlot)}
-          onRegisterLot={() => handleRegisterLot(selectedPlot)}
-          onDeletePlot={() => handleDeletePlot(selectedPlot)}
-          onEditBoundary={() => {
-            handleClosePopup();
-            onEditBoundaryRef.current?.(selectedPlot);
-          }}
-        />,
+        isEditorMode ? (
+          <MapSiteEditorPopup
+            plot={selectedPlot}
+            onDeletePlot={() => handleDeletePlot(selectedPlot)}
+            onEditBoundary={() => {
+              handleClosePopup();
+              onEditBoundaryRef.current?.(selectedPlot);
+            }}
+          />
+        ) : (
+          <MapSitePopup
+            plot={selectedPlot}
+            onViewDetails={() => handleViewDetails(selectedPlot)}
+            onRegisterLot={() => handleRegisterLot(selectedPlot)}
+          />
+        ),
         popupContainerRef.current
       )}
     </div>
