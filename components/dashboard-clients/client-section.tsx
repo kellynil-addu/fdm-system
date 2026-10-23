@@ -1,8 +1,6 @@
 'use client';
 
-import { DOC_TYPE_LABEL } from '@/lib/types/client';
 import { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardStickyHeader } from '@/components/ui/card';
@@ -10,8 +8,6 @@ import {
   FilterToolbar,
   ListPaginationFooter,
 } from '@/components/ui/filter-toolbar';
-import { IconBox } from '@/components/ui/icon-box';
-import { Badge } from '@/components/ui/badge';
 import {
   Plus,
   X,
@@ -28,7 +24,6 @@ import {
   Check,
   Phone,
   Mail,
-  UserRound,
   HelpCircle,
   LayoutList,
   Rows,
@@ -60,17 +55,18 @@ import {
 } from '@/lib/hooks/use-clients-page';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { useDialogPresence } from '@/lib/hooks/use-dialog-presence';
-import { formatActivityTime } from '@/lib/format-activity-time';
 import { getArchiveEligibility } from '@/lib/utils/archive-rules';
 import { getClientRequirements } from '@/lib/utils/client-requirements';
+import { rankContacts } from '@/lib/utils/contact-ranking';
+import { clientCardStatus } from '@/lib/utils/client-card-status';
 import { CreateClientModal } from './client-create-modal';
 import { EditClientModal } from './client-edit-modal';
 import { DeleteClientDialog } from './client-delete-dialog';
 import { ArchiveClientDialog } from './client-archive-dialog';
 import { DocumentSearchDialog } from './document-search-dialog';
 import { MissingDocumentsDialog } from './missing-documents-dialog';
-import { ClientCompactRow, ClientStatusPill } from './client-compact-row';
-import { getClientInitials } from './client-chip';
+import { ClientCompactRow } from './client-compact-row';
+import { ClientCallingCard } from './client-calling-card';
 import type { ClientListItem, ContactInfo } from '@/lib/types/client';
 
 const GUTTER = 'px-4 sm:px-6';
@@ -90,23 +86,7 @@ function ContactDetailsCell({
     return <span className="text-xs text-muted-foreground">No contact details</span>;
   }
 
-  // Sort contacts: phones first, then emails, then others
-  const sorted = [...contacts].sort((a, b) => {
-    const aType = a.type.toLowerCase();
-    const bType = b.type.toLowerCase();
-    const aIsPhone = aType.includes('phone') || aType.includes('mobile');
-    const bIsPhone = bType.includes('phone') || bType.includes('mobile');
-    if (aIsPhone && !bIsPhone) return -1;
-    if (!aIsPhone && bIsPhone) return 1;
-
-    const aIsEmail = aType.includes('email');
-    const bIsEmail = bType.includes('email');
-    if (aIsEmail && !bIsEmail) return -1;
-    if (!aIsEmail && bIsEmail) return 1;
-
-    return 0;
-  });
-
+  const sorted = rankContacts(contacts);
   const visible = sorted.slice(0, 2);
   const remaining = sorted.length - visible.length;
 
@@ -212,20 +192,18 @@ function EmptyState({
 
 function ClientRow({ client }: { client: ClientListItem }) {
   const router = useRouter();
-  const { openDialog, restoreClient, missingDocumentAlerts, isSystemAdmin } = useClients();
+  const { restoreClient, missingDocumentAlerts } = useClients();
   const missingDocs = missingDocumentAlerts.find(
     (alert) => alert.client_id === client.client_id
   );
   
-  // Calculate requirements status for badge
+  // The profile half of the requirements check; the document half comes from
+  // `missingDocumentAlerts`, since the grid does not load every client's files.
   const requirements = getClientRequirements(
     client,
     [] // We don't have full document list here, rely on missingDocumentAlerts
   );
-  const isProfileIncomplete = !requirements.profileComplete;
-  const hasDocIssues = missingDocs && missingDocs.missing_documents.length > 0;
-  const isIncomplete = isProfileIncomplete || hasDocIssues;
-  
+
   const { state: restoreState, execute: runRestore } = useMutation(restoreClient, {
     onSuccess: () => {
       toast.success(`${client.full_name} restored`);
@@ -243,162 +221,158 @@ function ClientRow({ client }: { client: ClientListItem }) {
     router.push(`/dashboard/clients/${client.client_id}`);
   }
 
-    return (
-      <Card
-        variant="interactive"
-        onClick={handleRowClick}
-        className="group flex flex-col justify-between p-4 sm:p-5 hover:border-primary"
-      >
-      <div className="flex items-start gap-3">
-        <IconBox size="md" shape="rounded-xl" className="shrink-0 font-semibold text-xs bg-card text-foreground">
-          {getClientInitials(client.full_name) || <UserRound className="h-4 w-4" />}
-        </IconBox>
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Link
-              href={`/dashboard/clients/${client.client_id}`}
-              onClick={(event) => event.stopPropagation()}
-              className="min-w-0 flex-1 truncate rounded text-sm font-semibold text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {client.full_name}
-            </Link>
-            {client.status?.toLowerCase() !== 'active' && (
-              <ClientStatusPill status={client.status} />
-            )}
-          </div>
-          <p className="mt-1 truncate text-xs text-muted-foreground">
-            {client.address || 'No address recorded'}
-          </p>
-        </div>
-        <div onClick={(event) => event.stopPropagation()}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-label={`Actions for ${client.full_name}`}
-                className="-mr-2 -mt-2 text-muted-foreground"
-                size="icon"
-                variant="ghost"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Actions
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              icon={<FileDown className="h-4 w-4" />}
-              onSelect={(event) => {
-                event.preventDefault();
-                  void downloadClientDocumentsPdf(client.client_id, client.full_name);
-              }}
-            >
-              Download uploaded files as PDF
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              icon={<ExternalLink className="h-4 w-4" />}
-              onSelect={() => router.push(`/dashboard/clients/${client.client_id}`)}
-            >
-              Open profile
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              icon={<FileDown className="h-4 w-4" />}
-              onSelect={async () => {
-                try {
-                  const data = await getClientReportData(client.client_id);
-                  // Loaded on demand so jsPDF stays out of the page bundle.
-                  const { generateClientPdfReport } = await import('@/lib/reports/pdf-client-report');
-                  generateClientPdfReport(data);
-                  toast.success('Client PDF report generated');
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : 'Failed to generate PDF report');
-                }
-              }}
-            >
-              Client summary PDF
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              icon={<Edit3 className="h-4 w-4" />}
-              onSelect={() => openDialog({ type: 'edit', client })}
-            >
-              Edit client
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              hidden={!isArchived}
-              icon={<ArchiveRestore className="h-4 w-4" />}
-              disabled={isRestoring}
-              onSelect={(e) => {
-                e.preventDefault();
-                void handleRestore();
-              }}
-            >
-              Restore client
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              hidden={isArchived}
-              icon={<Archive className="h-4 w-4" />}
-              onSelect={() => openDialog({ type: 'archive', client })}
-            >
-              Archive client
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              hidden={!isArchived || !isSystemAdmin}
-              disabled={!eligibility.isEligibleForDelete}
-              disabledReason={eligibility.tooltipReason}
-              variant="destructive"
-              icon={<Trash2 className="h-4 w-4" />}
-              onSelect={() => openDialog({ type: 'delete', client })}
-            >
-              Delete client
-            </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
+  return (
+    <ClientCallingCard
+      client={client}
+      // Not a link, and deliberately so. The actions menu is a `button`, and a
+      // `button` inside an `a` is invalid markup — so the card takes a click
+      // handler instead and the whole card stays one focus stop.
+      href={null}
+      onClick={handleRowClick}
+      status={clientCardStatus({
+        status: client.status,
+        missingProfile: requirements.missingProfile,
+        missingDocuments: missingDocs?.missing_documents ?? [],
+        latestActivity: client.latest_activity,
+      })}
+      trailing={
+        <ClientRowActions
+          client={client}
+          isArchived={isArchived}
+          isRestoring={isRestoring}
+          eligibility={eligibility}
+          onRestore={handleRestore}
+        />
+      }
+    >
+      {/*
+        Every contact on file, not just the primary one the card's field list
+        shows, each with its own copy button. The card does not model a list, so
+        the directory keeps it here rather than losing it.
+      */}
+      <ContactDetailsCell contacts={client.contact_info} onViewMore={handleRowClick} />
+    </ClientCallingCard>
+  );
+}
 
-      <div className="mt-4 space-y-3 border-t border-border pt-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contact</p>
-            <ContactDetailsCell contacts={client.contact_info} onViewMore={handleRowClick} />
-          </div>
-          {isIncomplete && (
-            <Badge
-              variant="warning"
-              shape="pill"
-              title={
-                isProfileIncomplete && hasDocIssues
-                  ? `Missing profile fields and documents: ${[...requirements.missingProfile, ...missingDocs.missing_documents.map((type) => DOC_TYPE_LABEL[type])].join(', ')}`
-                  : isProfileIncomplete
-                    ? `Incomplete profile: ${requirements.missingProfile.join(', ')}`
-                    : `Missing documents: ${missingDocs?.missing_documents.map((type) => DOC_TYPE_LABEL[type]).join(', ')}`
+/**
+ * The directory's per-row actions, in the card header's trailing slot.
+ *
+ * Kept as a `DropdownMenu` rather than moved into the card's hover reveal. The
+ * reveal is a `HoverCardContent`, which is portalled and manages no focus: a
+ * menu opened from it closes the moment the pointer leaves for the menu, and
+ * its items are unreachable by Tab because tabbing off the card closes the
+ * panel. A grid whose whole job is to let staff act on many rows quickly needs
+ * these on a real button.
+ */
+function ClientRowActions({
+  client,
+  isArchived,
+  isRestoring,
+  eligibility,
+  onRestore,
+}: {
+  client: ClientListItem;
+  isArchived: boolean;
+  isRestoring: boolean;
+  eligibility: ReturnType<typeof getArchiveEligibility>;
+  onRestore: () => Promise<void>;
+}) {
+  const router = useRouter();
+  const { openDialog, isSystemAdmin } = useClients();
+
+  return (
+    // The card owns Enter and Space for its own activation, so the menu has to
+    // stop both the click and the keydown before they reach it.
+    <div
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            aria-label={`Actions for ${client.full_name}`}
+            className="-mr-2 -mt-2 text-muted-foreground"
+            size="icon"
+            variant="ghost"
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Actions
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            icon={<FileDown className="h-4 w-4" />}
+            onSelect={(event) => {
+              event.preventDefault();
+              void downloadClientDocumentsPdf(client.client_id, client.full_name);
+            }}
+          >
+            Download uploaded files as PDF
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            icon={<ExternalLink className="h-4 w-4" />}
+            onSelect={() => router.push(`/dashboard/clients/${client.client_id}`)}
+          >
+            Open profile
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            icon={<FileDown className="h-4 w-4" />}
+            onSelect={async () => {
+              try {
+                const data = await getClientReportData(client.client_id);
+                // Loaded on demand so jsPDF stays out of the page bundle.
+                const { generateClientPdfReport } = await import('@/lib/reports/pdf-client-report');
+                generateClientPdfReport(data);
+                toast.success('Client PDF report generated');
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to generate PDF report');
               }
-            >
-              <ShieldAlert className="mr-1 h-3 w-3" />
-              Needs attention
-            </Badge>
-          )}
-        </div>
-
-        <div className="rounded-md bg-row-hover px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Latest activity</p>
-          {client.latest_activity ? (
-            <>
-              <p className="mt-1 truncate text-xs font-medium text-foreground">
-                {client.latest_activity.description || 'Activity recorded'}
-              </p>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {client.latest_activity.performer_name} · {formatActivityTime(client.latest_activity.time)}
-              </p>
-            </>
-          ) : (
-            <p className="mt-1 text-xs text-muted-foreground">No activity logged</p>
-          )}
-        </div>
-      </div>
-    </Card>
+            }}
+          >
+            Client summary PDF
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            icon={<Edit3 className="h-4 w-4" />}
+            onSelect={() => openDialog({ type: 'edit', client })}
+          >
+            Edit client
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            hidden={!isArchived}
+            icon={<ArchiveRestore className="h-4 w-4" />}
+            disabled={isRestoring}
+            onSelect={(e) => {
+              e.preventDefault();
+              void onRestore();
+            }}
+          >
+            Restore client
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            hidden={isArchived}
+            icon={<Archive className="h-4 w-4" />}
+            onSelect={() => openDialog({ type: 'archive', client })}
+          >
+            Archive client
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            hidden={!isArchived || !isSystemAdmin}
+            disabled={!eligibility.isEligibleForDelete}
+            disabledReason={eligibility.tooltipReason}
+            variant="destructive"
+            icon={<Trash2 className="h-4 w-4" />}
+            onSelect={() => openDialog({ type: 'delete', client })}
+          >
+            Delete client
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
 

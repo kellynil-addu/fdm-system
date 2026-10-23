@@ -14,6 +14,12 @@ const iconBoxVariants = cva(
       },
       size: {
         default: "h-8 w-8 text-sm",
+        /**
+         * For inline metadata rows inside dialogs and panel headers, where a
+         * 28px tile would set the row height on its own. `xs` still has to hold
+         * a legible 1-2 letter monogram, hence 24px rather than smaller.
+         */
+        xs: "h-6 w-6 text-[10px]",
         sm: "h-7 w-7 text-xs",
         md: "h-9 w-9 text-sm",
         lg: "h-11 w-11 text-base",

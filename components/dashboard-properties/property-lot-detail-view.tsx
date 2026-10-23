@@ -5,7 +5,6 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   X,
-  UserRound,
   DollarSign,
   FileDown,
   Loader2,
@@ -38,7 +37,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Card } from '@/components/ui/card';
-import { IconBox } from '@/components/ui/icon-box';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
@@ -61,7 +59,7 @@ import { usePropertyLots, lotLabel } from '@/lib/hooks/use-property-lots';
 import { useSession } from '@/lib/hooks/use-session';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
-import { ClientChip } from '@/components/dashboard-clients/client-chip';
+import { ClientCallingCard } from '@/components/dashboard-clients/client-calling-card';
 import { getArchiveEligibility } from '@/lib/utils/archive-rules';
 import type {
   AccountStatus,
@@ -807,7 +805,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
               {lot.client && (
                 <div className="space-y-1">
                   <p className="text-[11px] font-medium text-muted-foreground">Previous Buyer</p>
-                  <ClientChip variant="compact" client={lot.client} className="w-full" />
+                  <ClientCallingCard client={lot.client} tier="compact" className="w-full" />
                 </div>
               )}
 
@@ -856,7 +854,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
             <>
               {/* Assigned Client Card (Read-only with profile link) */}
               {lot.client ? (
-                <ClientChip variant="compact" client={lot.client} className="w-full" />
+                <ClientCallingCard client={lot.client} tier="compact" className="w-full" />
               ) : (
                 <Card padding="sm" className="text-xs text-muted-foreground">
                   Reserved lot — buyer record linked via installment ledger.
@@ -921,7 +919,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
             <>
               {/* Assigned Client Card (Read-only with profile link) */}
               {lot.client ? (
-                <ClientChip variant="compact" client={lot.client} className="w-full" />
+                <ClientCallingCard client={lot.client} tier="compact" className="w-full" />
               ) : (
                 <Card padding="sm" className="text-xs text-muted-foreground">
                   Sold lot — owner record linked via land title.

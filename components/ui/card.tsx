@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
@@ -16,6 +17,13 @@ const cardVariants = cva(
         dashed:
           "border-2 border-dashed hover:border-primary transition-colors flex items-center justify-center",
         canvas: "border-border-warm bg-card shadow-xs",
+        /**
+         * Summary card for a single record, used where a record appears inside
+         * another record's context (a client on a map lot, a lot on a title).
+         * Carries a rail down its left edge so the card reads as a document at
+         * a glance. Pair with `CardCallingRail` and `CardMotif`.
+         */
+        "calling-card": "relative overflow-hidden border-border-warm bg-card",
       },
       padding: {
         none: "",
@@ -33,16 +41,28 @@ const cardVariants = cva(
 
 export interface CardProps
   extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof cardVariants> {}
+    VariantProps<typeof cardVariants> {
+  /**
+   * Renders the card as its child rather than as a `div`, the same escape hatch
+   * `Button` has. A card that links somewhere needs to *be* the anchor, not
+   * wrap one: an extra element around it takes the slot the card's own layout
+   * classes — `flex-1`, `self-stretch`, `min-w-*` — were written for, and the
+   * card inside then sizes against that wrapper instead of against its cell.
+   */
+  asChild?: boolean;
+}
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, variant, padding, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn(cardVariants({ variant, padding, className }))}
-      {...props}
-    />
-  ),
+  ({ className, variant, padding, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "div";
+    return (
+      <Comp
+        ref={ref}
+        className={cn(cardVariants({ variant, padding, className }))}
+        {...props}
+      />
+    );
+  },
 );
 Card.displayName = "Card";
 
@@ -137,6 +157,29 @@ const CardToolbar = React.forwardRef<
 ));
 CardToolbar.displayName = "CardToolbar";
 
+/**
+ * The solid rail down the leading edge of a `calling-card`.
+ *
+ * Its own element rather than a border because a border cannot be wider on one
+ * side without also shifting the box. Colour comes from `color-mix` on a token
+ * so it stays inside the palette instead of introducing a hex.
+ */
+const CardCallingRail = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement>
+>(({ className, ...props }, ref) => (
+  <div
+    ref={ref}
+    aria-hidden="true"
+    className={cn(
+      "absolute inset-y-0 left-0 w-1 bg-[color-mix(in_srgb,var(--row-accent)_78%,black)]",
+      className,
+    )}
+    {...props}
+  />
+));
+CardCallingRail.displayName = "CardCallingRail";
+
 const CardStickyHeader = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement>
@@ -216,6 +259,7 @@ export {
   CardDescription,
   CardContent,
   CardToolbar,
+  CardCallingRail,
   CardStickyHeader,
   CardTableFooter,
   CardScrollContainer,

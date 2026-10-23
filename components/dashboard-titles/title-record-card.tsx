@@ -1,17 +1,10 @@
 'use client';
 
-import {
-  CheckCircle2,
-  Clock,
-  FileText,
-  MapPin,
-} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import { ClientChip } from '@/components/dashboard-clients/client-chip';
-import { PropertyChip } from '@/components/dashboard-properties/property-chip';
+import { RecordCard } from '@/components/ui/record-card';
+import { ClientCallingCard } from '@/components/dashboard-clients/client-calling-card';
+import { PropertyCallingCard } from '@/components/dashboard-properties/property-calling-card';
 import { formatActivityTime } from '@/lib/format-activity-time';
-import { lotRefLabel } from '@/lib/hooks/use-land-titles';
 import { calculateStorageFee } from '@/lib/storage-fee';
 import { TITLE_STATUS_VARIANT } from '@/lib/status-colors';
 import {
@@ -19,6 +12,7 @@ import {
   getMissingReleaseDocuments,
   getRequiredReleaseDocuments,
 } from '@/lib/utils/release-requirements';
+import type { CallingCardStatus } from '@/lib/types/calling-card';
 import type { AccountAwaitingTitle, LandTitle } from '@/lib/types/title';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' });
@@ -48,6 +42,31 @@ function getStatusChangedAt(title: LandTitle): string {
   return title.updated_at || title.created_at || new Date().toISOString();
 }
 
+function sinceLabel(changedAt: string): string {
+  return `Since ${DATE_FORMAT.format(new Date(changedAt))} (${formatActivityTime(changedAt)})`;
+}
+
+/**
+ * The latest notice on a record, in the fewest words that still say what to do
+ * about it. A returned notice is the single most actionable thing a
+ * Ready-for-Claim record can be carrying — it means the buyer never received
+ * it and the 30-day clock is running regardless — so it leads, ahead of the
+ * storage fee.
+ *
+ * Same vocabulary as `title-timeline-view`, so the grid card and the timeline
+ * cannot describe the same notice differently.
+ */
+function latestNoticeLabel(title: LandTitle): string | null {
+  const notices = title.notices ?? [];
+  if (notices.length === 0) return null;
+  const latest = [...notices].sort((a, b) => b.notice_number - a.notice_number)[0];
+  const nth =
+    latest.notice_number === 1 ? '1st' : latest.notice_number === 2 ? '2nd' : 'Final';
+  if (latest.status === 'returned_to_sender') return `${nth} notice returned to sender`;
+  if (latest.status === 'received') return `${nth} notice received`;
+  return `${nth} notice ongoing`;
+}
+
 interface TitleRecordCardProps {
   item:
     | { type: 'awaiting'; data: AccountAwaitingTitle }
@@ -55,57 +74,49 @@ interface TitleRecordCardProps {
   onClick: () => void;
 }
 
+/**
+ * One title record as a card: the lot, the buyer, and a banded footer saying
+ * where the record stands. The shell itself is `RecordCard`, shared with the
+ * Billing grid; what lives here is only what is specific to a title — which
+ * two subjects the record has, and which fact each stage makes actionable.
+ *
+ * The pair is the same composition as the title dialog's header, down to the
+ * `flex-wrap`: the two cards sit side by side when the cell allows and stack
+ * when it does not, so the card is correct at any column width without a
+ * breakpoint of its own.
+ */
 export function TitleRecordCard({ item, onClick }: TitleRecordCardProps) {
   if (item.type === 'awaiting') {
     const account = item.data;
     const clientName = account.client?.full_name ?? 'Unknown client';
-    const hasTct = Boolean(account.property.title_number?.trim());
+
+    const status: CallingCardStatus = {
+      label: 'Cleared by Billing',
+      tone: TITLE_STATUS_VARIANT['Cleared by Billing'],
+      detail: sinceLabel(account.cleared_at),
+    };
 
     return (
-      <Card
-        variant="interactive"
-        padding="none"
+      <RecordCard
+        label={`Open title intake for ${clientName}`}
         onClick={onClick}
-        role="button"
-        tabIndex={0}
-        aria-label={`Open title intake for ${clientName}`}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onClick();
-          }
-        }}
-        className="group flex flex-col justify-between p-3.5 transition-all duration-150 hover:border-primary"
+        status={status}
       >
-        <div className="space-y-2">
-          <ClientChip
-            variant="compact"
-            client={account.client ?? { full_name: clientName, client_id: null }}
-          />
-          {account.co_buyers.length > 0 && (
-            <p className="truncate text-[11px] text-muted-foreground px-1 -mt-0.5">
-              With {account.co_buyers.join(', ')}
-            </p>
-          )}
-          <PropertyChip
-            variant="compact"
-            property={account.property}
-          />
-        </div>
-
-        {/* Consolidated status footer */}
-        <div className="mt-3.5 border-t border-border pt-2.5 space-y-1.5">
-          <Badge variant="info" shape="pill" dot className="shrink-0">
-            Cleared by Billing
-          </Badge>
-          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <Clock className="h-3 w-3 shrink-0" />
-            <span className="truncate">
-              Since {DATE_FORMAT.format(new Date(account.cleared_at))} ({formatActivityTime(account.cleared_at)})
-            </span>
-          </div>
-        </div>
-      </Card>
+        <PropertyCallingCard property={account.property} tier="compact" embedded />
+        <ClientCallingCard
+          client={account.client ?? { full_name: clientName, client_id: null }}
+          tier="compact"
+          embedded
+        />
+        {account.co_buyers.length > 0 && (
+          // `w-full` so a list of names takes its own line rather than
+          // stretching the row, and `truncate` so a long list cannot push the
+          // card wider than its cell — the same treatment it had before.
+          <p className="w-full truncate px-1 text-[11px] text-muted-foreground">
+            With {account.co_buyers.join(', ')}
+          </p>
+        )}
+      </RecordCard>
     );
   }
 
@@ -121,103 +132,84 @@ export function TitleRecordCard({ item, onClick }: TitleRecordCardProps) {
   const docsDone = required - missing;
   const isPacketComplete = missing === 0 && hasTct;
 
-  const clearance = getClearanceProgress(title.clearance_started_at);
   const storageFee = calculateStorageFee(title);
 
-  let statusTimeString: string;
-  if (title.status === 'Clearance Period') {
-    if (clearance.targetDate) {
-      const daysCount = Math.max(0, clearance.daysRemaining);
-      const daysText = `${daysCount} ${daysCount === 1 ? 'day' : 'days'} remaining`;
-      statusTimeString = `Clears ${DATE_FORMAT.format(clearance.targetDate)} (${daysText})`;
-    } else {
-      const changedAt = getStatusChangedAt(title);
-      statusTimeString = `Since ${DATE_FORMAT.format(new Date(changedAt))} (${formatActivityTime(changedAt)})`;
-    }
-  } else {
-    const changedAt = getStatusChangedAt(title);
-    statusTimeString = `Since ${DATE_FORMAT.format(new Date(changedAt))} (${formatActivityTime(changedAt)})`;
-  }
+  /**
+   * The footer's detail line, chosen per stage rather than derived from the
+   * clock. Every stage has a fact worth more than "how long it has been sitting
+   * there", and this is where they all land:
+   *
+   * - clearance: days left in the 30-day window
+   * - document preparation / review / signature: release-packet progress
+   * - ready for claim: the live notice if there is one, else the storage fee
+   * - released: who it went to
+   *
+   * Only a stage with genuinely nothing to report falls back to the timestamp.
+   */
+  const notice = title.status === 'Ready for Claim' ? latestNoticeLabel(title) : null;
 
-  const showDocumentProgress =
+  let detail: string;
+  if (title.status === 'Clearance Period') {
+    const { targetDate, daysRemaining } = getClearanceProgress(title.clearance_started_at);
+    detail = targetDate
+      ? `${Math.max(0, daysRemaining)} ${Math.max(0, daysRemaining) === 1 ? 'day' : 'days'} remaining`
+      : sinceLabel(getStatusChangedAt(title));
+  } else if (
     title.status === 'Document Preparation' ||
     title.status === 'For Review' ||
-    title.status === 'For Signature';
+    title.status === 'For Signature'
+  ) {
+    detail = isPacketComplete
+      ? `Packet complete (${required}/${required})`
+      : `${docsDone} of ${required} documents`;
+  } else if (title.status === 'Ready for Claim') {
+    if (notice) detail = notice;
+    else if (storageFee.isOverdue)
+      detail = `${storageFee.monthsOverdue} ${storageFee.monthsOverdue === 1 ? 'mo' : 'mos'} overdue`;
+    else detail = 'Original title in vault';
+  } else if (title.status === 'Released') {
+    detail = title.released_to_name
+      ? `Released to ${title.released_to_name}`
+      : sinceLabel(getStatusChangedAt(title));
+  } else {
+    detail = sinceLabel(getStatusChangedAt(title));
+  }
+
+  const status: CallingCardStatus = {
+    label: title.status,
+    tone: TITLE_STATUS_VARIANT[title.status] ?? 'muted',
+    detail,
+  };
 
   return (
-    <Card
-      variant="interactive"
-      padding="none"
+    <RecordCard
+      label={`Open title record for ${clientName}`}
       onClick={onClick}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open title record for ${clientName}`}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onClick();
-        }
-      }}
-      className="group flex flex-col justify-between p-3.5 transition-all duration-150 hover:border-primary"
+      status={status}
     >
-      <div className="space-y-2">
-        <ClientChip
-          variant="compact"
-          client={title.client ?? { full_name: clientName, client_id: null }}
-        />
-        {title.property && (
-          <PropertyChip
-            variant="compact"
-            property={title.property}
-          />
-        )}
-
-        {title.is_legacy_transferred && (
-          <div className="px-1">
-            <Badge variant="outline" className="text-[10px]">
-              Legacy Title
-            </Badge>
-          </div>
-        )}
-
-        {showDocumentProgress && (
-          <div className="text-xs text-muted-foreground pt-0.5 px-1">
-            {isPacketComplete ? (
-              <span className="text-success font-medium flex items-center gap-1">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Packet complete
-              </span>
-            ) : (
-              <span className="flex items-center gap-1">
-                <FileText className="h-3.5 w-3.5" />
-                {docsDone} of {required} documents {!hasTct && '• Needs TCT'}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Consolidated status footer */}
-      <div className="mt-3.5 border-t border-border pt-2.5 space-y-1.5">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Badge
-            variant={TITLE_STATUS_VARIANT[title.status] ?? 'muted'}
-            shape="pill"
-            dot
-            className="shrink-0"
-          >
-            {title.status}
-          </Badge>
-          {title.status === 'Ready for Claim' && storageFee.isOverdue && (
-            <Badge variant="warning" shape="pill" dot className="shrink-0 text-[11px]">
-              {storageFee.monthsOverdue} {storageFee.monthsOverdue === 1 ? 'mo' : 'mos'} overdue
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Clock className="h-3 w-3 shrink-0" />
-          <span className="truncate">{statusTimeString}</span>
-        </div>
-      </div>
-    </Card>
+      {title.property && (
+        <PropertyCallingCard property={title.property} tier="compact" embedded />
+      )}
+      <ClientCallingCard
+        client={title.client ?? { full_name: clientName, client_id: null }}
+        tier="compact"
+        embedded
+      />
+      {title.is_legacy_transferred && (
+        <Badge variant="outline" className="shrink-0 text-[10px]">
+          Legacy Title
+        </Badge>
+      )}
+    </RecordCard>
   );
 }
+
+/*
+  Measured on the real legal grid, one fresh load per viewport: the cards sit
+  side by side at 1600px and wider (cell 405px, card 147px tall) and stack at
+  1440px and narrower (cell 351px, card 220px). The crossover is tight — at a
+  385px cell the content box is 359px and the pair needs 360px, so it misses by
+  a single pixel. That is the `min-w-[11rem]` floor on the compact cards, not
+  `RecordCard`'s body padding; see the note in `ClientCallingCard` for why the
+  floor is not lowered.
+*/

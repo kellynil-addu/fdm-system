@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import { Check, ClipboardCheck, ExternalLink, FileText, PenLine, Wallet } from 'lucide-react';
+import { Check, ClipboardCheck, FileText, PenLine, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -15,6 +14,12 @@ import {
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TITLE_STATUS_VARIANT } from '@/lib/status-colors';
+import { getClearanceProgress } from './title-record-card';
+import {
+  getMissingReleaseDocuments,
+  getRequiredReleaseDocuments,
+} from '@/lib/utils/release-requirements';
+import type { CallingCardStatus } from '@/lib/types/calling-card';
 import {
   useLandTitles,
   lotRefLabel,
@@ -23,8 +28,8 @@ import {
 import { useMutation } from '@/lib/hooks/use-mutation';
 import type { ClientDocument } from '@/lib/types/client';
 import type { LandTitle, LandTitleNotice, TitleStatus } from '@/lib/types/title';
-import { ClientChip } from '@/components/dashboard-clients/client-chip';
-import { PropertyChip } from '@/components/dashboard-properties/property-chip';
+import { ClientCallingCard } from '@/components/dashboard-clients/client-calling-card';
+import { PropertyCallingCard } from '@/components/dashboard-properties/property-calling-card';
 import {
   TitleTimelineView,
   normalizeLifecycleStage,
@@ -315,10 +320,51 @@ export function TitleDialog({
   const clientName = activeTitle?.client?.full_name ?? activeAwaiting?.client?.full_name ?? 'Client Account';
   const clientId = activeTitle?.client_id ?? activeAwaiting?.client?.client_id ?? null;
   const propertyRef = lotRefLabel(activeTitle?.property ?? activeAwaiting?.property);
-  const propertyLocation = activeTitle?.property?.location ?? activeAwaiting?.property?.location ?? '';
-  const propertyId = activeTitle?.property_id ?? activeAwaiting?.property?.property_id ?? null;
   const activeProperty = activeTitle?.property ?? activeAwaiting?.property;
   const activeClient = activeTitle?.client ?? activeAwaiting?.client;
+
+  /**
+   * The title's lifecycle status, resolved once.
+   *
+   * Shared with the cards so a badge and a status bar can never disagree about
+   * the same title. The detail line is the one fact that makes the stage
+   * actionable, and it is the reason the bar is worth having here at all:
+   * during clearance, how long is left; during preparation, what is still
+   * missing from the packet.
+   */
+  const currentStatus: CallingCardStatus = {
+    label: currentStageStatus,
+    tone: TITLE_STATUS_VARIANT[currentStageStatus] ?? 'muted',
+    detail: (() => {
+      if (currentStageStatus === 'Clearance Period') {
+        const { targetDate, daysRemaining } = getClearanceProgress(
+          activeTitle?.clearance_started_at
+        );
+        if (!targetDate) return undefined;
+        return daysRemaining > 0
+          ? `${daysRemaining} ${daysRemaining === 1 ? 'day' : 'days'} remaining`
+          : 'Clearance window elapsed';
+      }
+      if (currentStageStatus === 'Document Preparation') {
+        const required = getRequiredReleaseDocuments(
+          activeTitle?.is_legacy_transferred
+        );
+        const uploaded = new Set(
+          (activeTitle?.client?.documents ?? [])
+            .filter((d) => d.property_id === activeProperty?.property_id)
+            .map((d) => d.document_type)
+        );
+        const missing = getMissingReleaseDocuments(
+          activeTitle?.is_legacy_transferred,
+          uploaded
+        );
+        return missing.length === 0
+          ? `Release packet complete (${required.length}/${required.length})`
+          : `${required.length - missing.length} of ${required.length} documents`;
+      }
+      return undefined;
+    })(),
+  };
 
   const activeContent = (() => {
     if (selectedStage === 'Cleared by Billing') {
@@ -376,40 +422,67 @@ export function TitleDialog({
       <DialogContent className="bg-card border-border sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl w-[95vw] h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="shrink-0 border-b border-border bg-card px-5 py-3 pr-12 sm:px-6 sm:pr-14 text-left sm:text-left gap-0">
           <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0 space-y-1">
+            <div className="min-w-0">
               <DialogTitle className="sr-only">
                 {propertyRef} - {clientName}
               </DialogTitle>
               <DialogDescription className="sr-only">
                 Title record details for {propertyRef} owned by {clientName}
               </DialogDescription>
+              {/*
+                Both cards are links to their own records, derived from the id
+                they are handed, so clicking one leaves the dialog for that
+                client or lot. Nothing here has to say so: the derivation is in
+                `ClientCallingCard`/`PropertyCallingCard`.
+              */}
               <div className="flex flex-wrap items-center gap-2">
                 {activeProperty ? (
-                  <PropertyChip
-                    variant="compact"
+                  <PropertyCallingCard
                     property={activeProperty}
+                    tier="compact"
                   />
                 ) : (
                   <span className="text-sm font-semibold">{propertyRef}</span>
                 )}
                 {activeClient ? (
-                  <ClientChip
-                    variant="compact"
+                  <ClientCallingCard
                     client={activeClient}
+                    tier="compact"
                   />
                 ) : (
-                  <ClientChip
-                    variant="compact"
+                  <ClientCallingCard
                     client={{ full_name: clientName, client_id: clientId }}
+                    tier="compact"
                   />
                 )}
+                {/*
+                  The badge stays in this wrap row on purpose. An inline badge
+                  needs 537px: two cards at their 11rem floor (176px each), two
+                  8px gaps, and the 169px "Document Preparation" badge. At xl the
+                  workflow strip starts showing its step labels and this column
+                  is 522px — 15px short — so that one badge drops below by the
+                  wrap rather than by any code here. Below xl the labels hide,
+                  the column grows to exactly 537px, and it sits inline with
+                  nothing to spare. Measured on the real records it bites 3 of
+                  10, all of them "Document Preparation"; the narrower badges fit
+                  at every width. Moving the badge into its own element would be
+                  redundant, and would leave it stranded on the left if a future
+                  change let the cards fit one row.
+
+                  It stays a `Badge` on the title rather than becoming a status
+                  bar on the lot card, because the status belongs to the title,
+                  not the parcel: the same lot can carry a Sold lot status and a
+                  Clearance Period title at once, and one bar cannot say both.
+                  The colour still comes from `currentStatus` so the badge and
+                  any bar elsewhere cannot disagree.
+                */}
                 <Badge
-                  variant={TITLE_STATUS_VARIANT[currentStageStatus] ?? 'muted'}
+                  variant={currentStatus.tone}
                   shape="pill"
                   dot
                   className="shrink-0 text-xs"
                 >
-                  {currentStageStatus}
+                  {currentStatus.label}
                 </Badge>
                 {activeTitle?.is_legacy_transferred && (
                   <Badge variant="outline" className="text-[11px] shrink-0">

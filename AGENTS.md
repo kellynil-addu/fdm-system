@@ -13,6 +13,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - **UI components**: This project uses [shadcn/ui](https://ui.shadcn.com). Prefer composing from existing primitives in `components/ui/` before creating new ones. For full variant extension recipes and composition guidelines, refer to `.agents/skills/ui-components/SKILL.md`.
 - **Mapping & GIS**: Subdivision plat plans and vector maps use MapLibre GL via `useMapLibreMap`. For SSR safeguards and worker asset configuration, refer to `.agents/skills/maplibre-gl/SKILL.md`.
 - **FDM Domain & Titling Rules**: Core operational invariants, billing formulas, and titling lifecycle rules live in `.agents/skills/fdm-domain/SKILL.md`.
+- **Layout & Fit Claims**: Before asserting in code comments, a demo page, or prose that something fits, wraps, stacks, or truncates, read `.agents/skills/layout-verification/SKILL.md`. It covers measuring real components with Playwright and the traps that make a confident-looking mock or measurement wrong.
 
 ## UI Composition Invariants
 
@@ -28,7 +29,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 ```
 fdm-system/
 ├── .agents/                    # Workspace agent customizations
-│   └── skills/                 # Domain skills (ui-components, backend-architecture, maplibre-gl, fdm-domain)
+│   └── skills/                 # Domain skills (ui-components, backend-architecture, maplibre-gl, fdm-domain, layout-verification)
 ├── app/                        # Next.js App Router pages
 │   ├── (auth)/                 # Auth route group (login)
 │   ├── (dashboard)/            # Protected dashboard pages
