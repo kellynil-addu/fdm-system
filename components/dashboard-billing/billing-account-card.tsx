@@ -1,19 +1,14 @@
 'use client';
 
 import { useMemo } from 'react';
-import {
-  AlertCircle,
-  CheckCircle2,
-  Clock,
-  Coins,
-  MapPin,
-  Receipt,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Clock, Receipt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { RecordCard } from '@/components/ui/record-card';
+import { ClientCallingCard } from '@/components/dashboard-clients/client-calling-card';
+import { PropertyCallingCard } from '@/components/dashboard-properties/property-calling-card';
 import { BILLING_STATUS_VARIANT } from '@/lib/status-colors';
 import { useBillingAccounts } from '@/lib/hooks/use-billing-accounts';
+import type { CallingCardStatus } from '@/lib/types/calling-card';
 import type { BillingAccountSummary } from '@/lib/types/billing';
 
 const CURRENCY = new Intl.NumberFormat('en-PH', {
@@ -51,95 +46,72 @@ export function BillingAccountCard({ account }: BillingAccountCardProps) {
     return 'Active';
   }, [account, remaining]);
 
+  /**
+   * The one thing worth saying beside the status, in priority order.
+   *
+   * A notice outranks everything: it is a demand with a deadline attached, and
+   * it is the reason a clerk opened this page. An amnesty outranks the balance
+   * because it changes what the balance *means* — the buyer is on an agreed
+   * payment plan, so the number is not simply overdue. Only when neither
+   * applies does the bar fall back to how far along the payments are, which is
+   * the number that is true of every account and therefore the least
+   * informative.
+   *
+   * The old card stacked all three as separate rows, so a delinquent account on
+   * an amnesty with a notice spent four rows saying what the bar says in one,
+   * and still had nowhere to put the remaining balance.
+   */
+  const notice = !account.cleared_at && account.notices[0]
+    ? `${account.notices[0].notice_type} (${account.notices[0].delivery_status})`
+    : null;
+  const amnesty = account.active_compromise
+    ? `Amnesty ${CURRENCY.format(account.active_compromise.agreed_penalty)} · saved ${CURRENCY.format(account.active_compromise.waiver_amount)}`
+    : null;
+
+  const cardStatus: CallingCardStatus = {
+    label: derivedStatus,
+    tone: BILLING_STATUS_VARIANT[derivedStatus] ?? 'muted',
+    detail: notice ?? amnesty ?? `${percentPaid}% paid of ${CURRENCY.format(tcp)}`,
+    progress: percentPaid,
+    trailing: CURRENCY.format(remaining),
+  };
+
   return (
-    <Card
-      variant="interactive"
-      className="group flex flex-col justify-between p-4 transition-all duration-150 hover:border-primary"
+    <RecordCard
+      label={`Open billing ledger for ${clientName}, ${lotLabel}`}
       onClick={() => setActiveAccount(account)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault();
-          setActiveAccount(account);
-        }
-      }}
+      status={cardStatus}
     >
-      <div className="space-y-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold text-foreground group-hover:text-primary transition-colors">
-              {clientName}
-            </h3>
-            <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3 shrink-0" />
-              <span className="truncate">
-                {lotLabel} · {account.property.location}
-              </span>
-            </div>
-          </div>
-          <Badge
-            variant={BILLING_STATUS_VARIANT[derivedStatus]}
-            shape="pill"
-            dot
-            className="shrink-0"
-          >
-            {derivedStatus}
-          </Badge>
-        </div>
+      {/*
+        Both subjects are `embedded`: the account is the record here, and its
+        ledger is what a click opens. A lot that linked to the map and a client
+        that linked to their profile would each be a second destination inside a
+        card that already has one.
+      */}
+      <PropertyCallingCard property={account.property} tier="compact" embedded />
+      <ClientCallingCard
+        client={account.client ?? { full_name: clientName, client_id: null }}
+        tier="compact"
+        embedded
+      />
 
-        <div className="space-y-1.5 pt-1">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Principal Balance</span>
-            <span className="font-semibold text-foreground">
-              {CURRENCY.format(remaining)}
-            </span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-row-hover">
-            <div
-              className="h-full bg-primary transition-all duration-300"
-              style={{ width: `${percentPaid}%` }}
-            />
-          </div>
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-            <span>{percentPaid}% paid of {CURRENCY.format(tcp)}</span>
-            <span>{CURRENCY.format(account.monthly_amortization)}/mo</span>
-          </div>
-        </div>
-
-        {account.active_compromise && (
-          <div className="flex items-center gap-1.5 rounded-md bg-[color-mix(in_srgb,var(--accent-gold)_15%,white)] px-2.5 py-1 text-xs text-accent-gold-foreground">
-            <Coins className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">
-              Amnesty: {CURRENCY.format(account.active_compromise.agreed_penalty)} (Saved {CURRENCY.format(account.active_compromise.waiver_amount)})
-            </span>
-          </div>
-        )}
-
-        {account.notices.length > 0 && !account.cleared_at && (
-          <div className="flex items-center gap-1.5 rounded-md bg-[color-mix(in_srgb,var(--destructive)_12%,white)] px-2.5 py-1 text-xs text-destructive">
-            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">
-              {account.notices[0].notice_type} ({account.notices[0].delivery_status})
-            </span>
-          </div>
-        )}
-
-        {account.cleared_at && (
-          <div className="flex items-center gap-1.5 rounded-md bg-[color-mix(in_srgb,var(--success)_12%,white)] px-2.5 py-1 text-xs text-success">
-            <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">Cleared for Title Handover</span>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-2 border-t border-border pt-3">
-        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-          <Clock className="h-3.5 w-3.5" />
-          {account.payments.length} receipt{account.payments.length === 1 ? '' : 's'}
+      {/*
+        `w-full` claims its own line from the body's wrap, the same way the
+        co-buyer list does on a legal card. The wrapper stops propagation so
+        pressing Pay opens the payment modal rather than also opening the
+        ledger underneath it.
+      */}
+      <div
+        className="flex w-full flex-wrap items-center justify-between gap-2 px-1 pt-1"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          {CURRENCY.format(account.monthly_amortization)}/mo · {account.payments.length}{' '}
+          receipt{account.payments.length === 1 ? '' : 's'}
         </span>
 
-        <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5">
           {canEdit && !account.cleared_at && (
             <Button
               variant="quiet"
@@ -161,6 +133,6 @@ export function BillingAccountCard({ account }: BillingAccountCardProps) {
           </Button>
         </div>
       </div>
-    </Card>
+    </RecordCard>
   );
 }
