@@ -96,6 +96,10 @@ export interface ClientProperty extends PropertyLot {
   cleared_at?: string | null;
   /** Whether Legal has created the land title for this lot. */
   has_title?: boolean;
+  /** Associated land title ID if created by Legal. */
+  title_id?: string | null;
+  /** Associated land title status if created by Legal. */
+  title_status?: string | null;
 }
 
 export interface ClientActivitySummary {

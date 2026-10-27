@@ -5,7 +5,6 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   X,
-  UserRound,
   DollarSign,
   FileDown,
   Loader2,
@@ -38,7 +37,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Card } from '@/components/ui/card';
-import { IconBox } from '@/components/ui/icon-box';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
@@ -61,6 +59,7 @@ import { usePropertyLots, lotLabel } from '@/lib/hooks/use-property-lots';
 import { useSession } from '@/lib/hooks/use-session';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
+import { ClientCallingCard } from '@/components/dashboard-clients/client-calling-card';
 import { getArchiveEligibility } from '@/lib/utils/archive-rules';
 import type {
   AccountStatus,
@@ -85,12 +84,6 @@ const ACCOUNT_STATUS_VARIANT: Record<AccountStatus, 'success' | 'warning' | 'des
   Forfeited: 'purple',
 };
 
-function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
 
 interface LotMetricFloatingEditorProps {
   title: string;
@@ -810,32 +803,10 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
           {displayStatus === 'Forfeited' && (
             <>
               {lot.client && (
-                <Card padding="sm" className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <IconBox size="md" shape="rounded-xl" className="shrink-0 font-semibold">
-                      {initials(lot.client.full_name) || <UserRound className="h-4 w-4" />}
-                    </IconBox>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="truncate text-sm font-semibold text-foreground">
-                          {lot.client.full_name}
-                        </p>
-                        <Badge variant="purple" shape="pill" className="text-[10px]">
-                          Previous Buyer
-                        </Badge>
-                      </div>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {lot.client.address || 'Forfeited buyer'}
-                      </p>
-                    </div>
-                  </div>
-                  <Button asChild variant="quiet" size="sm" className="h-7 shrink-0 gap-1 text-xs">
-                    <Link href={`/dashboard/clients/${lot.client.client_id}`}>
-                      <span>Profile</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </Link>
-                  </Button>
-                </Card>
+                <div className="space-y-1">
+                  <p className="text-[11px] font-medium text-muted-foreground">Previous Buyer</p>
+                  <ClientCallingCard client={lot.client} tier="compact" className="w-full" />
+                </div>
               )}
 
               <Card padding="sm" className="space-y-3 bg-row-hover">
@@ -883,32 +854,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
             <>
               {/* Assigned Client Card (Read-only with profile link) */}
               {lot.client ? (
-                <Card padding="sm" className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <IconBox size="md" shape="rounded-xl" className="shrink-0 font-semibold">
-                      {initials(lot.client.full_name) || <UserRound className="h-4 w-4" />}
-                    </IconBox>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="truncate text-sm font-semibold text-foreground">
-                          {lot.client.full_name}
-                        </p>
-                        <Badge variant="outline" shape="pill" className="text-[10px]">
-                          {lot.client.status}
-                        </Badge>
-                      </div>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {lot.client.address || 'Principal Buyer'}
-                      </p>
-                    </div>
-                  </div>
-                  <Button asChild variant="quiet" size="sm" className="h-7 shrink-0 gap-1 text-xs">
-                    <Link href={`/dashboard/clients/${lot.client.client_id}`}>
-                      <span>Profile</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </Link>
-                  </Button>
-                </Card>
+                <ClientCallingCard client={lot.client} tier="compact" className="w-full" />
               ) : (
                 <Card padding="sm" className="text-xs text-muted-foreground">
                   Reserved lot — buyer record linked via installment ledger.
@@ -973,32 +919,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
             <>
               {/* Assigned Client Card (Read-only with profile link) */}
               {lot.client ? (
-                <Card padding="sm" className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <IconBox size="md" shape="rounded-xl" className="shrink-0 font-semibold">
-                      {initials(lot.client.full_name) || <UserRound className="h-4 w-4" />}
-                    </IconBox>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="truncate text-sm font-semibold text-foreground">
-                          {lot.client.full_name}
-                        </p>
-                        <Badge variant="outline" shape="pill" className="text-[10px]">
-                          {lot.client.status}
-                        </Badge>
-                      </div>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {lot.client.address || 'Registered Owner'}
-                      </p>
-                    </div>
-                  </div>
-                  <Button asChild variant="quiet" size="sm" className="h-7 shrink-0 gap-1 text-xs">
-                    <Link href={`/dashboard/clients/${lot.client.client_id}`}>
-                      <span>Profile</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </Link>
-                  </Button>
-                </Card>
+                <ClientCallingCard client={lot.client} tier="compact" className="w-full" />
               ) : (
                 <Card padding="sm" className="text-xs text-muted-foreground">
                   Sold lot — owner record linked via land title.
@@ -1019,9 +940,16 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   <span>Land Title</span>
                 </div>
                 {lot.title ? (
-                  <Badge variant="info" shape="pill">
-                    {lot.title.status}
-                  </Badge>
+                  <Link
+                    href={`/dashboard/legal?titleId=${encodeURIComponent(lot.title.title_id)}`}
+                    className="flex items-center gap-1 transition-opacity hover:opacity-80"
+                    title="Open title workflow in Legal"
+                  >
+                    <Badge variant="info" shape="pill" className="cursor-pointer">
+                      {lot.title.status}
+                    </Badge>
+                    <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                  </Link>
                 ) : currentTitle ? (
                   <Badge variant="outline" shape="pill" className="text-[10px]">
                     TCT Recorded
@@ -1066,6 +994,21 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   />
                 </div>
               </div>
+
+              {lot.title && (
+                <div className="border-t border-border bg-row-hover/60 px-3 py-2">
+                  <Link
+                    href={`/dashboard/legal?titleId=${encodeURIComponent(lot.title.title_id)}`}
+                    className="group/link flex items-center justify-between text-xs font-medium text-primary hover:underline"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Award className="h-3.5 w-3.5" />
+                      <span>Open Title Record in Legal</span>
+                    </span>
+                    <ExternalLink className="h-3.5 w-3.5 opacity-70 group-hover/link:opacity-100" />
+                  </Link>
+                </div>
+              )}
             </Card>
           )}
         </div>

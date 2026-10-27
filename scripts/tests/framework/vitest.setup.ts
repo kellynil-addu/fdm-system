@@ -57,6 +57,12 @@ const virtualDoc = {
       cookieJar.set(name, value);
     }
   },
+  getElementsByTagName: () => [],
+  currentScript: undefined,
+  createElement: () => ({ setAttribute: () => {}, appendChild: () => {} }),
+  createTextNode: () => ({}),
+  head: { appendChild: () => {}, removeChild: () => {} },
+  documentElement: { dataset: {} },
 };
 
 // Polyfill window and document for browser client compatibility

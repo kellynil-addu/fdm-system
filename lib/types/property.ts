@@ -195,3 +195,39 @@ export interface CreateAndAssignPropertyFromSubdivisionInput {
   title_number?: string;
 }
 
+export interface UpdateSubdivisionBoundaryInput {
+  subdivision_id: string;
+  site_id: string;
+  block_number: number;
+  lot_number: number;
+  boundary: [number, number][];
+}
+
+export interface DraftLot {
+  draftId: string;
+  siteId: string;
+  boundary: [number, number][];
+  block?: number;
+  lot?: number;
+  areaSize: number;
+  createdAt: number;
+}
+
+export interface PendingBoundaryUpdate {
+  subdivisionId: string;
+  siteId: string;
+  block: number;
+  lot: number;
+  boundary: [number, number][];
+  areaSize: number;
+  updatedAt: number;
+}
+
+export interface SiteDraftStoragePayload {
+  siteId: string;
+  draftLots: DraftLot[];
+  pendingBoundaryUpdates: PendingBoundaryUpdate[];
+  lastModified: number;
+}
+
+

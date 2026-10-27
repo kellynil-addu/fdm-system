@@ -195,10 +195,20 @@ export const reopenPropertyLotForSaleSchema = z.object({
   allowEarlyReopen: z.boolean().optional(),
 });
 
+export const updateSubdivisionBoundarySchema = z.object({
+  subdivision_id: uuidSchema,
+  site_id: uuidSchema,
+  block_number: blockOrLotNumberSchema("Block number"),
+  lot_number: blockOrLotNumberSchema("Lot number"),
+  boundary: polygonBoundarySchema,
+});
+
 export type CreatePropertyLotFormData = z.infer<typeof createPropertyLotSchema>;
 export type UpdateLotFormData = z.infer<typeof updateLotSchema>;
 export type OpenSubdivisionForSaleFormData = z.infer<typeof openSubdivisionForSaleSchema>;
 export type CreateAndAssignPropertyFromSubdivisionFormData = z.infer<typeof createAndAssignPropertyFromSubdivisionSchema>;
 export type ForfeitPropertyLotFormData = z.infer<typeof forfeitPropertyLotSchema>;
 export type ReopenPropertyLotForSaleFormData = z.infer<typeof reopenPropertyLotForSaleSchema>;
+export type UpdateSubdivisionBoundaryFormData = z.infer<typeof updateSubdivisionBoundarySchema>;
+
 

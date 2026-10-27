@@ -25,7 +25,11 @@ const heroCards = [
   },
 ];
 
-export function Hero() {
+interface HeroProps {
+  isLoggedIn?: boolean;
+}
+
+export function Hero({ isLoggedIn = false }: HeroProps) {
   return (
     <section className="w-full bg-background py-20 sm:py-32">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -47,8 +51,8 @@ export function Hero() {
                 asChild
                 className="h-auto rounded-lg bg-primary px-10 py-6 text-lg font-semibold text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
               >
-                <Link href="/login">
-                  Get Started
+                <Link href={isLoggedIn ? '/dashboard' : '/login'}>
+                  {isLoggedIn ? 'Continue to Dashboard' : 'Get Started'}
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>

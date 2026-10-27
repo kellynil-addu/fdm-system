@@ -3,10 +3,18 @@ import { ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { DASHBOARD_WORKFLOW } from '@/lib/dashboard-workflow';
 
-export function QuickLinks({ canViewProperties, canViewClients, canViewTitles = false }: {
-  canViewProperties: boolean; canViewClients: boolean; canViewTitles?: boolean;
+export function QuickLinks({
+  canViewProperties,
+  canViewClients,
+  canViewTitles = false,
+  canViewBilling = false,
+}: {
+  canViewProperties: boolean;
+  canViewClients: boolean;
+  canViewTitles?: boolean;
+  canViewBilling?: boolean;
 }) {
-  const visible = [canViewClients, canViewProperties, canViewTitles];
+  const visible = [canViewClients, canViewProperties, canViewBilling, canViewTitles];
   const links = DASHBOARD_WORKFLOW.filter((_, index) => visible[index]);
   if (!links.length) return null;
   return (
@@ -17,7 +25,7 @@ export function QuickLinks({ canViewProperties, canViewClients, canViewTitles = 
         </CardTitle>
         <CardDescription>Open a workspace to continue.</CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-3">
+      <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {links.map((link) => (
           <Link
             key={link.href}

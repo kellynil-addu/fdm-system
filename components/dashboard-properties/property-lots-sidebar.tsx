@@ -40,6 +40,7 @@ import { PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
 import { Badge } from '@/components/ui/badge';
 import { IconBox } from '@/components/ui/icon-box';
 import { cn } from '@/lib/utils';
+import { getInitials } from '@/lib/utils/initials';
 import { useDialogPresence } from '@/lib/hooks/use-dialog-presence';
 
 const PESO = new Intl.NumberFormat('en-PH', {
@@ -79,13 +80,6 @@ const STATUS_TEXT: Record<PropertyStatus, string> = {
   Sold: 'text-accent-gold-foreground',
   Forfeited: 'text-[#7C3AED]',
 };
-
-function getInitials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-}
 
 function StatusPill({ status }: { status: PropertyStatus }) {
   return (

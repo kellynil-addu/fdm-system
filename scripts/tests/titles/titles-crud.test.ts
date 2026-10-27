@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { faker } from "@faker-js/faker";
 import {
   getLandTitles,
@@ -21,8 +21,8 @@ import {
   loginAsAdmin,
   logoutUser,
   withTemporaryUser,
-  hardDeleteTestProperty,
-  hardDeleteTestClient,
+  hardDeleteTestProperties,
+  hardDeleteTestClients,
 } from "../framework/session";
 import { unwrap } from "../framework/action-helper";
 import { uniqueNameSuffix } from "../framework/fake-data";
@@ -35,20 +35,16 @@ describe("Land Title Management Actions", () => {
     await loginAsAdmin();
   });
 
+  beforeEach(async () => {
+    await loginAsAdmin();
+  });
+
   afterAll(async () => {
-    for (const id of testPropertyIds) {
-      try {
-        await hardDeleteTestProperty(id);
-      } catch {
-        // Ignore cleanup errors
-      }
-    }
-    for (const id of testClientIds) {
-      try {
-        await hardDeleteTestClient(id);
-      } catch {
-        // Ignore cleanup errors
-      }
+    try {
+      await hardDeleteTestProperties(testPropertyIds);
+      await hardDeleteTestClients(testClientIds);
+    } catch {
+      // Ignore cleanup errors
     }
   });
 

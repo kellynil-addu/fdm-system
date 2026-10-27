@@ -1,10 +1,11 @@
 'use client';
 
-import { LandPlot, MapPin, DollarSign, Plus } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { LandPlot, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { IconBox } from '@/components/ui/icon-box';
+import { PropertyCallingCard } from '@/components/dashboard-properties/property-calling-card';
 import { PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
+import { lotDestinationHref } from '@/lib/utils/lot-destination';
 import { useClientDetail } from '@/lib/hooks/use-client-detail';
 import { ClientPropertyClearance } from './client-property-clearance';
 
@@ -13,8 +14,6 @@ const PESO = new Intl.NumberFormat('en-PH', {
   currency: 'PHP',
   maximumFractionDigits: 0,
 });
-
-const AREA = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 2 });
 
 interface ClientDetailPropertiesProps {
   onOpenAssignProperty: () => void;
@@ -68,62 +67,35 @@ export function ClientDetailProperties({
               const totalPrice = property.area_size * property.price_per_sqm;
 
               return (
-                <div
-                  key={property.property_id}
-                  className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 transition-colors hover:bg-row-hover"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <IconBox size="default" shape="rounded-md">
-                        <LandPlot className="h-4 w-4 text-muted-foreground" />
-                      </IconBox>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-foreground">
-                          Block {property.block_number} Lot {property.lot_number}
-                        </p>
-                        <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                          <MapPin className="h-3 w-3" />
-                          {property.location}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge
-                      variant={PROPERTY_STATUS_VARIANT[property.status]}
-                      shape="pill"
-                      dot
-                      className="shrink-0 text-xs"
-                    >
-                      {property.status}
-                    </Badge>
-                  </div>
+                <div key={property.property_id} className="flex flex-col gap-2">
+                  {/*
+                    The card carries the lot, its project area, its area and its
+                    TCT. Where it links depends on the lot's stage, not on the
+                    grid it happens to be rendered in — see `lotDestinationHref`
+                    for why. The money is the one number the field list has no
+                    room for, so it goes in the bar beside the status: a buyer's
+                    first question about a lot is what it costs and how far
+                    along the payments are.
+                  */}
+                  <PropertyCallingCard
+                    property={property}
+                    href={lotDestinationHref(property, client.client_id)}
+                    status={{
+                      label: property.status,
+                      tone: PROPERTY_STATUS_VARIANT[property.status] ?? 'muted',
+                      detail: `${PESO.format(totalPrice)} TCP · ${PESO.format(property.price_per_sqm)}/sqm`,
+                    }}
+                  />
 
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <p className="text-muted-foreground">Area</p>
-                      <p className="font-medium text-foreground">
-                        {AREA.format(property.area_size)} sqm
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Price per sqm</p>
-                      <p className="font-medium text-foreground">
-                        {PESO.format(property.price_per_sqm)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between border-t border-border pt-3">
-                    <span className="text-xs text-muted-foreground">Total Contract Price</span>
-                    <span className="flex items-center gap-1 text-sm font-bold text-foreground">
-                      <DollarSign className="h-3.5 w-3.5" />
-                      {PESO.format(totalPrice)}
-                    </span>
-                  </div>
-
+                  {/*
+                    Deliberately outside the card, not tucked under the bar.
+                    This is not a fact about the lot — it is the set of things
+                    staff can *do* to it (clear it, forfeit it, undo a
+                    clearance), and a bar that ends with buttons stops being a
+                    status strip.
+                  */}
                   {(property.account_id || property.has_title) && (
-                    <div className="border-t border-border pt-3">
-                      <ClientPropertyClearance property={property} />
-                    </div>
+                    <ClientPropertyClearance property={property} />
                   )}
                 </div>
               );

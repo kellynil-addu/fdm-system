@@ -1,4 +1,5 @@
-import type { ClientDocument, DocType } from '@/lib/types/client';
+import type { ClientDocument, ContactInfo, DocType } from '@/lib/types/client';
+import type { PropertyStatus } from '@/lib/types/property';
 
 /** The internal release steps, in order. A new title starts at the first one. */
 export const TITLE_STATUSES = [
@@ -37,6 +38,8 @@ export interface LandTitle {
     civil_status?: string | null;
     spouse_name?: string | null;
     tin_number?: string | null;
+    /** Selected by `TITLE_SELECT` for the calling cards' contact line. */
+    contact_info?: ContactInfo[] | null;
     /** The client's documents, used for the release packet progress on title lists. */
     documents?: Pick<ClientDocument, 'document_type' | 'property_id'>[];
   } | null;
@@ -48,6 +51,8 @@ export interface LandTitle {
     title_number?: string | null;
     area_size?: number | null;
     price_per_sqm?: number | null;
+    /** The lot's own status, distinct from the title's. */
+    status?: PropertyStatus | null;
   } | null;
   history?: LandTitleStatusHistory[];
   notices?: LandTitleNotice[];
@@ -103,11 +108,17 @@ export interface AccountAwaitingTitle {
     block_number: number;
     lot_number: number;
     title_number?: string | null;
+    status?: PropertyStatus | null;
+    area_size?: number | null;
   };
   /** The principal buyer. The title is linked to this client. */
   client: {
     client_id: string;
     full_name: string;
+    /** Shown in the split band's buyer column, beside the lot's project area. */
+    address?: string | null;
+    /** Selected for the calling cards' contact line on the work queue. */
+    contact_info?: ContactInfo[] | null;
   } | null;
   /** Anyone else on the account, such as a spouse buying together. */
   co_buyers: string[];

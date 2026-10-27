@@ -1,6 +1,7 @@
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Plus, Trash2, RotateCcw, Loader2 } from 'lucide-react';
+import { ArrowRight, Plus, RotateCcw, Loader2, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -12,7 +13,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useSession } from '@/lib/hooks/use-session';
 import { reopenPropertyLotForSale } from '@/lib/actions/properties';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -33,9 +33,11 @@ export interface LotPlotProperties {
   pricePerSqm: number;
   totalPrice: number;
   clientName: string;
+  clientId?: string;
   titleNumber?: string;
   forfeitedAt?: string;
   isSiteArchived?: boolean;
+  hasUnsavedChange: boolean;
   centerLng: number;
   centerLat: number;
   topLat: number;
@@ -43,10 +45,8 @@ export interface LotPlotProperties {
 
 export interface MapSitePopupProps {
   plot: LotPlotProperties;
-  isEditorMode?: boolean;
   onViewDetails: () => void;
   onRegisterLot: () => void;
-  onDeletePlot: () => void;
 }
 
 export const STATUS_PILL_MAP: Record<string, string> = {
@@ -61,13 +61,10 @@ export const STATUS_PILL_MAP: Record<string, string> = {
 
 export function MapSitePopup({
   plot,
-  isEditorMode,
   onViewDetails,
   onRegisterLot,
-  onDeletePlot,
 }: MapSitePopupProps) {
   const router = useRouter();
-  const { isSystemAdmin } = useSession();
   const [isReopenOpen, setIsReopenOpen] = useState(false);
   const [isReopening, setIsReopening] = useState(false);
 
@@ -146,9 +143,26 @@ export function MapSitePopup({
               <dt className="text-muted-foreground">Title No:</dt>
               <dd className="font-mono text-foreground">{plot.titleNumber || 'Pending'}</dd>
             </div>
-            <div className="flex justify-between">
+            <div className="flex justify-between items-center">
               <dt className="text-muted-foreground">Client:</dt>
-              <dd className="font-medium text-foreground">{plot.clientName || 'Unassigned'}</dd>
+              <dd className="font-medium text-foreground">
+                {plot.clientName ? (
+                  plot.clientId ? (
+                    <Link
+                      href={`/dashboard/clients/${encodeURIComponent(plot.clientId)}`}
+                      className="inline-flex items-center gap-1 text-primary hover:underline"
+                      title="Open client profile"
+                    >
+                      <span>{plot.clientName}</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </Link>
+                  ) : (
+                    <span>{plot.clientName}</span>
+                  )
+                ) : (
+                  'Unassigned'
+                )}
+              </dd>
             </div>
             {plot.status === 'Forfeited' && (
               <div className="flex justify-between">
@@ -212,20 +226,6 @@ export function MapSitePopup({
             <span>Open Lot for Sale</span>
           </Button>
         </div>
-      )}
-
-      {!plot.isRegistered && isEditorMode && isSystemAdmin && (
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={plot.isSiteArchived}
-          title={plot.isSiteArchived ? 'Restore site before deleting plots' : undefined}
-          onClick={plot.isSiteArchived ? undefined : onDeletePlot}
-          className="mt-2 w-full cursor-pointer gap-1.5 border-[color-mix(in_srgb,var(--destructive)_40%,white)] bg-[color-mix(in_srgb,var(--destructive)_10%,white)] text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_18%,white)] disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Trash2 className="h-3 w-3" />
-          <span>Delete Plot</span>
-        </Button>
       )}
 
       <AlertDialog

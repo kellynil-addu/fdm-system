@@ -10,7 +10,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { notifyActivityUpdated } from '@/lib/activity-events';
 import { useStatusFilter } from '@/lib/hooks/use-status-filter';
 import { useSession } from '@/lib/hooks/use-session';
@@ -50,6 +50,7 @@ import type {
   TitleStatus,
   UpdateLandTitleInput,
 } from '@/lib/types/title';
+import { TITLE_STATUSES } from '@/lib/types/title';
 import type { ClientDocument } from '@/lib/types/client';
 import type { LedgerAccount } from '@/lib/types/property';
 
@@ -91,6 +92,29 @@ export type TitleDialogItem =
   | { type: 'awaiting'; data: AccountAwaitingTitle }
   | { type: 'title'; data: LandTitle };
 
+/**
+ * Where a record sits in the release pipeline, for ordering the grid.
+ *
+ * Only the `all` view mixes stages, so it is the only one that needs an order:
+ * without it the grid interleaves seven stages in arrival order and the stage
+ * colours on the bars read as noise rather than as blocks you can scan.
+ *
+ * An account awaiting intake ranks at the first step — that is the stage its
+ * card states ("Cleared by Billing"), it just has no title row yet. Anything
+ * unrecognised sorts last rather than first, so an unexpected status cannot
+ * shove itself to the top of the board.
+ */
+export function titleStatusRank(item: TitleDialogItem): number {
+  const status = item.type === 'awaiting' ? TITLE_STATUSES[0] : item.data.status;
+  const index = TITLE_STATUSES.indexOf(status);
+  return index === -1 ? TITLE_STATUSES.length : index;
+}
+
+/** Pipeline order, stable so records within a stage keep their arrival order. */
+export function compareTitleStatus(a: TitleDialogItem, b: TitleDialogItem): number {
+  return titleStatusRank(a) - titleStatusRank(b);
+}
+
 export type TitleDialogState =
   | { type: 'detail'; item: TitleDialogItem }
   | null;
@@ -110,6 +134,8 @@ export interface LandTitlesContextValue {
   };
   visibleTitles: LandTitle[];
   visibleAwaiting: AccountAwaitingTitle[];
+  /** Filtered by tab, search, and sorted into pipeline order. */
+  cardItems: TitleDialogItem[];
   filteredTitles: LandTitle[];
   filteredAwaiting: AccountAwaitingTitle[];
   search: string;
@@ -179,6 +205,10 @@ export function LandTitlesProvider({
   children: ReactNode;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const titleIdParam = searchParams.get('titleId');
+  const lotIdParam = searchParams.get('lotId');
+
   const { hasPermission } = useSession();
   const canCreate = hasPermission('legal.create');
   const canEdit = hasPermission('legal.update');
@@ -189,10 +219,46 @@ export function LandTitlesProvider({
   const [search, setSearch] = useState('');
   const defaultTab: LegalTab = initialAwaiting.length > 0 ? 'intake' : 'all';
   const [tab, setTab] = useStatusFilter<LegalTab>(TABS, defaultTab);
-  const [activeDialog, setActiveDialog] = useState<TitleDialogState>(null);
+  const [activeDialog, setActiveDialog] = useState<TitleDialogState>(() => {
+    if (titleIdParam) {
+      const match = initialTitles.find((t) => t.title_id === titleIdParam);
+      if (match) return { type: 'detail', item: { type: 'title', data: match } };
+    }
+    if (lotIdParam) {
+      const matchTitle = initialTitles.find((t) => t.property_id === lotIdParam);
+      if (matchTitle) return { type: 'detail', item: { type: 'title', data: matchTitle } };
+      const matchAwaiting = initialAwaiting.find((a) => a.property.property_id === lotIdParam);
+      if (matchAwaiting) return { type: 'detail', item: { type: 'awaiting', data: matchAwaiting } };
+    }
+    return null;
+  });
 
   useEffect(() => setTitles(initialTitles), [initialTitles]);
   useEffect(() => setAwaiting(initialAwaiting), [initialAwaiting]);
+
+  // Synchronize URL title or lot parameter with active modal
+  useEffect(() => {
+    if (!titleIdParam && !lotIdParam) return;
+    if (titleIdParam) {
+      const match = titles.find((t) => t.title_id === titleIdParam);
+      if (match) {
+        setActiveDialog({ type: 'detail', item: { type: 'title', data: match } });
+        return;
+      }
+    }
+    if (lotIdParam) {
+      const matchTitle = titles.find((t) => t.property_id === lotIdParam);
+      if (matchTitle) {
+        setActiveDialog({ type: 'detail', item: { type: 'title', data: matchTitle } });
+        return;
+      }
+      const matchAwaiting = awaiting.find((a) => a.property.property_id === lotIdParam);
+      if (matchAwaiting) {
+        setActiveDialog({ type: 'detail', item: { type: 'awaiting', data: matchAwaiting } });
+        return;
+      }
+    }
+  }, [titleIdParam, lotIdParam, titles, awaiting]);
 
   const openDialog = useCallback((dialog: TitleDialogState) => {
     setActiveDialog(dialog);
@@ -257,7 +323,6 @@ export function LandTitlesProvider({
     if (tab === 'all' || tab === 'intake') return visibleAwaiting;
     return [];
   }, [tab, visibleAwaiting]);
-
   const filteredTitles = useMemo(() => {
     switch (tab) {
       case 'all':
@@ -280,6 +345,22 @@ export function LandTitlesProvider({
         return [];
     }
   }, [tab, visibleTitles]);
+
+  /**
+   * The cards the grid renders, in pipeline order.
+   *
+   * Sorting here rather than in the view keeps the order with the data it
+   * orders. The comparator is stable, so within one stage the records keep the
+   * arrival order they were fetched in — newest first — and the grid only
+   * appears to jump when the stage a record is in actually changes.
+   */
+  const cardItems = useMemo<TitleDialogItem[]>(() => {
+    const items: TitleDialogItem[] = [
+      ...visibleAwaiting.map((data): TitleDialogItem => ({ type: 'awaiting', data })),
+      ...visibleTitles.map((data): TitleDialogItem => ({ type: 'title', data })),
+    ];
+    return items.sort(compareTitleStatus);
+  }, [visibleAwaiting, visibleTitles]);
 
   const createTitle = useCallback(
     async (
@@ -554,6 +635,7 @@ export function LandTitlesProvider({
     counts,
     visibleTitles,
     visibleAwaiting,
+    cardItems,
     filteredTitles,
     filteredAwaiting,
     search,

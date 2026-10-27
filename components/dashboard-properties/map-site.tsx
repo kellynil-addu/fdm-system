@@ -13,12 +13,25 @@ import {
 } from '@/components/ui/tooltip';
 import { getArcGISHybridStyle } from '@/lib/actions/arcgis';
 import { useMapLibreMap } from '@/lib/hooks/use-maplibre-map';
-import { parseRing, ringBounds, ringCentroid } from '@/lib/geometry';
-import type { PropertyLotWithClient, PropertyStatus, Site, SiteWithLots } from '@/lib/types/property';
-import type { ErrorEvent as MapLibreErrorEvent, GeoJSONSource, StyleSpecification, LayerSpecification } from 'maplibre-gl';
+import { parseRing, ringBounds, ringCentroid, pointInPolygon, isPolygonContained, type Ring } from '@/lib/geometry';
+import type { PropertyLotWithClient, PropertyStatus, Site, SiteWithLots, DraftLot, PendingBoundaryUpdate } from '@/lib/types/property';
+import type {
+  ErrorEvent as MapLibreErrorEvent,
+  GeoJSONSource,
+  StyleSpecification,
+  LayerSpecification,
+  ExpressionSpecification,
+} from 'maplibre-gl';
 import { cn } from '@/lib/utils';
 import { MapSitePopup, type LotPlotProperties } from '@/components/dashboard-properties/map-site-popup';
+import { MapSiteEditorPopup } from '@/components/dashboard-properties/map-site-editor-popup';
 import 'maplibre-gl/dist/maplibre-gl.css';
+
+function notifyWarning(message: string) {
+  if (typeof window !== 'undefined') {
+    void import('sonner').then(({ toast }) => toast.warning(message));
+  }
+}
 
 export interface SiteMapProps {
   site?: SiteWithLots;
@@ -43,14 +56,26 @@ export interface SiteMapProps {
   draftPoints?: [number, number][];
   onAddDraftPoint?: (point: [number, number]) => void;
   onDeletePlot?: (plot: { subdivisionId?: string; siteId: string; siteName: string; block: number; lot: number; status: string }) => void;
+  onEditBoundary?: (plot: LotPlotProperties) => void;
   focusedSiteId?: string | null;
   preview?: boolean;
+  activeSiteRing?: Ring | null;
+  draftLots?: DraftLot[];
+  pendingBoundaryUpdates?: PendingBoundaryUpdate[];
+  onUpdateDraftPoints?: (points: [number, number][]) => void;
+  isAdjustingVertices?: boolean;
 }
 
 const SIDEBAR_WIDTH = 460;
 const REGIONAL_CENTER: [number, number] = [125.7150395, 7.0445282];
 const REGIONAL_ZOOM = 11.8;
 const DETAILS_ZOOM = 14;
+
+const SAMAL_ISLAND_BOUNDS: [[number, number], [number, number]] = [
+  [125.2301694, 6.5481584],
+  [126.2301694, 7.5481584],
+];
+const MIN_ZOOM = 9;
 
 const STATUS_COLOR_MAP: Record<string, string> = {
   Open: '#22C55E',
@@ -60,7 +85,107 @@ const STATUS_COLOR_MAP: Record<string, string> = {
   Closed: '#6C7E8E',
   Available: '#6C7E8E',
   Unregistered: '#6C7E8E',
+  Draft: '#0284c7',
 };
+
+// Neutral lot palette for editor mode (status colors hidden while editing geometry)
+const EDITOR_LOT_COLORS = {
+  fill: '#ffffff',
+  stroke: '#ffffff',
+  unsavedFill: '#0284c7',
+  unsavedStroke: '#38bdf8',
+  archivedStroke: '#d97706',
+  selectedStroke: '#ffffff',
+} as const;
+
+type Expr = ExpressionSpecification;
+
+function isActiveLotExpr(activeLotId: string | null): Expr {
+  const key = activeLotId || '__NONE__';
+  return ['any', ['==', ['get', 'id'], key], ['==', ['get', 'propertyId'], key]];
+}
+
+function buildLotFillColor(isEditorMode: boolean): Expr {
+  if (isEditorMode) {
+    return ['case', ['boolean', ['get', 'hasUnsavedChange'], false], EDITOR_LOT_COLORS.unsavedFill, EDITOR_LOT_COLORS.fill];
+  }
+  return [
+    'match',
+    ['get', 'status'],
+    'Open',
+    STATUS_COLOR_MAP.Open,
+    'Reserved',
+    STATUS_COLOR_MAP.Reserved,
+    'Sold',
+    STATUS_COLOR_MAP.Sold,
+    'Forfeited',
+    STATUS_COLOR_MAP.Forfeited,
+    STATUS_COLOR_MAP.Available,
+  ];
+}
+
+function buildLotFillOpacity(activeLotId: string | null, isEditorMode: boolean): Expr {
+  if (isEditorMode) {
+    return [
+      'case',
+      ['boolean', ['get', 'isSiteArchived'], false],
+      0.06,
+      isActiveLotExpr(activeLotId),
+      0.3,
+      ['boolean', ['get', 'hasUnsavedChange'], false],
+      0.3,
+      0.1,
+    ];
+  }
+  return [
+    'case',
+    ['boolean', ['get', 'isSiteArchived'], false],
+    0.25,
+    [
+      'case',
+      isActiveLotExpr(activeLotId),
+      0.85,
+      ['any', ['==', ['get', 'status'], 'Closed'], ['==', ['get', 'status'], 'Available'], ['==', ['get', 'status'], 'Unregistered']],
+      0.35,
+      0.75,
+    ],
+  ];
+}
+
+function buildLotStrokeColor(activeLotId: string | null, isEditorMode: boolean): Expr {
+  if (isEditorMode) {
+    return [
+      'case',
+      isActiveLotExpr(activeLotId),
+      EDITOR_LOT_COLORS.selectedStroke,
+      ['boolean', ['get', 'hasUnsavedChange'], false],
+      EDITOR_LOT_COLORS.unsavedStroke,
+      ['boolean', ['get', 'isSiteArchived'], false],
+      EDITOR_LOT_COLORS.archivedStroke,
+      EDITOR_LOT_COLORS.stroke,
+    ];
+  }
+  return [
+    'case',
+    isActiveLotExpr(activeLotId),
+    '#ef4444',
+    ['case', ['boolean', ['get', 'isSiteArchived'], false], '#d97706', '#ffffff'],
+  ];
+}
+
+function buildLotStrokeWidth(activeLotId: string | null, isEditorMode: boolean): Expr {
+  if (isEditorMode) {
+    return [
+      'case',
+      isActiveLotExpr(activeLotId),
+      3.5,
+      ['boolean', ['get', 'hasUnsavedChange'], false],
+      2.5,
+      1.5,
+    ];
+  }
+  return ['case', isActiveLotExpr(activeLotId), 3.5, 1.5];
+}
 
 // Scale numeric and interpolated text-size expressions for basemap labels
 function scaleTextSize(expr: unknown, factor: number = 1.28): unknown {
@@ -185,8 +310,14 @@ export function SiteMap({
   draftPoints = [],
   onAddDraftPoint,
   onDeletePlot,
+  onEditBoundary,
   focusedSiteId,
   preview = false,
+  activeSiteRing,
+  draftLots = [],
+  pendingBoundaryUpdates = [],
+  onUpdateDraftPoints,
+  isAdjustingVertices = false,
 }: SiteMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hoveredLotKeyRef = useRef<string | null>(hoveredLotKey ?? null);
@@ -201,8 +332,16 @@ export function SiteMap({
   onAddDraftPointRef.current = onAddDraftPoint;
   const onDeletePlotRef = useRef(onDeletePlot);
   onDeletePlotRef.current = onDeletePlot;
+  const onEditBoundaryRef = useRef(onEditBoundary);
+  onEditBoundaryRef.current = onEditBoundary;
   const isEditorModeRef = useRef(isEditorMode);
   isEditorModeRef.current = isEditorMode;
+  const activeSiteRingRef = useRef(activeSiteRing);
+  activeSiteRingRef.current = activeSiteRing;
+  const draftPointsRef = useRef(draftPoints);
+  draftPointsRef.current = draftPoints;
+  const onUpdateDraftPointsRef = useRef(onUpdateDraftPoints);
+  onUpdateDraftPointsRef.current = onUpdateDraftPoints;
   const [token, setToken] = useState<string | null>(() => cachedArcgisToken);
   const [mapMode, setMapMode] = useState<'satellite' | 'normal'>(() => {
     if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
@@ -236,6 +375,8 @@ export function SiteMap({
     zoom: initialZoom,
     padding: { top: 0, bottom: 0, left: isSidebarOpen ? SIDEBAR_WIDTH : 0, right: 0 },
     backgroundColor: mapMode === 'satellite' ? SATELLITE_BACKGROUND_COLOR : NORMAL_BACKGROUND_COLOR,
+    maxBounds: SAMAL_ISLAND_BOUNDS,
+    minZoom: MIN_ZOOM,
   });
 
   // Track style reload events to mount custom property layers on top
@@ -347,6 +488,16 @@ export function SiteMap({
     onSelectLot?.(null);
   }, [onSelectLot]);
 
+  // Close any open lot popup when switching between view and editor modes
+  const isFirstModeSwitchRef = useRef(true);
+  useEffect(() => {
+    if (isFirstModeSwitchRef.current) {
+      isFirstModeSwitchRef.current = false;
+      return;
+    }
+    handleClosePopup();
+  }, [isEditorMode, handleClosePopup]);
+
   // Navigate to property details for registered or closed lots
   const handleViewDetails = useCallback(
     (p: LotPlotProperties) => {
@@ -370,7 +521,7 @@ export function SiteMap({
           updated_at: new Date().toISOString(),
           is_archived: false,
           archived_at: null,
-          client: p.clientName ? { client_id: '', full_name: p.clientName, status: 'Active', address: null } : null,
+          client: p.clientName ? { client_id: p.clientId || '', full_name: p.clientName, status: 'Active', address: null } : null,
         } as PropertyLotWithClient);
       onSelectLotPropertyRef.current?.(lotObj);
     },
@@ -461,10 +612,19 @@ export function SiteMap({
     const pts = draftPoints ?? [];
     const features: GeoJSON.Feature[] = [];
 
+    const isContained = activeSiteRing && pts.length > 0 ? isPolygonContained(pts, activeSiteRing) : true;
+    const hasError = !isContained;
+
     pts.forEach((p, idx) => {
+      const isOutOfBounds = activeSiteRing ? !pointInPolygon(p, activeSiteRing) : false;
       features.push({
         type: 'Feature',
-        properties: { isFirst: idx === 0, index: idx + 1 },
+        properties: {
+          isFirst: idx === 0,
+          index: idx + 1,
+          isOutOfBounds,
+          isAdjusting: isAdjustingVertices,
+        },
         geometry: { type: 'Point', coordinates: p },
       });
     });
@@ -472,7 +632,7 @@ export function SiteMap({
     if (pts.length >= 2) {
       features.push({
         type: 'Feature',
-        properties: { type: 'line' },
+        properties: { type: 'line', hasError },
         geometry: { type: 'LineString', coordinates: pts },
       });
     }
@@ -480,7 +640,7 @@ export function SiteMap({
     if (pts.length >= 3) {
       features.push({
         type: 'Feature',
-        properties: { type: 'polygon' },
+        properties: { type: 'polygon', hasError },
         geometry: { type: 'Polygon', coordinates: [[...pts, pts[0]]] },
       });
     }
@@ -489,7 +649,7 @@ export function SiteMap({
       type: 'FeatureCollection' as const,
       features,
     };
-  }, [draftPoints]);
+  }, [draftPoints, activeSiteRing, isAdjustingVertices]);
 
   // Set map crosshair cursor when plotting
   useEffect(() => {
@@ -526,14 +686,18 @@ export function SiteMap({
 
   // GeoJSON features for all subdivisions across visible sites
   const lotsGeoJson = useMemo(() => {
+    const pendingUpdatesMap = new Map(pendingBoundaryUpdates.map((u) => [u.subdivisionId, u]));
+
     const features = activeVisibleSites
       .flatMap((s) => {
         const siteLots = 'lots' in s && Array.isArray(s.lots) ? s.lots : [];
         const siteSubs = 'subdivisions' in s && Array.isArray(s.subdivisions) ? s.subdivisions : [];
         const lotMap = new Map(siteLots.map((l) => [`${l.block_number}-${l.lot_number}`, l]));
 
-        return siteSubs.map((sub) => {
-          const ring = parseRing(sub.boundary);
+        const subFeatures = siteSubs.map((sub) => {
+          const pendingUpdate = pendingUpdatesMap.get(sub.subdivision_id);
+          const rawBoundary = pendingUpdate ? pendingUpdate.boundary : sub.boundary;
+          const ring = parseRing(rawBoundary);
           if (!ring) return null;
           const b = ringBounds(ring);
           const centerLng = (b.minX + b.maxX) / 2;
@@ -544,7 +708,7 @@ export function SiteMap({
           const lot = lotMap.get(lotKey);
           const isRegistered = Boolean(lot);
           const status = lot?.status ?? 'Closed';
-          const areaSize = lot?.area_size ?? 252;
+          const areaSize = pendingUpdate ? pendingUpdate.areaSize : (lot?.area_size ?? 252);
           const pricePerSqm = lot?.price_per_sqm ?? 6500;
 
           return {
@@ -562,10 +726,12 @@ export function SiteMap({
               name: `Block ${sub.block_number} Lot ${sub.lot_number}`,
               status,
               isRegistered,
+              hasUnsavedChange: Boolean(pendingUpdate),
               areaSize,
               pricePerSqm,
               totalPrice: areaSize * pricePerSqm,
               clientName: lot?.client?.full_name ?? '',
+              clientId: lot?.client?.client_id ?? '',
               titleNumber: lot?.title_number ?? '',
               forfeitedAt: lot?.forfeited_account?.forfeited_at ?? '',
               centerLng,
@@ -578,6 +744,64 @@ export function SiteMap({
             },
           };
         });
+
+        // If in editor mode, also render confirmed draft lots
+        const siteDraftLots = isEditorMode
+          ? draftLots.filter(
+              (d) =>
+                d.siteId === s.site_id &&
+                d.block &&
+                d.lot &&
+                Array.isArray(d.boundary) &&
+                d.boundary.length >= 3
+            )
+          : [];
+
+        const draftFeatures = siteDraftLots.map((d) => {
+          const ring = parseRing(d.boundary);
+          if (!ring) return null;
+          const b = ringBounds(ring);
+          const centerLng = (b.minX + b.maxX) / 2;
+          const centerLat = (b.minY + b.maxY) / 2;
+          const topLat = b.maxY;
+          const lotKey = `${d.block}-${d.lot}`;
+          const siteLotKey = `${s.site_id}:${d.block}-${d.lot}`;
+
+          return {
+            type: 'Feature' as const,
+            properties: {
+              id: d.draftId,
+              lotKey,
+              siteLotKey,
+              propertyId: '',
+              siteId: s.site_id,
+              siteName: s.name,
+              isSiteArchived: false,
+              block: d.block!,
+              lot: d.lot!,
+              name: `Block ${d.block} Lot ${d.lot} (Draft)`,
+              status: 'Draft',
+              isRegistered: false,
+              hasUnsavedChange: true,
+              areaSize: d.areaSize,
+              pricePerSqm: 6500,
+              totalPrice: d.areaSize * 6500,
+              clientName: '',
+              clientId: '',
+              titleNumber: '',
+              forfeitedAt: '',
+              centerLng,
+              centerLat,
+              topLat,
+            },
+            geometry: {
+              type: 'Polygon' as const,
+              coordinates: [[...ring, ring[0]] as [number, number][]],
+            },
+          };
+        });
+
+        return [...subFeatures, ...draftFeatures];
       })
       .filter((f): f is NonNullable<typeof f> => f !== null);
 
@@ -585,7 +809,7 @@ export function SiteMap({
       type: 'FeatureCollection' as const,
       features,
     };
-  }, [activeVisibleSites]);
+  }, [activeVisibleSites, pendingBoundaryUpdates, draftLots, isEditorMode]);
 
   // Focus and fly to the selected property on map viewport
   const prevSelectedLotIdRef = useRef<string | null>(null);
@@ -679,36 +903,8 @@ export function SiteMap({
         source: 'lots-data',
         minzoom: DETAILS_ZOOM,
         paint: {
-          'fill-color': [
-            'match',
-            ['get', 'status'],
-            'Open',
-            STATUS_COLOR_MAP.Open,
-            'Reserved',
-            STATUS_COLOR_MAP.Reserved,
-            'Sold',
-            STATUS_COLOR_MAP.Sold,
-            'Forfeited',
-            STATUS_COLOR_MAP.Forfeited,
-            STATUS_COLOR_MAP.Available,
-          ],
-          'fill-opacity': [
-            'case',
-            ['boolean', ['get', 'isSiteArchived'], false],
-            0.25,
-            [
-              'case',
-              [
-                'any',
-                ['==', ['get', 'id'], activeLotIdRef.current || '__NONE__'],
-                ['==', ['get', 'propertyId'], activeLotIdRef.current || '__NONE__'],
-              ],
-              0.85,
-              ['any', ['==', ['get', 'status'], 'Closed'], ['==', ['get', 'status'], 'Available'], ['==', ['get', 'status'], 'Unregistered']],
-              0.35,
-              0.75,
-            ],
-          ],
+          'fill-color': buildLotFillColor(isEditorModeRef.current),
+          'fill-opacity': buildLotFillOpacity(activeLotIdRef.current, isEditorModeRef.current),
         },
       });
 
@@ -718,26 +914,8 @@ export function SiteMap({
         source: 'lots-data',
         minzoom: DETAILS_ZOOM,
         paint: {
-          'line-color': [
-            'case',
-            [
-              'any',
-              ['==', ['get', 'id'], activeLotIdRef.current || '__NONE__'],
-              ['==', ['get', 'propertyId'], activeLotIdRef.current || '__NONE__'],
-            ],
-            '#ef4444',
-            ['case', ['boolean', ['get', 'isSiteArchived'], false], '#d97706', '#ffffff'],
-          ],
-          'line-width': [
-            'case',
-            [
-              'any',
-              ['==', ['get', 'id'], activeLotIdRef.current || '__NONE__'],
-              ['==', ['get', 'propertyId'], activeLotIdRef.current || '__NONE__'],
-            ],
-            3.5,
-            1.5,
-          ],
+          'line-color': buildLotStrokeColor(activeLotIdRef.current, isEditorModeRef.current),
+          'line-width': buildLotStrokeWidth(activeLotIdRef.current, isEditorModeRef.current),
         },
       });
 
@@ -799,8 +977,18 @@ export function SiteMap({
         source: 'draft-plot-data',
         filter: ['==', ['get', 'type'], 'polygon'],
         paint: {
-          'fill-color': '#0284c7',
-          'fill-opacity': 0.25,
+          'fill-color': [
+            'case',
+            ['boolean', ['get', 'hasError'], false],
+            '#ef4444',
+            '#0284c7',
+          ],
+          'fill-opacity': [
+            'case',
+            ['boolean', ['get', 'hasError'], false],
+            0.4,
+            0.25,
+          ],
         },
       });
 
@@ -810,7 +998,12 @@ export function SiteMap({
         source: 'draft-plot-data',
         filter: ['==', ['get', 'type'], 'line'],
         paint: {
-          'line-color': '#38bdf8',
+          'line-color': [
+            'case',
+            ['boolean', ['get', 'hasError'], false],
+            '#ef4444',
+            '#38bdf8',
+          ],
           'line-width': 2.5,
           'line-dasharray': [3, 2],
         },
@@ -822,8 +1015,18 @@ export function SiteMap({
         source: 'draft-plot-data',
         filter: ['has', 'index'],
         paint: {
-          'circle-radius': ['case', ['get', 'isFirst'], 7, 5],
-          'circle-color': ['case', ['get', 'isFirst'], '#22c55e', '#38bdf8'],
+          'circle-radius': [
+            'case',
+            ['boolean', ['get', 'isAdjusting'], false],
+            8,
+            ['case', ['get', 'isFirst'], 7, 5],
+          ],
+          'circle-color': [
+            'case',
+            ['boolean', ['get', 'isOutOfBounds'], false],
+            '#ef4444',
+            ['case', ['get', 'isFirst'], '#22c55e', '#38bdf8'],
+          ],
           'circle-stroke-width': 2,
           'circle-stroke-color': '#ffffff',
         },
@@ -836,6 +1039,70 @@ export function SiteMap({
   }
 }, [map, isReady, styleRevision, sitesGeoJson, lotsGeoJson, draftGeoJson]);
 
+  // Vertex dragging interaction when isAdjustingVertices is active
+  useEffect(() => {
+    if (!map || !isReady || !isAdjustingVertices) return;
+
+    let isDragging = false;
+    let draggedIndex = -1;
+
+    const handleMouseEnter = () => {
+      map.getCanvas().style.cursor = 'grab';
+    };
+
+    const handleMouseLeave = () => {
+      if (!isDragging) {
+        map.getCanvas().style.cursor = '';
+      }
+    };
+
+    const handleMouseDown = (e: import('maplibre-gl').MapLayerMouseEvent) => {
+      const feat = e.features?.[0];
+      if (!feat || feat.properties?.index === undefined) return;
+
+      isDragging = true;
+      draggedIndex = Number(feat.properties.index) - 1;
+      map.dragPan.disable();
+      map.getCanvas().style.cursor = 'grabbing';
+      e.preventDefault();
+    };
+
+    const handleMouseMove = (e: import('maplibre-gl').MapMouseEvent) => {
+      if (!isDragging || draggedIndex < 0) return;
+      const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+
+      const currentPts = draftPointsRef.current ? [...draftPointsRef.current] : [];
+      if (draggedIndex < currentPts.length) {
+        currentPts[draggedIndex] = pt;
+        onUpdateDraftPointsRef.current?.(currentPts);
+      }
+    };
+
+    const handleMouseUp = () => {
+      if (isDragging) {
+        isDragging = false;
+        draggedIndex = -1;
+        map.dragPan.enable();
+        map.getCanvas().style.cursor = '';
+      }
+    };
+
+    map.on('mouseenter', 'draft-vertices', handleMouseEnter);
+    map.on('mouseleave', 'draft-vertices', handleMouseLeave);
+    map.on('mousedown', 'draft-vertices', handleMouseDown);
+    map.on('mousemove', handleMouseMove);
+    map.on('mouseup', handleMouseUp);
+
+    return () => {
+      map.off('mouseenter', 'draft-vertices', handleMouseEnter);
+      map.off('mouseleave', 'draft-vertices', handleMouseLeave);
+      map.off('mousedown', 'draft-vertices', handleMouseDown);
+      map.off('mousemove', handleMouseMove);
+      map.off('mouseup', handleMouseUp);
+      map.dragPan.enable();
+    };
+  }, [map, isReady, isAdjustingVertices]);
+
   // Update dynamic lot styles on selection change
   useEffect(() => {
     if (!map || !isReady) return;
@@ -843,63 +1110,17 @@ export function SiteMap({
     try {
       if (!map.getLayer('lots-fill') || !map.getLayer('lots-stroke')) return;
 
-      map.setPaintProperty('lots-fill', 'fill-color', [
-        'match',
-        ['get', 'status'],
-        'Open',
-        STATUS_COLOR_MAP.Open,
-        'Reserved',
-        STATUS_COLOR_MAP.Reserved,
-        'Sold',
-        STATUS_COLOR_MAP.Sold,
-        'Forfeited',
-        STATUS_COLOR_MAP.Forfeited,
-        STATUS_COLOR_MAP.Available,
-      ]);
+      map.setPaintProperty('lots-fill', 'fill-color', buildLotFillColor(isEditorMode));
 
-      map.setPaintProperty('lots-fill', 'fill-opacity', [
-        'case',
-        ['boolean', ['get', 'isSiteArchived'], false],
-        0.25,
-        [
-          'case',
-          [
-            'any',
-            ['==', ['get', 'id'], activeLotId || '__NONE__'],
-            ['==', ['get', 'propertyId'], activeLotId || '__NONE__'],
-          ],
-          0.85,
-          ['any', ['==', ['get', 'status'], 'Closed'], ['==', ['get', 'status'], 'Available'], ['==', ['get', 'status'], 'Unregistered']],
-          0.35,
-          0.75,
-        ],
-      ]);
+      map.setPaintProperty('lots-fill', 'fill-opacity', buildLotFillOpacity(activeLotId, isEditorMode));
 
-      map.setPaintProperty('lots-stroke', 'line-color', [
-        'case',
-        [
-          'any',
-          ['==', ['get', 'id'], activeLotId || '__NONE__'],
-          ['==', ['get', 'propertyId'], activeLotId || '__NONE__'],
-        ],
-        '#ef4444',
-        ['case', ['boolean', ['get', 'isSiteArchived'], false], '#d97706', '#ffffff'],
-      ]);
+      map.setPaintProperty('lots-stroke', 'line-color', buildLotStrokeColor(activeLotId, isEditorMode));
 
-      map.setPaintProperty('lots-stroke', 'line-width', [
-        'case',
-        [
-          'any',
-          ['==', ['get', 'id'], activeLotId || '__NONE__'],
-          ['==', ['get', 'propertyId'], activeLotId || '__NONE__'],
-        ],
-        3.5,
-        1.5,
-      ]);
+      map.setPaintProperty('lots-stroke', 'line-width', buildLotStrokeWidth(activeLotId, isEditorMode));
     } catch {
       // Style is reloading; will be reapplied on style.load
     }
-  }, [map, isReady, styleRevision, activeLotId]);
+  }, [map, isReady, styleRevision, activeLotId, isEditorMode]);
 
   // Update hover outline filter
   useEffect(() => {
@@ -962,7 +1183,12 @@ export function SiteMap({
 
       const handleClick = (e: import('maplibre-gl').MapLayerMouseEvent) => {
         if (isPlottingRef.current) {
-          onAddDraftPointRef.current?.([e.lngLat.lng, e.lngLat.lat]);
+          const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+          if (activeSiteRingRef.current && !pointInPolygon(pt, activeSiteRingRef.current)) {
+            notifyWarning('Plotted point must be inside the site boundary.');
+            return;
+          }
+          onAddDraftPointRef.current?.(pt);
           return;
         }
 
@@ -1008,7 +1234,12 @@ export function SiteMap({
       // Close popup when clicking anywhere on the map outside lots
       const handleMapClick = (e: import('maplibre-gl').MapMouseEvent) => {
         if (isPlottingRef.current) {
-          onAddDraftPointRef.current?.([e.lngLat.lng, e.lngLat.lat]);
+          const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
+          if (activeSiteRingRef.current && !pointInPolygon(pt, activeSiteRingRef.current)) {
+            notifyWarning('Plotted point must be inside the site boundary.');
+            return;
+          }
+          onAddDraftPointRef.current?.(pt);
           return;
         }
 
@@ -1355,13 +1586,22 @@ export function SiteMap({
 
       {/* Interactive plot popup mounted inside MapLibre container */}
       {selectedPlot && popupContainerRef.current && createPortal(
-        <MapSitePopup
-          plot={selectedPlot}
-          isEditorMode={isEditorMode}
-          onViewDetails={() => handleViewDetails(selectedPlot)}
-          onRegisterLot={() => handleRegisterLot(selectedPlot)}
-          onDeletePlot={() => handleDeletePlot(selectedPlot)}
-        />,
+        isEditorMode ? (
+          <MapSiteEditorPopup
+            plot={selectedPlot}
+            onDeletePlot={() => handleDeletePlot(selectedPlot)}
+            onEditBoundary={() => {
+              handleClosePopup();
+              onEditBoundaryRef.current?.(selectedPlot);
+            }}
+          />
+        ) : (
+          <MapSitePopup
+            plot={selectedPlot}
+            onViewDetails={() => handleViewDetails(selectedPlot)}
+            onRegisterLot={() => handleRegisterLot(selectedPlot)}
+          />
+        ),
         popupContainerRef.current
       )}
     </div>

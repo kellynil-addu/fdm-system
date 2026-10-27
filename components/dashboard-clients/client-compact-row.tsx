@@ -33,6 +33,7 @@ import { IconBox } from '@/components/ui/icon-box';
 import { cn } from '@/lib/utils';
 import { ARCHIVED_STATUS } from '@/lib/hooks/use-clients-page';
 import { getArchiveEligibility } from '@/lib/utils/archive-rules';
+import { getInitials } from '@/lib/utils/initials';
 import type { ClientListItem } from '@/lib/types/client';
 
 export function ClientStatusPill({ status }: { status: string }) {
@@ -109,8 +110,8 @@ export function ClientCompactRow({
 
         <TableCell className="py-2.5 pr-3">
           <div className="flex items-center gap-2.5">
-            <IconBox size="sm" shape="circle">
-              <UserRound className="h-3.5 w-3.5" />
+            <IconBox size="sm" shape="rounded-md" className="shrink-0 font-semibold text-[11px] bg-card text-foreground">
+              {getInitials(client.full_name) || <UserRound className="h-3.5 w-3.5" />}
             </IconBox>
             <p className="truncate text-xs font-medium text-foreground">{client.full_name}</p>
           </div>
@@ -152,8 +153,8 @@ export function ClientCompactRow({
     >
       <TableCell className={`py-2.5 pr-3 ${gutterL}`}>
         <div className="flex items-center gap-2.5">
-          <IconBox size="sm" shape="circle">
-            <UserRound className="h-3.5 w-3.5" />
+          <IconBox size="sm" shape="rounded-md" className="shrink-0 font-semibold text-[11px] bg-card text-foreground">
+            {getInitials(client.full_name) || <UserRound className="h-3.5 w-3.5" />}
           </IconBox>
           <p className="truncate text-sm font-medium text-foreground">{client.full_name}</p>
         </div>

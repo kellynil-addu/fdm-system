@@ -15,6 +15,9 @@ const dotVariants = {
   destructive: "bg-destructive",
   muted: "bg-muted-foreground",
   purple: "bg-[#8B5CF6]",
+  slate: "bg-[var(--tone-slate)]",
+  teal: "bg-[var(--tone-teal)]",
+  violet: "bg-[var(--tone-violet)]",
 } as const;
 
 const badgeVariants = cva(
@@ -30,16 +33,24 @@ const badgeVariants = cva(
         "outline-warm": "border-border-warm text-foreground",
         canvas: "border-border-warm bg-card text-foreground",
         success:
-          "border-transparent bg-[color-mix(in_srgb,var(--success)_12%,white)] text-success",
+          "border-transparent bg-[color-mix(in_srgb,var(--success)_12%,var(--card))] text-success",
         warning:
           "border-transparent bg-row-active text-accent-gold-foreground",
         info:
           "border-transparent bg-sidebar-accent text-accent-blue-foreground",
         destructive:
-          "border-transparent bg-[color-mix(in_srgb,var(--destructive)_10%,white)] text-destructive",
+          "border-transparent bg-[color-mix(in_srgb,var(--destructive)_10%,var(--card))] text-destructive",
         muted: "border-transparent bg-muted text-muted-foreground",
         purple:
           "border-transparent bg-[color-mix(in_srgb,#8B5CF6_12%,white)] text-[#7C3AED]",
+        /* Stage tones — surface and text colour both flip with the theme, so a
+           badge and a `StatusBar` for one status agree in either mode. */
+        teal:
+          "border-transparent bg-[color-mix(in_srgb,var(--tone-teal)_12%,var(--card))] text-[var(--tone-teal-foreground)]",
+        violet:
+          "border-transparent bg-[color-mix(in_srgb,var(--tone-violet)_12%,var(--card))] text-[var(--tone-violet-foreground)]",
+        slate:
+          "border-transparent bg-[color-mix(in_srgb,var(--tone-slate)_14%,var(--card))] text-[var(--tone-slate-foreground)]",
       },
       shape: {
         default: "rounded-md",

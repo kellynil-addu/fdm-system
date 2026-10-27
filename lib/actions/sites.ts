@@ -1,5 +1,6 @@
 "use server";
 
+import { z } from "zod";
 import { createScope } from "@/lib/actions/action-handler";
 import type { ActionResult } from "@/lib/actions/action-result";
 import { uuidSchema } from "@/lib/validations/client";
@@ -7,6 +8,7 @@ import {
   createSiteSchema,
   createSubdivisionLotSchema,
   deleteSubdivisionLotSchema,
+  updateSubdivisionBoundarySchema,
 } from "@/lib/validations/property";
 import { calculatePolygonAreaSqm } from "@/lib/geometry";
 import {
@@ -22,6 +24,7 @@ import type {
   CreateSiteInput,
   CreateSubdivisionLotInput,
   DeleteSubdivisionLotInput,
+  UpdateSubdivisionBoundaryInput,
 } from "@/lib/types/property";
 
 const property = createScope(["properties.read"]);
@@ -278,6 +281,75 @@ export async function createSubdivisionLot(
     },
   });
 }
+
+/** Batch create multiple subdivision lots in a single request. */
+export async function batchCreateSubdivisionLots(
+  lots: CreateSubdivisionLotInput[]
+): Promise<ActionResult<SiteSubdivision[]>> {
+  return propertyCreate.run({
+    permissions: ["properties.update"],
+    schema: z.array(createSubdivisionLotSchema).min(1),
+    input: lots,
+    handler: async (validatedLots, { supabase }) => {
+      const rows = validatedLots.map((l) => ({
+        site_id: l.site_id,
+        block_number: l.block_number,
+        lot_number: l.lot_number,
+        boundary: l.boundary,
+      }));
+
+      const { data, error } = await supabase
+        .from("site_subdivision")
+        .insert(rows)
+        .select()
+        .returns<SiteSubdivision[]>();
+
+      if (error) {
+        throw new Error(`Batch lot creation failed: ${error.message}`);
+      }
+
+      return data ?? [];
+    },
+  });
+}
+
+/** Update an existing subdivision lot boundary and sync its companion property area. */
+export async function updateSubdivisionLotBoundary(
+  input: UpdateSubdivisionBoundaryInput
+): Promise<ActionResult<SiteSubdivision>> {
+  return propertyWrite.run({
+    schema: updateSubdivisionBoundarySchema,
+    input,
+    handler: async (validated, { supabase }) => {
+      const area = Math.max(10, Math.round(calculatePolygonAreaSqm(validated.boundary) * 100) / 100);
+
+      const { data, error } = await supabase
+        .from("site_subdivision")
+        .update({ boundary: validated.boundary })
+        .eq("subdivision_id", validated.subdivision_id)
+        .select()
+        .single<SiteSubdivision>();
+
+      if (error || !data) {
+        throw new Error(`Failed to update subdivision boundary: ${error?.message ?? "Unknown error"}`);
+      }
+
+      // Also update companion property_lot row if one exists
+      await supabase
+        .from("property_lot")
+        .update({
+          boundary: validated.boundary,
+          area_size: area,
+        })
+        .eq("site_id", validated.site_id)
+        .eq("block_number", validated.block_number)
+        .eq("lot_number", validated.lot_number);
+
+      return data;
+    },
+  });
+}
+
 
 export async function deleteSubdivisionLot(input: DeleteSubdivisionLotInput): Promise<ActionResult<void>> {
   return propertyDelete.run({

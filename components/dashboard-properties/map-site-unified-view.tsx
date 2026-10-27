@@ -1,22 +1,50 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { PanelLeftOpen } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { LoadingButton } from '@/components/ui/loading-button';
+import { PanelLeftOpen, PenTool, AlertTriangle } from 'lucide-react';
 import { SiteMap } from './map-site';
 import { PropertyLotsSidebar } from './property-lots-sidebar';
-import { MapSiteEditor, type SelectedPlotInfo } from './map-site-editor';
+import { MapSiteEditor, type SelectedPlotInfo, type ActiveDraftState } from './map-site-editor';
 import {
   createSite,
-  createSubdivisionLot,
+  batchCreateSubdivisionLots,
+  updateSubdivisionLotBoundary,
   deleteSubdivisionLot,
   archiveSite,
   unarchiveSite,
   deleteSite,
 } from '@/lib/actions/sites';
-import type { PropertyLotWithClient, SiteWithLots } from '@/lib/types/property';
+import { parseRing, calculatePolygonAreaSqm, isPolygonContained } from '@/lib/geometry';
+import { getSiteDraft, saveSiteDraft, clearSiteDraft } from '@/lib/storage/map-draft-storage';
+import type {
+  PropertyLotWithClient,
+  SiteWithLots,
+  DraftLot,
+  PendingBoundaryUpdate,
+} from '@/lib/types/property';
+import type { LotPlotProperties } from './map-site-popup';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
@@ -24,12 +52,22 @@ export interface SiteMapUnifiedViewProps {
   sites: SiteWithLots[];
 }
 
-/** Interactive site map, floating property lots sidebar, and integrated map editor. */
+/** Interactive site map, floating property lots sidebar, and integrated draft-driven CAD map editor. */
 export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const targetLotId = searchParams.get('lot');
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [hoveredLotKey, setHoveredLotKey] = useState<string | null>(null);
-  const [selectedPropertyLot, setSelectedPropertyLot] = useState<PropertyLotWithClient | null>(null);
+  const [selectedPropertyLot, setSelectedPropertyLot] = useState<PropertyLotWithClient | null>(() => {
+    if (!targetLotId) return null;
+    for (const site of sites) {
+      const match = site.lots.find((l) => l.property_id === targetLotId);
+      if (match) return match;
+    }
+    return null;
+  });
   const [createInitialValues, setCreateInitialValues] = useState<{
     site_id?: string;
     block_number?: number;
@@ -40,15 +78,119 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
 
   // Editor states
   const [isEditorActive, setIsEditorActive] = useState(false);
-  const [activeSiteId, setActiveSiteId] = useState<string | null>(
-    () => sites.find((s) => !s.is_archived)?.site_id ?? sites[0]?.site_id ?? null
-  );
+  const [activeSiteId, setActiveSiteId] = useState<string | null>(() => {
+    if (targetLotId) {
+      for (const site of sites) {
+        if (site.lots.some((l) => l.property_id === targetLotId)) {
+          return site.site_id;
+        }
+      }
+    }
+    return sites.find((s) => !s.is_archived)?.site_id ?? sites[0]?.site_id ?? null;
+  });
+
+  // Entry confirmation dialog
+  const [isEntryConfirmOpen, setIsEntryConfirmOpen] = useState(false);
+  const [pendingEntrySiteId, setPendingEntrySiteId] = useState<string | null>(activeSiteId);
+
+  // Exit guard dialog when unsaved drafts exist
+  const [isExitGuardOpen, setIsExitGuardOpen] = useState(false);
+  const [pendingExitTarget, setPendingExitTarget] = useState<'leaveSite' | 'exitEditor' | null>(null);
+
+  // Drawing & Plotting states
   const [plotType, setPlotType] = useState<'lot' | 'site' | null>(null);
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const [selectedPlotToDelete, setSelectedPlotToDelete] = useState<SelectedPlotInfo | null>(null);
-  const [pendingLotBoundary, setPendingLotBoundary] = useState<[number, number][] | null>(null);
   const [pendingSiteBoundary, setPendingSiteBoundary] = useState<[number, number][] | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Draft session queue for active site
+  const [draftLots, setDraftLots] = useState<DraftLot[]>([]);
+  const [pendingBoundaryUpdates, setPendingBoundaryUpdates] = useState<PendingBoundaryUpdate[]>([]);
+  const [activeDraft, setActiveDraft] = useState<ActiveDraftState | null>(null);
+  const [editingSubdivisionId, setEditingSubdivisionId] = useState<string | null>(null);
+  const [hasStoredDraft, setHasStoredDraft] = useState(false);
+
+  // Active site boundary ring for ray-casting containment
+  const activeSite = useMemo(() => sites.find((s) => s.site_id === activeSiteId), [sites, activeSiteId]);
+  const activeSiteRing = useMemo(() => {
+    if (!activeSite?.boundary) return null;
+    return parseRing(activeSite.boundary);
+  }, [activeSite]);
+
+  // Out-of-bounds vertex status
+  const hasOutOfBoundsVertex = useMemo(() => {
+    if (!activeSiteRing || draftPoints.length === 0) return false;
+    return !isPolygonContained(draftPoints, activeSiteRing);
+  }, [draftPoints, activeSiteRing]);
+
+  // Sync selected lot from targetLotId URL param
+  useEffect(() => {
+    if (!targetLotId) return;
+    for (const site of sites) {
+      const match = site.lots.find((l) => l.property_id === targetLotId);
+      if (match) {
+        setSelectedPropertyLot(match);
+        setIsSidebarOpen(true);
+        setActiveSiteId(site.site_id);
+        break;
+      }
+    }
+  }, [targetLotId, sites]);
+
+  // Check localStorage for saved draft when active site changes in editor mode
+  useEffect(() => {
+    if (!isEditorActive || !activeSiteId) {
+      setHasStoredDraft(false);
+      return;
+    }
+    const saved = getSiteDraft(activeSiteId);
+    if (saved && (saved.draftLots?.length > 0 || saved.pendingBoundaryUpdates?.length > 0)) {
+      setHasStoredDraft(true);
+    } else {
+      setHasStoredDraft(false);
+    }
+  }, [isEditorActive, activeSiteId]);
+
+  // Debounced auto-save of drafts to localStorage
+  const draftLotsRef = useRef(draftLots);
+  draftLotsRef.current = draftLots;
+  const pendingBoundaryUpdatesRef = useRef(pendingBoundaryUpdates);
+  pendingBoundaryUpdatesRef.current = pendingBoundaryUpdates;
+
+  useEffect(() => {
+    if (!isEditorActive || !activeSiteId) return;
+
+    const timer = setTimeout(() => {
+      const currentLots = draftLotsRef.current;
+      const currentUpdates = pendingBoundaryUpdatesRef.current;
+      if (currentLots.length > 0 || currentUpdates.length > 0) {
+        saveSiteDraft(activeSiteId, {
+          siteId: activeSiteId,
+          draftLots: currentLots,
+          pendingBoundaryUpdates: currentUpdates,
+        });
+      } else {
+        clearSiteDraft(activeSiteId);
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [isEditorActive, activeSiteId, draftLots, pendingBoundaryUpdates]);
+
+  // beforeunload protection when unsaved drafts exist
+  useEffect(() => {
+    const hasUnsaved = draftLots.length > 0 || pendingBoundaryUpdates.length > 0;
+    if (!hasUnsaved) return;
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [draftLots, pendingBoundaryUpdates]);
 
   const totalLots = sites.reduce((sum, s) => sum + s.lots.length, 0);
 
@@ -67,7 +209,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       setCreateInitialValues(null);
       setSelectedPropertyLot(lot);
     },
-    [isEditorActive],
+    [isEditorActive]
   );
 
   const handleSelectLot = useCallback((lot: PropertyLotWithClient | null) => {
@@ -95,43 +237,95 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         price_per_sqm: data.pricePerSqm,
       });
     },
-    [isEditorActive],
+    [isEditorActive]
   );
+
+  // Request entering editor mode (shows Entry Confirmation Dialog)
+  const handleRequestEditorEntry = useCallback(() => {
+    setPendingEntrySiteId(activeSiteId ?? sites.find((s) => !s.is_archived)?.site_id ?? sites[0]?.site_id ?? null);
+    setIsEntryConfirmOpen(true);
+  }, [activeSiteId, sites]);
+
+  // Confirm entering editor mode
+  const handleConfirmEditorEntry = useCallback(() => {
+    setIsEntryConfirmOpen(false);
+    setIsSidebarOpen(false);
+    setIsEditorActive(true);
+    if (pendingEntrySiteId) {
+      setActiveSiteId(pendingEntrySiteId);
+    }
+  }, [pendingEntrySiteId]);
+
+  // Request leaving the chosen site or exiting editor mode
+  const handleLeaveSite = useCallback(() => {
+    const hasUnsaved = draftLots.length > 0 || pendingBoundaryUpdates.length > 0;
+    if (hasUnsaved) {
+      setPendingExitTarget('leaveSite');
+      setIsExitGuardOpen(true);
+      return;
+    }
+    setActiveSiteId(null);
+    setActiveDraft(null);
+    setDraftPoints([]);
+    setPlotType(null);
+  }, [draftLots, pendingBoundaryUpdates]);
 
   const handleToggleEditor = useCallback(
     (active: boolean) => {
-      setIsEditorActive(active);
-      if (active) {
-        setIsSidebarOpen(false);
-        if (!activeSiteId && sites.length > 0) {
-          const firstSite = sites.find((s) => !s.is_archived) ?? sites[0];
-          setActiveSiteId(firstSite.site_id);
+      if (!active) {
+        const hasUnsaved = draftLots.length > 0 || pendingBoundaryUpdates.length > 0;
+        if (hasUnsaved) {
+          setPendingExitTarget('exitEditor');
+          setIsExitGuardOpen(true);
+          return;
         }
-      } else {
+        setIsEditorActive(false);
         setPlotType(null);
         setDraftPoints([]);
+        setActiveDraft(null);
         setSelectedPlotToDelete(null);
-        setPendingLotBoundary(null);
         setPendingSiteBoundary(null);
-        const currentSite = sites.find((s) => s.site_id === activeSiteId);
-        if (currentSite?.is_archived) {
-          setActiveSiteId(null);
-        }
+        setIsSidebarOpen(true);
+      } else {
+        handleRequestEditorEntry();
       }
     },
-    [activeSiteId, sites],
+    [draftLots, pendingBoundaryUpdates, handleRequestEditorEntry]
   );
 
+  // LocalStorage draft recovery actions
+  const handleResumeStoredDraft = useCallback(() => {
+    if (!activeSiteId) return;
+    const saved = getSiteDraft(activeSiteId);
+    if (saved) {
+      setDraftLots(saved.draftLots ?? []);
+      setPendingBoundaryUpdates(saved.pendingBoundaryUpdates ?? []);
+      toast.success('Restored previous draft lots.');
+    }
+    setHasStoredDraft(false);
+  }, [activeSiteId]);
 
+  const handleDiscardStoredDraft = useCallback(() => {
+    if (!activeSiteId) return;
+    clearSiteDraft(activeSiteId);
+    setHasStoredDraft(false);
+    toast.info('Discarded stored drafts.');
+  }, [activeSiteId]);
+
+  // Start plotting shape
   const handleStartPlotting = useCallback((type: 'lot' | 'site') => {
     setPlotType(type);
     setDraftPoints([]);
+    setActiveDraft(null);
+    setEditingSubdivisionId(null);
     setIsSidebarOpen(false);
   }, []);
 
   const handleCancelPlotting = useCallback(() => {
     setPlotType(null);
     setDraftPoints([]);
+    setActiveDraft(null);
+    setEditingSubdivisionId(null);
   }, []);
 
   const handleAddDraftPoint = useCallback((pt: [number, number]) => {
@@ -142,54 +336,227 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     setDraftPoints((prev) => prev.slice(0, -1));
   }, []);
 
+  // Update draft points (from live vertex drag on map canvas)
+  const handleUpdateDraftPoints = useCallback((points: [number, number][]) => {
+    setDraftPoints(points);
+    if (points.length >= 3) {
+      const area = Math.max(10, Math.round(calculatePolygonAreaSqm(points) * 100) / 100);
+      setActiveDraft((prev) => (prev ? { ...prev, boundary: points, areaSize: area } : null));
+    }
+  }, []);
+
+  // Finish shape drawing -> open inline lot details panel
   const handleFinishShape = useCallback(() => {
     if (draftPoints.length < 3) {
       toast.error('Plotting requires at least 3 points to form a polygon.');
       return;
     }
     if (plotType === 'lot') {
-      setPendingLotBoundary(draftPoints);
+      const area = Math.max(10, Math.round(calculatePolygonAreaSqm(draftPoints) * 100) / 100);
+      setActiveDraft({
+        boundary: draftPoints,
+        areaSize: area,
+        isEditingExisting: Boolean(editingSubdivisionId),
+      });
+      setPlotType(null);
     } else if (plotType === 'site') {
       setPendingSiteBoundary(draftPoints);
+      setPlotType(null);
+      setDraftPoints([]);
     }
-    setPlotType(null);
-    setDraftPoints([]);
-  }, [draftPoints, plotType]);
+  }, [draftPoints, plotType, editingSubdivisionId]);
 
-  const handleSaveLot = useCallback(
-    async (data: {
-      block_number: number;
-      lot_number: number;
-      area_size?: number;
-      price_per_sqm?: number;
-    }) => {
-      if (!activeSiteId || !pendingLotBoundary) return;
-      setIsSaving(true);
-      try {
-        const result = await createSubdivisionLot({
-          site_id: activeSiteId,
-          block_number: data.block_number,
-          lot_number: data.lot_number,
-          boundary: pendingLotBoundary,
-          area_size: data.area_size,
-          price_per_sqm: data.price_per_sqm,
-        });
-        if (!result.success) {
-          toast.error(result.error);
-          return;
+  // Existing lot "Edit Boundary" clicked in popup
+  const handleEditBoundary = useCallback((plot: LotPlotProperties) => {
+    // Find subdivision boundary for this plot
+    let foundBoundary: [number, number][] | null = null;
+    for (const site of sites) {
+      if (site.site_id === plot.siteId) {
+        const sub = site.subdivisions?.find((s) => s.subdivision_id === plot.id);
+        if (sub?.boundary) {
+          const ring = parseRing(sub.boundary);
+          if (ring) {
+            foundBoundary = ring as [number, number][];
+          }
         }
-        toast.success(`Block ${data.block_number} Lot ${data.lot_number} created successfully.`);
-        setPendingLotBoundary(null);
-        router.refresh();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to create lot plot');
-      } finally {
-        setIsSaving(false);
+        break;
       }
+    }
+
+    if (!foundBoundary) {
+      toast.error('Boundary geometry not found for this lot.');
+      return;
+    }
+
+    setActiveSiteId(plot.siteId);
+    setEditingSubdivisionId(plot.id);
+    setDraftPoints(foundBoundary);
+    setActiveDraft({
+      boundary: foundBoundary,
+      areaSize: plot.areaSize,
+      block: plot.block,
+      lot: plot.lot,
+      isEditingExisting: true,
+    });
+    setPlotType(null);
+  }, [sites]);
+
+  // Confirm lot in inline slide-in panel -> queue in draft state
+  const handleConfirmDraftLot = useCallback(
+    (data: { block_number: number; lot_number: number }) => {
+      if (!activeSiteId || !activeDraft) return;
+
+      if (activeDraft.isEditingExisting && editingSubdivisionId) {
+        setPendingBoundaryUpdates((prev) => {
+          const filtered = prev.filter((p) => p.subdivisionId !== editingSubdivisionId);
+          return [
+            ...filtered,
+            {
+              subdivisionId: editingSubdivisionId,
+              siteId: activeSiteId,
+              block: data.block_number,
+              lot: data.lot_number,
+              boundary: activeDraft.boundary,
+              areaSize: activeDraft.areaSize,
+              updatedAt: Date.now(),
+            },
+          ];
+        });
+        toast.success(`Block ${data.block_number} Lot ${data.lot_number} boundary queued for save.`);
+      } else {
+        const newDraft: DraftLot = {
+          draftId: crypto.randomUUID(),
+          siteId: activeSiteId,
+          boundary: activeDraft.boundary,
+          block: data.block_number,
+          lot: data.lot_number,
+          areaSize: activeDraft.areaSize,
+          createdAt: Date.now(),
+        };
+        setDraftLots((prev) => [...prev, newDraft]);
+        toast.success(`Block ${data.block_number} Lot ${data.lot_number} added to drafts.`);
+      }
+
+      setActiveDraft(null);
+      setEditingSubdivisionId(null);
+      setDraftPoints([]);
     },
-    [activeSiteId, pendingLotBoundary, router],
+    [activeSiteId, activeDraft, editingSubdivisionId]
   );
 
+  const handleDiscardDraftLot = useCallback(() => {
+    setActiveDraft(null);
+    setEditingSubdivisionId(null);
+    setDraftPoints([]);
+  }, []);
+
+  const handleRedrawDraftLot = useCallback(() => {
+    setActiveDraft(null);
+    setPlotType('lot');
+    setDraftPoints([]);
+  }, []);
+
+  const handleDiscardAllDrafts = useCallback(() => {
+    if (activeSiteId) {
+      clearSiteDraft(activeSiteId);
+    }
+    setDraftLots([]);
+    setPendingBoundaryUpdates([]);
+    setActiveDraft(null);
+    setEditingSubdivisionId(null);
+    setDraftPoints([]);
+    toast.info('All draft lots discarded.');
+  }, [activeSiteId]);
+
+  // Save All drafts & exit editor mode
+  const handleSaveAll = useCallback(async () => {
+    if (draftLots.length === 0 && pendingBoundaryUpdates.length === 0) {
+      setIsEditorActive(false);
+      setIsSidebarOpen(true);
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // 1. Batch create new draft lots
+      if (draftLots.length > 0) {
+        const payload = draftLots.map((d) => ({
+          site_id: d.siteId,
+          block_number: d.block!,
+          lot_number: d.lot!,
+          boundary: d.boundary,
+          area_size: d.areaSize,
+        }));
+        const res = await batchCreateSubdivisionLots(payload);
+        if (!res.success) {
+          toast.error(res.error);
+          return;
+        }
+      }
+
+      // 2. Commit boundary updates for existing subdivisions
+      for (const update of pendingBoundaryUpdates) {
+        const res = await updateSubdivisionLotBoundary({
+          subdivision_id: update.subdivisionId,
+          site_id: update.siteId,
+          block_number: update.block,
+          lot_number: update.lot,
+          boundary: update.boundary,
+        });
+        if (!res.success) {
+          toast.error(res.error);
+          return;
+        }
+      }
+
+      toast.success(
+        `Saved ${draftLots.length + pendingBoundaryUpdates.length} change(s) successfully.`
+      );
+
+      if (activeSiteId) {
+        clearSiteDraft(activeSiteId);
+      }
+      setDraftLots([]);
+      setPendingBoundaryUpdates([]);
+      setActiveDraft(null);
+      setEditingSubdivisionId(null);
+      setDraftPoints([]);
+      setIsEditorActive(false);
+      setIsSidebarOpen(true);
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save changes');
+    } finally {
+      setIsSaving(false);
+    }
+  }, [draftLots, pendingBoundaryUpdates, activeSiteId, router]);
+
+  // Confirm discarding drafts when exit guard triggers
+  const handleConfirmDiscardAndExit = useCallback(() => {
+    handleDiscardAllDrafts();
+    setIsExitGuardOpen(false);
+    if (pendingExitTarget === 'leaveSite') {
+      setActiveSiteId(null);
+    } else {
+      setIsEditorActive(false);
+      setIsSidebarOpen(true);
+    }
+    setPendingExitTarget(null);
+  }, [handleDiscardAllDrafts, pendingExitTarget]);
+
+  // Confirm saving drafts when exit guard triggers
+  const handleConfirmSaveAndExit = useCallback(async () => {
+    setIsExitGuardOpen(false);
+    await handleSaveAll();
+    if (pendingExitTarget === 'leaveSite') {
+      setActiveSiteId(null);
+      setIsEditorActive(true);
+      setIsSidebarOpen(false);
+    }
+    setPendingExitTarget(null);
+  }, [handleSaveAll, pendingExitTarget]);
+
+  // Save brand-new site
   const handleSaveSite = useCallback(
     async (data: { name: string; description?: string }) => {
       if (!pendingSiteBoundary) return;
@@ -215,7 +582,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         setIsSaving(false);
       }
     },
-    [pendingSiteBoundary, router],
+    [pendingSiteBoundary, router]
   );
 
   const handleDeletePlotTrigger = useCallback((plot: SelectedPlotInfo) => {
@@ -313,89 +680,227 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="relative flex flex-1 h-full min-h-0 w-full flex-col overflow-hidden">
-      {/* Background: Edge-to-edge interactive canvas */}
-      <div className="absolute inset-0 h-full w-full flex flex-col">
-        <SiteMap
-          sites={sites}
-          isSidebarOpen={isSidebarOpen}
-          hoveredLotKey={hoveredLotKey}
-          selectedLotId={selectedPropertyLot?.property_id}
-          onSelectLotProperty={handleSelectLotProperty}
-          onSelectUnregistered={handleSelectUnregistered}
-          isEditorMode={isEditorActive}
-          isPlotting={plotType !== null}
-          draftPoints={draftPoints}
-          onAddDraftPoint={handleAddDraftPoint}
-          onDeletePlot={handleDeletePlotTrigger}
-          focusedSiteId={activeSiteId}
-        />
-      </div>
+        {/* Background: Edge-to-edge interactive MapLibre canvas */}
+        <div className="absolute inset-0 h-full w-full flex flex-col">
+          <SiteMap
+            sites={sites}
+            isSidebarOpen={isSidebarOpen}
+            hoveredLotKey={hoveredLotKey}
+            selectedLotId={selectedPropertyLot?.property_id}
+            onSelectLotProperty={handleSelectLotProperty}
+            onSelectUnregistered={handleSelectUnregistered}
+            isEditorMode={isEditorActive}
+            isPlotting={plotType !== null}
+            draftPoints={draftPoints}
+            onAddDraftPoint={handleAddDraftPoint}
+            onDeletePlot={handleDeletePlotTrigger}
+            onEditBoundary={handleEditBoundary}
+            focusedSiteId={activeSiteId}
+            activeSiteRing={activeSiteRing}
+            draftLots={draftLots}
+            pendingBoundaryUpdates={pendingBoundaryUpdates}
+            onUpdateDraftPoints={handleUpdateDraftPoints}
+            isAdjustingVertices={activeDraft !== null}
+          />
+        </div>
 
-      {/* Floating Low-profile Map Editor Controls */}
-      <MapSiteEditor
-        sites={sites}
-        activeSiteId={activeSiteId}
-        onSelectSite={setActiveSiteId}
-        isEditorActive={isEditorActive}
-        onToggleEditor={handleToggleEditor}
-        plotType={plotType}
-        onStartPlotting={handleStartPlotting}
-        onCancelPlotting={handleCancelPlotting}
-        draftPointsCount={draftPoints.length}
-        onUndoPoint={handleUndoPoint}
-        onFinishShape={handleFinishShape}
-        selectedPlotToDelete={selectedPlotToDelete}
-        onConfirmDeletePlot={handleConfirmDeletePlot}
-        onCancelDeletePlot={() => setSelectedPlotToDelete(null)}
-        pendingLotBoundary={pendingLotBoundary}
-        onSaveLot={handleSaveLot}
-        onDiscardLot={() => setPendingLotBoundary(null)}
-        pendingSiteBoundary={pendingSiteBoundary}
-        onSaveSite={handleSaveSite}
-        onDiscardSite={() => setPendingSiteBoundary(null)}
-        isSaving={isSaving}
-        onArchiveSite={handleArchiveSite}
-        onUnarchiveSite={handleUnarchiveSite}
-        onDeleteSite={handleDeleteSite}
-      />
-
-      {/* Floating Collapsible Card on Left */}
-      <div
-        className={cn(
-          'absolute bottom-2 left-2 top-2 z-20 w-[calc(100vw-1rem)] sm:bottom-4 sm:left-4 sm:top-4 sm:w-[460px] sm:max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ease-in-out',
-          isSidebarOpen && !plotType
-            ? 'translate-x-0 opacity-100 pointer-events-auto'
-            : '-translate-x-[calc(100%+2rem)] opacity-0 pointer-events-none'
+        {/* Floating Map Editor button at top-right when editor is NOT active */}
+        {!isEditorActive && (
+          <div className="absolute top-4 right-16 z-20">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRequestEditorEntry}
+              className="h-8 gap-1.5 rounded-xl border border-border bg-card px-3 shadow-md hover:bg-row-hover text-foreground font-semibold text-xs"
+              title="Enter interactive map editor"
+            >
+              <PenTool className="h-3.5 w-3.5 text-primary" />
+              <span>Map Editor</span>
+            </Button>
+          </div>
         )}
-      >
-        <PropertyLotsSidebar
-          sites={sites}
-          onClose={() => setIsSidebarOpen(false)}
-          selectedLot={selectedPropertyLot}
-          onSelectLot={handleSelectLot}
-          onHoverLot={setHoveredLotKey}
-          onSiteFilterChange={setActiveSiteId}
-          createInitialValues={createInitialValues}
-          onClearCreateInitialValues={() => setCreateInitialValues(null)}
-        />
-      </div>
 
-      {/* Floating expand toggle button when card is collapsed and editor is not active */}
-      {!isSidebarOpen && !isEditorActive && !plotType && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleOpenSidebar}
-          className="absolute left-4 top-4 z-20 gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-lg hover:bg-row-hover text-foreground font-medium"
-          aria-label="Open property lots panel"
+        {/* Floating Map Editor Shell */}
+        <MapSiteEditor
+          sites={sites}
+          activeSiteId={activeSiteId}
+          onSelectSite={setActiveSiteId}
+          onLeaveSite={handleLeaveSite}
+          isEditorActive={isEditorActive}
+          onToggleEditor={handleToggleEditor}
+          plotType={plotType}
+          onStartPlotting={handleStartPlotting}
+          onCancelPlotting={handleCancelPlotting}
+          draftPointsCount={draftPoints.length}
+          onUndoPoint={handleUndoPoint}
+          onFinishShape={handleFinishShape}
+          hasOutOfBoundsVertex={hasOutOfBoundsVertex}
+          activeDraft={activeDraft}
+          onConfirmDraftLot={handleConfirmDraftLot}
+          onDiscardDraftLot={handleDiscardDraftLot}
+          onRedrawDraftLot={handleRedrawDraftLot}
+          selectedPlotToDelete={selectedPlotToDelete}
+          onConfirmDeletePlot={handleConfirmDeletePlot}
+          onCancelDeletePlot={() => setSelectedPlotToDelete(null)}
+          pendingSiteBoundary={pendingSiteBoundary}
+          onSaveSite={handleSaveSite}
+          onDiscardSite={() => setPendingSiteBoundary(null)}
+          draftLotsCount={draftLots.length}
+          pendingUpdatesCount={pendingBoundaryUpdates.length}
+          onSaveAll={handleSaveAll}
+          onDiscardAllDrafts={handleDiscardAllDrafts}
+          isSaving={isSaving}
+          hasStoredDraft={hasStoredDraft}
+          onResumeStoredDraft={handleResumeStoredDraft}
+          onDiscardStoredDraft={handleDiscardStoredDraft}
+          onArchiveSite={handleArchiveSite}
+          onUnarchiveSite={handleUnarchiveSite}
+          onDeleteSite={handleDeleteSite}
+        />
+
+        {/* Floating Collapsible Card on Left (View Mode only) */}
+        <div
+          className={cn(
+            'absolute bottom-2 left-2 top-2 z-20 w-[calc(100vw-1rem)] sm:bottom-4 sm:left-4 sm:top-4 sm:w-[460px] sm:max-w-[calc(100vw-2rem)] rounded-2xl border border-border bg-card shadow-2xl overflow-hidden flex flex-col transition-all duration-300 ease-in-out',
+            isSidebarOpen && !isEditorActive && !plotType
+              ? 'translate-x-0 opacity-100 pointer-events-auto'
+              : '-translate-x-[calc(100%+2rem)] opacity-0 pointer-events-none'
+          )}
         >
-          <PanelLeftOpen className="h-4 w-4 text-primary" />
-          <span className="text-xs font-semibold">Property Lots</span>
-          <span className="rounded-full bg-sidebar-accent px-1.5 py-0.5 text-[10px] text-accent-blue-foreground font-medium">
-            {totalLots}
-          </span>
-        </Button>
-      )}
+          <PropertyLotsSidebar
+            sites={sites}
+            onClose={() => setIsSidebarOpen(false)}
+            selectedLot={selectedPropertyLot}
+            onSelectLot={handleSelectLot}
+            onHoverLot={setHoveredLotKey}
+            onSiteFilterChange={setActiveSiteId}
+            createInitialValues={createInitialValues}
+            onClearCreateInitialValues={() => setCreateInitialValues(null)}
+          />
+        </div>
+
+        {/* Floating expand toggle button when card is collapsed and editor is not active */}
+        {!isSidebarOpen && !isEditorActive && !plotType && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleOpenSidebar}
+            className="absolute left-4 top-4 z-20 gap-2 rounded-xl border border-border bg-card px-3 py-2 shadow-lg hover:bg-row-hover text-foreground font-medium"
+            aria-label="Open property lots panel"
+          >
+            <PanelLeftOpen className="h-4 w-4 text-primary" />
+            <span className="text-xs font-semibold">Property Lots</span>
+            <span className="rounded-full bg-sidebar-accent px-1.5 py-0.5 text-[10px] text-accent-blue-foreground font-medium">
+              {totalLots}
+            </span>
+          </Button>
+        )}
+
+        {/* Editor Entry Confirmation Dialog */}
+        <AlertDialog open={isEntryConfirmOpen} onOpenChange={setIsEntryConfirmOpen}>
+          <AlertDialogContent className="max-w-md bg-card">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-base font-bold">
+                <PenTool className="h-4 w-4 text-primary" />
+                <span>Enter Map Editor?</span>
+              </AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3 pt-2 text-xs text-foreground leading-relaxed">
+                  <p>
+                    You are entering <strong>interactive editing mode</strong>.
+                  </p>
+                  <div className="rounded-lg bg-row-hover p-2.5 space-y-1.5 border border-border text-muted-foreground">
+                    <div className="flex items-start gap-1.5">
+                      <span className="text-primary font-bold">•</span>
+                      <span>Edits are <strong>drafted locally</strong> and never applied to the live map until you click <strong>Save All &amp; Exit</strong>.</span>
+                    </div>
+                    <div className="flex items-start gap-1.5">
+                      <span className="text-primary font-bold">•</span>
+                      <span>Editing is <strong>scoped to your selected site</strong>. You must leave the site to switch projects or add a new site.</span>
+                    </div>
+                    <div className="flex items-start gap-1.5">
+                      <span className="text-primary font-bold">•</span>
+                      <span>Clicking lots on the map displays editing controls rather than client details.</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 pt-1">
+                    <Label htmlFor="entry-site-select" className="text-xs font-semibold">
+                      Select Site to Edit:
+                    </Label>
+                    <Select
+                      value={pendingEntrySiteId ?? ''}
+                      onValueChange={setPendingEntrySiteId}
+                    >
+                      <SelectTrigger id="entry-site-select" className="h-8 text-xs bg-card">
+                        <SelectValue placeholder="Choose a site" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sites.map((s) => (
+                          <SelectItem key={s.site_id} value={s.site_id} className="text-xs">
+                            {s.name}
+                            {s.is_archived ? ' (Archived)' : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="pt-2">
+              <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmEditorEntry}
+                disabled={!pendingEntrySiteId}
+                className="text-xs font-semibold bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)] disabled:opacity-50"
+              >
+                Enter Editor
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Unsaved Drafts Exit Warning Dialog */}
+        <AlertDialog open={isExitGuardOpen} onOpenChange={setIsExitGuardOpen}>
+          <AlertDialogContent className="max-w-md bg-card">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-base font-bold text-warning">
+                <AlertTriangle className="h-4 w-4" />
+                <span>Unsaved Drafts Detected</span>
+              </AlertDialogTitle>
+              <AlertDialogDescription className="text-xs text-foreground leading-relaxed space-y-2">
+                <p>
+                  You have <strong>{draftLots.length + pendingBoundaryUpdates.length}</strong> unsaved draft change(s) on{' '}
+                  <strong>{sites.find((s) => s.site_id === activeSiteId)?.name ?? 'this site'}</strong>.
+                </p>
+                <p className="text-muted-foreground">
+                  You cannot leave this site or exit the editor until you either commit all changes to the database or discard them.
+                </p>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter className="pt-2 flex-col sm:flex-row gap-2">
+              <AlertDialogCancel className="text-xs">Stay in Editor</AlertDialogCancel>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleConfirmDiscardAndExit}
+                className="text-xs"
+              >
+                Discard All Drafts
+              </Button>
+              <LoadingButton
+                size="sm"
+                onClick={handleConfirmSaveAndExit}
+                isLoading={isSaving}
+                loadingText="Saving..."
+                className="text-xs font-semibold bg-primary text-primary-foreground"
+              >
+                Save All &amp; Exit
+              </LoadingButton>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
   );

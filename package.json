@@ -17,6 +17,8 @@
     "test:e2e:admin-roles": "vitest run scripts/tests/admin/admin-roles.test.ts",
     "test:e2e:clients": "vitest run scripts/tests/clients/clients.test.ts",
     "test:e2e:properties": "vitest run scripts/tests/properties/properties.test.ts",
+    "test:e2e:titles": "vitest run scripts/tests/titles/titles-crud.test.ts",
+    "test:e2e:billing": "vitest run scripts/tests/billing/billing-backend.test.ts",
     "test:e2e:permissions": "vitest run scripts/tests/permissions/permissions-guard.test.ts",
     "test:e2e:arcgis": "vitest run scripts/tests/arcgis/arcgis-token.test.ts",
     "test:e2e:map": "vitest run scripts/tests/properties/map-site.test.ts",

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertOctagon, BadgeCheck, FileCheck, Loader2, Undo2 } from 'lucide-react';
+import { AlertOctagon, BadgeCheck, Loader2, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -63,11 +63,15 @@ export function ClientPropertyClearance({ property }: ClientPropertyClearancePro
     }
   );
 
+  // A titled lot shows no link here any more. The card above already opens the
+  // legal record — that is what `lotDestinationHref` resolves a titled lot to —
+  // so a second link to the same place eight pixels below it is a duplicate
+  // rather than a convenience.
   if (property.has_title) {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <FileCheck className="h-3.5 w-3.5" />
-        Title record created by Legal
+      <p className="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
+        <BadgeCheck className="h-3.5 w-3.5 text-primary" />
+        <span>Title record in Legal{property.title_status ? ` (${property.title_status})` : ''}</span>
       </p>
     );
   }
@@ -86,9 +90,11 @@ export function ClientPropertyClearance({ property }: ClientPropertyClearancePro
   if (property.cleared_at) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-xs text-foreground">
+        {/* Same reasoning as the titled branch: the card opens Legal, so this
+            states the fact and leaves the navigation to it. */}
+        <p className="flex items-center gap-1.5 px-1 text-xs text-foreground">
           <BadgeCheck className="h-3.5 w-3.5 text-success" />
-          Cleared by Billing {DATE.format(new Date(property.cleared_at))}. Awaiting title from Legal.
+          <span>Cleared by Billing {DATE.format(new Date(property.cleared_at))}. Awaiting title from Legal.</span>
         </p>
         {canClear && (
           <Button

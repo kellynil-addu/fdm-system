@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FileCheck2, FileText, LayoutDashboard, LandPlot, Settings, UserCog, Users } from 'lucide-react';
+import { FileCheck2, FileText, LayoutDashboard, LandPlot, Receipt, Settings, UserCog, Users } from 'lucide-react';
 import { useSession } from '@/lib/hooks/use-session';
 import { DASHBOARD_WORKFLOW } from '@/lib/dashboard-workflow';
 import { cn } from '@/lib/utils';
@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 const WORKFLOW_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
   '/dashboard/clients': Users,
   '/dashboard/properties/map': LandPlot,
+  '/dashboard/billing': Receipt,
   '/dashboard/legal': FileCheck2,
 };
 

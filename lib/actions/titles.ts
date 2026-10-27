@@ -15,8 +15,13 @@ import type { AccountAwaitingTitle, CreateLandTitleInput, LandTitle } from "@/li
 import type { PaginatedResult } from "@/lib/types/client";
 
 // The client's documents ride along so title lists can show release packet progress.
+//
+// `contact_info` and the property's `status` are here for the calling cards in
+// the title dialog, which show a contact number and the lot's status. They are
+// scoped to this select rather than added to `LOT_WITH_CLIENT_SELECT`, because
+// that one feeds the property map and is on its hot path.
 const TITLE_SELECT =
-  "*, client:client_id(client_id, full_name, status, address, civil_status, spouse_name, tin_number, documents:client_document(document_type, property_id)), property:property_id(property_id, location, block_number, lot_number, title_number, area_size, price_per_sqm), history:land_title_status_history(history_id, title_id, status, changed_at, changed_by), release_attachment:release_attachment_id(attachment_id, file_path, file_name, file_size, mime_type, uploaded_at)";
+  "*, client:client_id(client_id, full_name, status, address, civil_status, spouse_name, tin_number, contact_info(*), documents:client_document(document_type, property_id)), property:property_id(property_id, location, block_number, lot_number, title_number, area_size, price_per_sqm, status), history:land_title_status_history(history_id, title_id, status, changed_at, changed_by), release_attachment:release_attachment_id(attachment_id, file_path, file_name, file_size, mime_type, uploaded_at)";
 
 const titleBase = createScope();
 const titleCreate = createScope(["legal.create"]);
@@ -107,7 +112,10 @@ interface RawClearedAccount {
     title_number?: string | null;
     land_title: { title_id: string }[] | { title_id: string } | null;
   } | null;
-  parties: { is_primary: boolean; client: { client_id: string; full_name: string } | null }[];
+  parties: {
+    is_primary: boolean;
+    client: { client_id: string; full_name: string; address: string | null } | null;
+  }[];
 }
 
 /**
@@ -121,7 +129,7 @@ export async function getAccountsAwaitingTitle(): Promise<AccountAwaitingTitle[]
     const { data, error } = await supabase
       .from("ledger_account")
       .select(
-        "account_id, cleared_at, property:property_id(property_id, location, block_number, lot_number, title_number, land_title(title_id)), parties:account_party(is_primary, client:client_id(client_id, full_name))"
+        "account_id, cleared_at, property:property_id(property_id, location, block_number, lot_number, title_number, status, area_size, land_title(title_id)), parties:account_party(is_primary, client:client_id(client_id, full_name, address, contact_info(*)))"
       )
       .eq("status", "Active")
       .not("cleared_at", "is", null)

@@ -127,6 +127,16 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      /**
+       * Tailwind 3 stops at `shadow-sm`, but the codebase uses `shadow-xs` on the
+       * `canvas` surfaces (Card, Button, filter toolbar) and on `CardStickyHeader`.
+       * Those classes silently compiled to nothing, so every one of those
+       * elements rendered with no shadow at all. Defined here as the step below
+       * `sm` so the intent — a flatter surface on the beige canvas — holds.
+       */
+      boxShadow: {
+        xs: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+      },
     },
   },
   plugins: [tailwindcssAnimate, colorMixPlugin],
