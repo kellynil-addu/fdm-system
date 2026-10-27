@@ -224,26 +224,26 @@ export function ClientCallingCard({
           eyebrow and shrinks the watermark, so the rail is the only domain cue
           left in this tier and has to carry more weight here, not less. */}
       <CardCallingRail />
-      <CardMotif
-        variant={motifVariant}
-        icon={<UserRound />}
-        iconSize={isCompact ? 'sm' : 'default'}
-        intensity={motifIntensity}
-        // Strongest at the bottom-right corner, fading out toward the text.
-        className={cn(
-          'text-accent-gold-foreground',
-          isCompact || motifVariant === 'icon'
-            ? '[mask-image:linear-gradient(to_left,black,transparent_60%)]'
-            : '[mask-image:linear-gradient(to_bottom_right,transparent_5%,black_70%)]',
-        )}
-      />
 
       <div
         className={cn(
-          'relative',
+          'relative flex-1 flex flex-col',
           isCompact ? 'px-3 py-2' : isLarge ? 'p-4 pl-6' : 'p-3 pl-5',
         )}
       >
+        <CardMotif
+          variant={motifVariant}
+          icon={<UserRound />}
+          iconSize={isCompact ? 'sm' : 'default'}
+          intensity={motifIntensity}
+          // Strongest at the bottom-right corner, fading out toward the text.
+          className={cn(
+            'text-accent-gold-foreground',
+            isCompact || motifVariant === 'icon'
+              ? '[mask-image:linear-gradient(to_left,black,transparent_60%)]'
+              : '[mask-image:linear-gradient(to_bottom_right,transparent_5%,black_70%)]',
+          )}
+        />
         {isCompact ? (
           // Two rows, deliberately. Trading vertical space to stay narrow is the
           // whole point of this tier: the alternative was a single wide row that
@@ -307,6 +307,7 @@ export function ClientCallingCard({
           detail={statusProp.detail}
           progress={statusProp.progress}
           trailing={statusProp.trailing}
+          className="mt-auto shrink-0"
         />
       )}
     </>
@@ -354,7 +355,7 @@ export function ClientCallingCard({
       }
       aria-label={`Client ${client.full_name}`}
       className={cn(
-        'group overflow-hidden text-left transition-shadow',
+        'group overflow-hidden text-left transition-shadow flex flex-col h-full',
         // The lift follows the affordance, not the tier: a card that does
         // something on hover — opens a panel or takes a click — rises, and one
         // that does nothing stays flat. Before, this was gated on `onClick`
@@ -390,7 +391,7 @@ export function ClientCallingCard({
         // two cards in a dialog header come out equal rather than 240px and
         // 176px. `self-stretch` then equalises their heights, since a property
         // card carries one more compact row than a client card.
-        isCompact && 'min-w-[11rem] max-w-full flex-1 self-stretch flex flex-col rounded-lg',
+        isCompact && 'min-w-[11rem] max-w-full flex-1 self-stretch rounded-lg',
         // Last, so it wins the `twMerge` against the compact tier's rounding and
         // against the variant's border, surface and shadow. The parent supplies
         // all three; a second set here is what made the legal grid read as

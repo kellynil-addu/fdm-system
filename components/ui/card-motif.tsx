@@ -79,20 +79,33 @@ export interface CardMotifProps
    * ~15rem card reads as competing with the text rather than sitting behind it.
    */
   iconSize?: 'default' | 'sm';
+  /** Optional class overrides for the watermark glyph container. */
+  iconClassName?: string;
 }
 
 /**
  * Watermark glyph size, paired with the bleed offset so the glyph leaves the
  * card at a consistent proportion rather than a consistent pixel amount.
+ * Anchored from the top so the watermark remains stable behind card facts and
+ * does not sink down as the card stretches or status bar height changes.
  */
 const WATERMARK_GLYPH = {
-  default: 'h-40 w-40 -bottom-6 -right-4',
-  sm: 'h-20 w-20 -bottom-3 -right-2',
+  default: 'h-40 w-40 top-8 -right-4',
+  sm: 'h-20 w-20 top-0 -right-2',
 } as const;
 
 const CardMotif = React.forwardRef<HTMLDivElement, CardMotifProps>(
   (
-    { className, variant, intensity = 0.16, icon, iconSize = 'default', style, ...props },
+    {
+      className,
+      variant,
+      intensity = 0.16,
+      icon,
+      iconSize = 'default',
+      iconClassName,
+      style,
+      ...props
+    },
     ref,
   ) => (
     <div
@@ -103,12 +116,16 @@ const CardMotif = React.forwardRef<HTMLDivElement, CardMotifProps>(
       {...props}
     >
       {variant === "icon" && icon && (
-        // Bleeding off two edges keeps the glyph from reading as a centred
-        // illustration, which would look like deliberate content.
+        // Bleeding off the right edge keeps the glyph from reading as a centred
+        // illustration, which would look like deliberate content. Anchored from
+        // the top so the watermark stays consistently positioned behind the
+        // card details rather than sinking down as the card stretches or as the
+        // status bar grows.
         <div
           className={cn(
             "absolute [&_svg]:h-full [&_svg]:w-full",
             WATERMARK_GLYPH[iconSize],
+            iconClassName,
           )}
         >
           {icon}

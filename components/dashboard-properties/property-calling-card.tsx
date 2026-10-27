@@ -156,27 +156,27 @@ export function PropertyCallingCard({
           of the family uses it and the client side takes gold. */}
       {/* Width kept at the full rail; see the note in `ClientCallingCard`. */}
       <CardCallingRail className="bg-[color-mix(in_srgb,var(--primary)_70%,black)]" />
-      <CardMotif
-        variant={motifVariant}
-        icon={<MapPin />}
-        iconSize={isCompact ? 'sm' : 'default'}
-        intensity={motifIntensity}
-        // Fades the lattice out toward the text at the top-left while leaving
-        // the parcel at the bottom-right at full strength.
-        className={cn(
-          'text-accent-blue-foreground',
-          isCompact || motifVariant === 'icon'
-            ? '[mask-image:linear-gradient(to_left,black,transparent_60%)]'
-            : '[mask-image:linear-gradient(to_bottom_right,transparent_5%,black_75%)]',
-        )}
-      />
 
       <div
         className={cn(
-          'relative',
+          'relative flex-1 flex flex-col',
           isCompact ? 'px-3 py-2' : isLarge ? 'p-4 pl-6' : 'p-3 pl-5',
         )}
       >
+        <CardMotif
+          variant={motifVariant}
+          icon={<MapPin />}
+          iconSize={isCompact ? 'sm' : 'default'}
+          intensity={motifIntensity}
+          // Fades the lattice out toward the text at the top-left while leaving
+          // the parcel at the bottom-right at full strength.
+          className={cn(
+            'text-accent-blue-foreground',
+            isCompact || motifVariant === 'icon'
+              ? '[mask-image:linear-gradient(to_left,black,transparent_60%)]'
+              : '[mask-image:linear-gradient(to_bottom_right,transparent_5%,black_75%)]',
+          )}
+        />
         {isCompact ? (
           // Three rows: the lot, its project area, its TCT. The TCT earns a
           // permanent row because it is the number staff cross-reference against
@@ -237,6 +237,7 @@ export function PropertyCallingCard({
           detail={statusProp.detail}
           progress={statusProp.progress}
           trailing={statusProp.trailing}
+          className="mt-auto shrink-0"
         />
       )}
     </>
@@ -269,7 +270,7 @@ export function PropertyCallingCard({
       }
       aria-label={`Property ${lotLabel}`}
       className={cn(
-        'group overflow-hidden text-left transition-shadow',
+        'group overflow-hidden text-left transition-shadow flex flex-col h-full',
         /** See the note in `ClientCallingCard` on why the lift follows the affordance. */
         (isInteractive || showReveal) && 'hover:shadow-md',
         isInteractive && 'cursor-pointer',
@@ -281,7 +282,7 @@ export function PropertyCallingCard({
         // `self-stretch` matters here specifically: a property card has three
         // compact rows and a client card has two, so without it the two cards
         // in a dialog header come out 89px and 65px and look misaligned.
-        isCompact && 'min-w-[11rem] max-w-full flex-1 self-stretch flex flex-col rounded-lg',
+        isCompact && 'min-w-[11rem] max-w-full flex-1 self-stretch rounded-lg',
         /** See the note in `ClientCallingCard` — the parent supplies the chrome. */
         embedded && 'rounded-none border-0 bg-transparent shadow-none',
         className,
