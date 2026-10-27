@@ -174,15 +174,10 @@ export function PropertyCallingCard({
 
       <div
         className={cn(
-          'relative',
+          'relative flex-1 flex flex-col',
           isCompact ? 'px-3 py-2' : isLarge ? 'p-4 pl-6' : 'p-3 pl-5',
         )}
       >
-        {/*
-          Inside the content box rather than as a sibling spanning the whole
-          card — see the note in `ClientCallingCard` on why the watermark has to
-          sit behind the text rather than behind the status bar too.
-        */}
         <CardMotif
           variant={motifVariant}
           icon={<MapPin />}
@@ -197,7 +192,6 @@ export function PropertyCallingCard({
               : '[mask-image:linear-gradient(to_bottom_right,transparent_5%,black_75%)]',
           )}
         />
-        <div className="relative">
         {isCompact ? (
           // Three rows: the lot, its project area, its TCT. The TCT earns a
           // permanent row because it is the number staff cross-reference against
@@ -265,6 +259,7 @@ export function PropertyCallingCard({
           detail={statusProp.detail}
           progress={statusProp.progress}
           trailing={statusProp.trailing}
+          className="mt-auto shrink-0"
         />
       )}
     </>
@@ -297,7 +292,7 @@ export function PropertyCallingCard({
       }
       aria-label={`Property ${lotLabel}`}
       className={cn(
-        'group overflow-hidden text-left transition-shadow',
+        'group overflow-hidden text-left transition-shadow flex flex-col h-full',
         /** See the note in `ClientCallingCard` on why the lift follows the affordance. */
         (isInteractive || showReveal) && 'hover:shadow-md',
         isInteractive && 'cursor-pointer',
@@ -309,7 +304,7 @@ export function PropertyCallingCard({
         // `self-stretch` matters here specifically: a property card has three
         // compact rows and a client card has two, so without it the two cards
         // in a dialog header come out 89px and 65px and look misaligned.
-        isCompact && 'min-w-[11rem] max-w-full flex-1 self-stretch flex flex-col rounded-lg',
+        isCompact && 'min-w-[11rem] max-w-full flex-1 self-stretch rounded-lg',
         /** See the note in `ClientCallingCard` — the parent supplies the chrome. */
         embedded && 'rounded-none border-0 bg-transparent shadow-none',
         className,

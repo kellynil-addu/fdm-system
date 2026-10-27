@@ -242,21 +242,10 @@ export function ClientCallingCard({
 
       <div
         className={cn(
-          'relative',
+          'relative flex-1 flex flex-col',
           isCompact ? 'px-3 py-2' : isLarge ? 'p-4 pl-6' : 'p-3 pl-5',
         )}
       >
-        {/*
-          Inside the content box rather than as a sibling spanning the whole
-          card, because the watermark is anchored to the bottom-right of
-          whatever it fills. Filling the card meant it filled the status bar
-          too, so a bar with a progress row made the card taller and dragged
-          the glyph down away from the text it sits behind.
-
-          The wrapper below is what keeps the text on top: an absolutely
-          positioned element paints above static in-flow content in the same
-          stacking context, so without it the watermark would cover the fields.
-        */}
         <CardMotif
           variant={motifVariant}
           icon={<UserRound />}
@@ -270,7 +259,6 @@ export function ClientCallingCard({
               : '[mask-image:linear-gradient(to_bottom_right,transparent_5%,black_70%)]',
           )}
         />
-        <div className="relative">
         {isCompact ? (
           // Two rows, deliberately. Trading vertical space to stay narrow is the
           // whole point of this tier: the alternative was a single wide row that
@@ -354,6 +342,7 @@ export function ClientCallingCard({
           detail={statusProp.detail}
           progress={statusProp.progress}
           trailing={statusProp.trailing}
+          className="mt-auto shrink-0"
         />
       )}
     </>
@@ -401,7 +390,7 @@ export function ClientCallingCard({
       }
       aria-label={`Client ${client.full_name}`}
       className={cn(
-        'group overflow-hidden text-left transition-shadow',
+        'group overflow-hidden text-left transition-shadow flex flex-col h-full',
         // The lift follows the affordance, not the tier: a card that does
         // something on hover — opens a panel or takes a click — rises, and one
         // that does nothing stays flat. Before, this was gated on `onClick`
@@ -437,7 +426,7 @@ export function ClientCallingCard({
         // two cards in a dialog header come out equal rather than 240px and
         // 176px. `self-stretch` then equalises their heights, since a property
         // card carries one more compact row than a client card.
-        isCompact && 'min-w-[11rem] max-w-full flex-1 self-stretch flex flex-col rounded-lg',
+        isCompact && 'min-w-[11rem] max-w-full flex-1 self-stretch rounded-lg',
         // Last, so it wins the `twMerge` against the compact tier's rounding and
         // against the variant's border, surface and shadow. The parent supplies
         // all three; a second set here is what made the legal grid read as
