@@ -27,9 +27,15 @@ export function CallingCardHeader({
   trailing,
   size = 'default',
 }: {
-  monogram: React.ReactNode;
+  /**
+   * Optional so a card nested as a secondary subject can drop it — the parent
+   * has already established the record's identity, and a second box of initials
+   * inside it reads as a second record.
+   */
+  monogram?: React.ReactNode;
   title: React.ReactNode;
-  eyebrow: string;
+  /** Optional for the mirror reason: a label the parent has already stated. */
+  eyebrow?: string;
   badge?: React.ReactNode;
   trailing?: React.ReactNode;
   size?: 'default' | 'lg';
@@ -50,9 +56,11 @@ export function CallingCardHeader({
           </span>
           {badge}
         </div>
-        <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          {eyebrow}
-        </p>
+        {eyebrow && (
+          <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            {eyebrow}
+          </p>
+        )}
       </div>
       {trailing}
     </div>
@@ -88,6 +96,48 @@ export function CallingCardInline({
       >
         {title}
       </span>
+    </div>
+  );
+}
+
+/**
+ * A second subject inside a card, below the field list.
+ *
+ * Its reason to exist is the billing and legal grids, where one record holds
+ * both a lot and the buyer of that lot. Two side-by-side compact cards gave
+ * that record two identities, two monograms and two rails for one thing; this
+ * renders the buyer as a subject line inside the lot's card instead, which is
+ * what the data actually says.
+ *
+ * Deliberately not interactive and not able to be: it sits inside a card that
+ * is already the click target, and an anchor inside an anchor is invalid
+ * markup. `trailing` is for a fact, not a control.
+ */
+export function CallingCardSubject({
+  monogram,
+  title,
+  eyebrow,
+  trailing,
+  className,
+}: {
+  monogram: React.ReactNode;
+  title: React.ReactNode;
+  eyebrow: string;
+  trailing?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn('flex items-center gap-2', className)}>
+      {monogram}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-semibold text-foreground">{title}</p>
+          <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            {eyebrow}
+          </p>
+        </div>
+        {trailing && <span className="ml-auto shrink-0">{trailing}</span>}
+      </div>
     </div>
   );
 }
@@ -150,16 +200,21 @@ export function CallingCardFieldCompact({
   value,
   fallback,
   mono,
+  className,
 }: {
   icon: React.ReactNode;
   label: string;
   value?: string | null;
   fallback: string;
   mono?: boolean;
+  className?: string;
 }) {
   const hasValue = Boolean(value && value.trim());
   return (
-    <div className="flex items-baseline gap-2" title={`${label}: ${hasValue ? value : fallback}`}>
+    <div
+      className={cn('flex items-baseline gap-2', className)}
+      title={`${label}: ${hasValue ? value : fallback}`}
+    >
       <span className="mt-0.5 shrink-0 text-muted-foreground">{icon}</span>
       <dt className="sr-only">{label}</dt>
       <dd

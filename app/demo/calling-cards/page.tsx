@@ -1,11 +1,31 @@
 'use client';
 
 import { useState } from 'react';
-import { Check, ClipboardCheck, FileText, PenLine, Wallet } from 'lucide-react';
+import {
+  Check,
+  ClipboardCheck,
+  FileText,
+  MapPin,
+  PenLine,
+  Phone,
+  Ruler,
+  UserRound,
+  Wallet,
+} from 'lucide-react';
 import { ClientCallingCard } from '@/components/dashboard-clients/client-calling-card';
 import { PropertyCallingCard } from '@/components/dashboard-properties/property-calling-card';
-import { Card, CardTitle } from '@/components/ui/card';
+import { Card, CardCallingRail, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { IconBox } from '@/components/ui/icon-box';
+import { StatusBar } from '@/components/ui/status-bar';
+import {
+  CallingCardHeader,
+  CallingCardInline,
+  CallingCardRule,
+  CallingCardField,
+  CallingCardFieldCompact,
+  CallingCardFieldList,
+} from '@/components/ui/card-calling-parts';
 import { cn } from '@/lib/utils';
 import { clientCardStatus } from '@/lib/utils/client-card-status';
 import { TitleRecordCard } from '@/components/dashboard-titles/title-record-card';
@@ -222,6 +242,355 @@ const WORKFLOW = [
   { short: 'Signature', Icon: PenLine },
   { short: 'Release', Icon: Check },
 ];
+
+/**
+ * The billing and legal grids are `lg:grid-cols-3`, so this is the width a card
+ * actually gets there — 1180px container, 48px gutters, two 16px gaps. Anything
+ * shown at a wider "preview" width would be a claim about a layout that does
+ * not exist.
+ */
+const GRID_CELL = 'grid gap-4 lg:grid-cols-3';
+
+/** One status bar descriptor, shaped for `CallingCardStatus`. */
+type DemoStatus = {
+  label: string;
+  tone: 'success' | 'warning' | 'info' | 'muted' | 'destructive';
+  detail: string;
+  progress: number;
+  trailing: string;
+};
+
+const BILLING_COMBO_STATUS: DemoStatus = {
+  label: 'Delinquent',
+  tone: 'warning',
+  detail: 'Final Notice (Sent)',
+  progress: 45,
+  trailing: '₱720,000',
+};
+
+const LEGAL_COMBO_STATUS: DemoStatus = {
+  label: 'Preparation',
+  tone: 'info',
+  detail: 'Document preparation · 3 of 7 documents',
+  progress: 43,
+  trailing: '3/7 docs',
+};
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+/**
+ * A section wrapper for the subject-combination comparison.
+ *
+ * The note under each is the honest part: these variants are close enough in
+ * appearance that the reason to pick one over another is almost never the
+ * pixels, and writing that down is more useful than a caption describing what
+ * the reader can already see.
+ */
+function Combo({
+  label,
+  note,
+  children,
+}: {
+  label: string;
+  note: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <div className={GRID_CELL}>{children}</div>
+      <p className="max-w-3xl text-xs text-muted-foreground">{note}</p>
+    </div>
+  );
+}
+
+/**
+ * Hand-built to match the current billing grid card's geometry: a rail, two
+ * stacked compact cards, then the amortization line, wrapped in the
+ * `interactive` Card the `RecordCard` composes.
+ *
+ * Rebuilt rather than imported on purpose. `RecordCard` requires
+ * `useBillingAccounts` for its click target, so rendering the real one here
+ * would mean standing up the whole billing provider inside a design preview.
+ * What matters for the comparison is the box, and the box is reproduced.
+ */
+function ComboBaseline({ buyer, lot }: { buyer: string; lot: string }) {
+  return (
+    <Card variant="interactive" padding="none" className="group flex flex-col overflow-hidden">
+      <div className="flex flex-1 flex-wrap items-start gap-2 p-3">
+        <div className="relative flex min-w-0 w-full rounded-lg border border-border-warm-subtle bg-card">
+          <CardCallingRail className="bg-[color-mix(in_srgb,var(--primary)_70%,black)]" />
+          <div className="min-w-0 flex-1 space-y-1 px-3 py-2">
+            <CallingCardInline
+              monogram={
+                <IconBox variant="canvas" size="xs" shape="rounded-md" className="shrink-0">
+                  <MapPin className="h-3 w-3" />
+                </IconBox>
+              }
+              title={lot}
+            />
+            <div className="min-w-0 space-y-1 pl-[1.75rem]">
+              <CallingCardFieldCompact
+                icon={<MapPin className="h-3 w-3" />}
+                label="Project area"
+                value="Brgy. Talomo, Davao City"
+                fallback="No project area recorded"
+              />
+              <CallingCardFieldCompact
+                icon={<FileText className="h-3 w-3" />}
+                label="TCT"
+                value="TCT 12-3456"
+                fallback="No TCT recorded"
+                mono
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="relative flex min-w-0 w-full rounded-lg border border-border-warm-subtle bg-card">
+          <CardCallingRail />
+          <div className="min-w-0 flex-1 space-y-1 px-3 py-2">
+            <CallingCardInline
+              monogram={
+                <IconBox variant="canvas" size="xs" shape="rounded-md" className="shrink-0">
+                  <UserRound className="h-3 w-3" />
+                </IconBox>
+              }
+              title={buyer}
+            />
+            <div className="min-w-0 pl-[1.75rem]">
+              <CallingCardFieldCompact
+                icon={<Phone className="h-3 w-3" />}
+                label="Mobile"
+                value="+63 917 555 0144"
+                fallback="Not on file"
+              />
+            </div>
+          </div>
+        </div>
+
+        <span className="w-full px-1 pt-1 text-[11px] text-muted-foreground">
+          ₱14,500/mo · 6 receipts
+        </span>
+      </div>
+      <StatusBar
+        tone="warning"
+        status="Delinquent"
+        detail="Final Notice (Sent)"
+        progress={45}
+        trailing="₱720,000"
+      />
+    </Card>
+  );
+}
+
+/**
+ * The combo as a single card: the lot is the record, the buyer is a field in it.
+ *
+ * Uses the new `children` slot on `PropertyCallingCard`, so this is the real
+ * component rather than a mock — what is on screen is what the grid would ship.
+ */
+type DemoLot = {
+  property_id: string;
+  block_number: number;
+  lot_number: number;
+  location: string | null;
+  status: string;
+  title_number: string | null;
+  area_size: number | null;
+};
+
+function ComboContained({
+  lot,
+  status,
+  client = FULL_CLIENT,
+}: {
+  lot: DemoLot;
+  status: DemoStatus;
+  client?: { full_name: string; client_id: string | null; contact_info?: ContactInfo[] };
+}) {
+  return (
+    <Card
+      variant="calling-card"
+      padding="none"
+      className="group flex cursor-pointer flex-col overflow-hidden text-left transition-shadow hover:shadow-md"
+    >
+      {/* No `status` and no rule above the buyer — the parent renders the one
+          status bar and the property card draws the one rule. See
+          `BillingAccountCard`. */}
+      <PropertyCallingCard property={lot} embedded className="border-0">
+        <ClientCallingCard
+          client={client}
+          tier="compact"
+          embedded
+          hideMonogram
+          hideEyebrow
+        />
+        <p className="pt-1.5 text-[11px] text-muted-foreground">₱14,500/mo · 6 receipts</p>
+      </PropertyCallingCard>
+      <StatusBar
+        tone={status.tone}
+        status={status.label}
+        detail={status.detail}
+        progress={status.progress}
+        trailing={status.trailing}
+      />
+    </Card>
+  );
+}
+
+/**
+ * A card led by the buyer, built from the same parts.
+ *
+ * This is not a rewrite of `PropertyCallingCard` with the labels swapped —
+ * swapping the subject changes which fields belong on it. A lot's project area
+ * and TCT are facts about *the lot*; on a buyer-led card they become facts about
+ * the buyer's purchase, and the fields that matter are the lot reference, the
+ * amount paid and the balance. The status bar keeps doing what it does.
+ *
+ * Composed here from the primitives rather than from either card, because the
+ * family has no member whose subject is a person and whose fields are a
+ * transaction. If this variant is chosen, that member has to be built — this is
+ * what it would look like, not a component that exists.
+ */
+/**
+ * The lot card with the buyer as its last field.
+ *
+ * The cheapest real change of the four: no new block, no extra line, no second
+ * identity, and it fits the card's existing rhythm because a rule already
+ * separates every field. Composed from the parts rather than from
+ * `PropertyCallingCard`, because the field list is not an injectable slot — a
+ * caller can append below it but not inside it — so this is what the card would
+ * look like if it were. Shipping it means adding a `fields` override, which is
+ * a smaller change than any of the others.
+ *
+ * The cost is prominence: a buyer buried as the fourth row of a lot's field
+ * list is the least visible the buyer gets, and for staff whose next action is
+ * a phone call that is the wrong trade.
+ */
+function ComboBuyerField({ lot, status }: { lot: DemoLot; status: DemoStatus }) {
+  return (
+    <Card
+      variant="calling-card"
+      padding="none"
+      className="group flex flex-col overflow-hidden text-left"
+    >
+      <CardCallingRail className="bg-[color-mix(in_srgb,var(--primary)_70%,black)]" />
+      <div className="relative p-3 pl-5">
+        <CallingCardHeader
+          monogram={
+            <IconBox variant="canvas" size="md" shape="rounded-md" className="shrink-0">
+              <MapPin className="h-4 w-4" />
+            </IconBox>
+          }
+          title={`Block ${lot.block_number} Lot ${lot.lot_number}`}
+          eyebrow="Property"
+        />
+        <CallingCardRule />
+        <CallingCardFieldList>
+          <CallingCardField
+            icon={<MapPin className="h-3.5 w-3.5" />}
+            label="Project area"
+            value={lot.location}
+            fallback="No project area recorded"
+          />
+          <CallingCardField
+            icon={<Ruler className="h-3.5 w-3.5" />}
+            label="Area"
+            value={lot.area_size ? `${lot.area_size} sqm` : null}
+            fallback="Area not recorded"
+            mono
+          />
+          <CallingCardField
+            icon={<FileText className="h-3.5 w-3.5" />}
+            label="Title"
+            value={lot.title_number ? `TCT ${lot.title_number}` : null}
+            fallback="No TCT recorded"
+            mono
+          />
+          <CallingCardField
+            icon={<UserRound className="h-3.5 w-3.5" />}
+            label="Buyer"
+            value={FULL_CLIENT.full_name}
+            fallback="Unassigned"
+          />
+        </CallingCardFieldList>
+      </div>
+      <StatusBar
+        tone={status.tone}
+        status={status.label}
+        detail={status.detail}
+        progress={status.progress}
+        trailing={status.trailing}
+      />
+    </Card>
+  );
+}
+
+function ComboBuyerLed({
+  lot,
+  status,
+}: {
+  lot: DemoLot;
+  status: DemoStatus;
+}) {
+  return (
+    <Card
+      variant="calling-card"
+      padding="none"
+      className="group flex flex-col overflow-hidden text-left"
+    >
+      <CardCallingRail />
+      <div className="relative p-3 pl-5">
+        <CallingCardHeader
+          monogram={
+            <IconBox variant="canvas" size="md" shape="rounded-xl" className="shrink-0 text-xs font-semibold">
+              {initialsOf(FULL_CLIENT.full_name)}
+            </IconBox>
+          }
+          title={FULL_CLIENT.full_name}
+          eyebrow="Buyer"
+        />
+        <CallingCardRule />
+        <CallingCardFieldList>
+          <CallingCardField
+            icon={<MapPin className="h-3.5 w-3.5" />}
+            label="Lot"
+            value={`Block ${lot.block_number} Lot ${lot.lot_number}`}
+            fallback="No lot"
+          />
+          <CallingCardField
+            icon={<FileText className="h-3.5 w-3.5" />}
+            label="Title"
+            value={`TCT ${lot.title_number}`}
+            fallback="No TCT recorded"
+            mono
+          />
+          <CallingCardField
+            icon={<Wallet className="h-3.5 w-3.5" />}
+            label="Paid to date"
+            value="₱480,000 of ₱1,200,000"
+            fallback="No payments recorded"
+          />
+        </CallingCardFieldList>
+      </div>
+      <StatusBar
+        tone={status.tone}
+        status={status.label}
+        detail={status.detail}
+        progress={status.progress}
+        trailing={status.trailing}
+      />
+    </Card>
+  );
+}
 
 /**
  * A stand-in for the title dialog's header. Reproduces the real constraints:
@@ -856,6 +1225,77 @@ export default function CallingCardsPage() {
               headers on this page gained a shadow. Worth knowing that it changed
               surfaces outside the cards.
             </p>
+          </div>
+        </Section>
+
+        <Section
+          title="9. The property + client combo"
+          description="The billing and legal grids each render two compact cards — a lot and its buyer — side by side inside a wrapper. The complaint is fair, and the cause is measurable: both grids are lg:grid-cols-3, so a 1180px container leaves a ~340px cell, and once the wrapper's 24px of padding and the 8px gap are taken out, each compact card is about 165px against a min-w-[11rem] floor. They are already narrower than they were designed to be. Everything below is rendered at that real cell width, because a preview at some wider size would be a claim about a layout that does not exist.
+
+Each variant below is rendered against the same record, so the comparison is like for like. The notes say what each one costs, not what it looks like."
+        >
+          <div className="space-y-8">
+            <Combo
+              label="A — Current: two compact cards in a wrapper"
+              note="The baseline, reproduced at the same width. Nothing here is wrong exactly; it is that the card's own layout is doing a job it was not built for. A compact card is for a dialog header, where it sits beside one other card and the surrounding record supplies the context. In a grid it is the whole record, so two of them means two identity lines, two rails, two monograms and two statuses — none of which exist for this grid, because the wrapper's status bar is the only one being read."
+            >
+              <ComboBaseline buyer={FULL_CLIENT.full_name} lot="Block 4 Lot 12" />
+              <ComboBaseline buyer={FULL_CLIENT.full_name} lot="Block 14 Lot 27" />
+              <ComboBaseline buyer={LONG_NAME_CLIENT.full_name} lot="Block 7 Lot 3" />
+            </Combo>
+
+            <Combo
+              label="B — Buyer nested inside the lot card  ·  chosen"
+              note="One card, one rail, one monogram, one status bar, and the buyer is a field of the lot — which is what the data actually says. This is what shipped in the billing and legal grids, and it is the real components rather than a mock: PropertyCallingCard at its default tier with ClientCallingCard nested in its children slot at compact with hideMonogram and hideEyebrow, which collapses the buyer's two rows into one so the nesting costs a single line. The buyer is a fact, not a link, because an anchor inside an anchor is invalid markup — so the card keeps one destination."
+            >
+              <ComboContained lot={FULL_PROPERTY} status={BILLING_COMBO_STATUS} />
+              <ComboContained lot={LONG_AREA_PROPERTY} status={BILLING_COMBO_STATUS} />
+              <ComboContained
+                lot={SPARSE_PROPERTY}
+                status={BILLING_COMBO_STATUS}
+                client={{ full_name: 'Jose Dela Cruz', client_id: 'client-2', contact_info: [] }}
+              />
+            </Combo>
+
+            <Combo
+              label="C — Buyer-led card, lot as a field"
+              note="The inverted variant: the buyer is the subject and the lot becomes a field. It reads best when the clerk is thinking in people rather than parcels — a follow-up call, a document chase — and it puts the one field a lot card cannot carry, paid-to-date, on the card. It also renames the record: the legal grid would become a list of buyers, and a lot that changed hands would be hard to find by its number. This is composed from the card parts rather than from either card, because the family has no member whose subject is a person and whose fields are a transaction."
+            >
+              <ComboBuyerLed lot={FULL_PROPERTY} status={BILLING_COMBO_STATUS} />
+              <ComboBuyerLed lot={LONG_AREA_PROPERTY} status={BILLING_COMBO_STATUS} />
+              <ComboBuyerLed lot={SPARSE_PROPERTY} status={LEGAL_COMBO_STATUS} />
+            </Combo>
+
+            <Combo
+              label="D — The buyer as the last field of the lot"
+              note="No new block and no extra line: the buyer takes a fourth row in the field list the card already has, which is the cheapest of the four and the only one that fits without growing the card. It is composed from the parts rather than from PropertyCallingCard, because the field list is not an injectable slot — a caller can append below it but not inside it. Shipping it means adding a fields override, still a smaller change than B, C or D. The cost is prominence: as the fourth row of a lot's fields the buyer is at their least visible, which is the wrong trade if the clerk's next move is a phone call."
+            >
+              <ComboBuyerField lot={FULL_PROPERTY} status={BILLING_COMBO_STATUS} />
+              <ComboBuyerField lot={LONG_AREA_PROPERTY} status={BILLING_COMBO_STATUS} />
+              <ComboBuyerField lot={SPARSE_PROPERTY} status={LEGAL_COMBO_STATUS} />
+            </Combo>
+
+            <div className="rounded-lg border border-border-warm-subtle bg-row-hover p-3">
+              <p className="text-xs font-medium text-foreground">
+                What the choice actually comes down to
+              </p>
+              <p className="pt-1.5 text-xs text-muted-foreground">
+                All four differ in the pixels; they differ far more in what the
+                card is <em>about</em>. B and D both keep the lot as the record,
+                which matches how both grids are searched and sorted — B gives
+                the buyer a block of their own and D gives them a row, so the
+                choice between them is whether the buyer is worth a fourth line.
+                C is the better card if the questions staff ask are about
+                people, but it makes the lot number a field rather than an
+                identity, and both grids index by lot.
+              </p>
+              <p className="pt-2 text-xs text-muted-foreground">
+                One thing that applies to all of them: if a nested buyer should be
+                a link to the client profile, the nesting has to stop being
+                nested, because a link inside a link is invalid markup — the same
+                wall the client directory hit with its actions menu.
+              </p>
+            </div>
           </div>
         </Section>
       </div>

@@ -56,6 +56,20 @@ export interface PropertyCallingCardProps {
   href?: string | null;
   /** Custom click handler, for a card that does something other than navigate. */
   onClick?: (event: React.MouseEvent) => void;
+  /**
+   * Detail to append below the field list, separated by the same rule the
+   * fields use. Mirrors `ClientCallingCardProps.children`.
+   *
+   * Its reason for existing is the billing and legal grids, where a lot and its
+   * buyer are two subjects with equal claim on the card. Nesting the buyer here
+   * makes the lot the card and the buyer a fact about it, which is one card
+   * instead of two sharing a wrapper — see the comparison in
+   * `app/demo/calling-cards`.
+   *
+   * Only the non-compact tiers have a field list to append to; compact ignores
+   * it, and `embedded` callers should prefer putting the detail in the parent.
+   */
+  children?: React.ReactNode;
   className?: string;
 }
 
@@ -83,6 +97,7 @@ export function PropertyCallingCard({
   status: statusProp,
   href: hrefProp,
   onClick,
+  children,
   className,
 }: PropertyCallingCardProps) {
   const lotLabel = formatLotRef(property.block_number, property.lot_number);
@@ -156,20 +171,6 @@ export function PropertyCallingCard({
           of the family uses it and the client side takes gold. */}
       {/* Width kept at the full rail; see the note in `ClientCallingCard`. */}
       <CardCallingRail className="bg-[color-mix(in_srgb,var(--primary)_70%,black)]" />
-      <CardMotif
-        variant={motifVariant}
-        icon={<MapPin />}
-        iconSize={isCompact ? 'sm' : 'default'}
-        intensity={motifIntensity}
-        // Fades the lattice out toward the text at the top-left while leaving
-        // the parcel at the bottom-right at full strength.
-        className={cn(
-          'text-accent-blue-foreground',
-          isCompact || motifVariant === 'icon'
-            ? '[mask-image:linear-gradient(to_left,black,transparent_60%)]'
-            : '[mask-image:linear-gradient(to_bottom_right,transparent_5%,black_75%)]',
-        )}
-      />
 
       <div
         className={cn(
@@ -177,6 +178,26 @@ export function PropertyCallingCard({
           isCompact ? 'px-3 py-2' : isLarge ? 'p-4 pl-6' : 'p-3 pl-5',
         )}
       >
+        {/*
+          Inside the content box rather than as a sibling spanning the whole
+          card — see the note in `ClientCallingCard` on why the watermark has to
+          sit behind the text rather than behind the status bar too.
+        */}
+        <CardMotif
+          variant={motifVariant}
+          icon={<MapPin />}
+          iconSize={isCompact ? 'sm' : 'default'}
+          intensity={motifIntensity}
+          // Fades the lattice out toward the text at the top-left while leaving
+          // the parcel at the bottom-right at full strength.
+          className={cn(
+            'text-accent-blue-foreground',
+            isCompact || motifVariant === 'icon'
+              ? '[mask-image:linear-gradient(to_left,black,transparent_60%)]'
+              : '[mask-image:linear-gradient(to_bottom_right,transparent_5%,black_75%)]',
+          )}
+        />
+        <div className="relative">
         {isCompact ? (
           // Three rows: the lot, its project area, its TCT. The TCT earns a
           // permanent row because it is the number staff cross-reference against
@@ -224,8 +245,15 @@ export function PropertyCallingCard({
             />
             <CallingCardRule />
             <CallingCardFieldList>{fields}</CallingCardFieldList>
+            {children && (
+              <>
+                <CallingCardRule />
+                {children}
+              </>
+            )}
           </>
         )}
+        </div>
       </div>
 
       {/* Sibling of the padded body, not a row inside it, so the strip reaches

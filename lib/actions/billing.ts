@@ -74,6 +74,11 @@ interface RawBillingAccountRow {
   notices: LedgerAccountNotice[] | null;
 }
 
+// `contact_info` rides along so the billing card's client shows a phone number.
+// Without it the card fell back to "Not on file" for a buyer who has one, which
+// is indistinguishable from a buyer who has none — the same failure the title
+// select documents above. Unlike `LOT_WITH_CLIENT_SELECT`, this select is not on
+// the property map's hot path, so the join is affordable here.
 const BILLING_ACCOUNT_SELECT = `
   account_id,
   property_id,
@@ -115,7 +120,8 @@ const BILLING_ACCOUNT_SELECT = `
       tin_number,
       address,
       civil_status,
-      spouse_name
+      spouse_name,
+      contact_info (*)
     )
   ),
   payments:ledger_payment (*),

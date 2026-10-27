@@ -113,6 +113,17 @@ export interface ClientCallingCardProps {
    * it, and `embedded` callers should prefer putting the detail in the parent.
    */
   children?: React.ReactNode;
+  /**
+   * Drops the monogram, for a card nested inside another as a secondary
+   * subject. The parent has already established the record's identity, so a
+   * second box of initials reads as a second record rather than as one.
+   */
+  hideMonogram?: boolean;
+  /**
+   * Drops the eyebrow label, for a card whose subject the parent has already
+   * named — a "Client" label under a header that says the same thing is noise.
+   */
+  hideEyebrow?: boolean;
   className?: string;
 }
 
@@ -146,6 +157,8 @@ export function ClientCallingCard({
   onClick,
   trailing: trailingProp,
   children,
+  hideMonogram = false,
+  hideEyebrow = false,
   className,
 }: ClientCallingCardProps) {
   const initials = getInitials(client.full_name || '');
@@ -154,6 +167,8 @@ export function ClientCallingCard({
 
   const isCompact = tier === 'compact';
   const isLarge = tier === 'lg';
+  /** See `hideMonogram`: nesting is what those props are for. */
+  const isNested = hideMonogram || hideEyebrow;
   // `embedded` wins over both: a card inside a parent that is already the click
   // target must not open a panel of its own or take a focus stop.
   const showReveal = !embedded && (revealOnHover ?? isCompact);
@@ -224,19 +239,6 @@ export function ClientCallingCard({
           eyebrow and shrinks the watermark, so the rail is the only domain cue
           left in this tier and has to carry more weight here, not less. */}
       <CardCallingRail />
-      <CardMotif
-        variant={motifVariant}
-        icon={<UserRound />}
-        iconSize={isCompact ? 'sm' : 'default'}
-        intensity={motifIntensity}
-        // Strongest at the bottom-right corner, fading out toward the text.
-        className={cn(
-          'text-accent-gold-foreground',
-          isCompact || motifVariant === 'icon'
-            ? '[mask-image:linear-gradient(to_left,black,transparent_60%)]'
-            : '[mask-image:linear-gradient(to_bottom_right,transparent_5%,black_70%)]',
-        )}
-      />
 
       <div
         className={cn(
@@ -244,6 +246,31 @@ export function ClientCallingCard({
           isCompact ? 'px-3 py-2' : isLarge ? 'p-4 pl-6' : 'p-3 pl-5',
         )}
       >
+        {/*
+          Inside the content box rather than as a sibling spanning the whole
+          card, because the watermark is anchored to the bottom-right of
+          whatever it fills. Filling the card meant it filled the status bar
+          too, so a bar with a progress row made the card taller and dragged
+          the glyph down away from the text it sits behind.
+
+          The wrapper below is what keeps the text on top: an absolutely
+          positioned element paints above static in-flow content in the same
+          stacking context, so without it the watermark would cover the fields.
+        */}
+        <CardMotif
+          variant={motifVariant}
+          icon={<UserRound />}
+          iconSize={isCompact ? 'sm' : 'default'}
+          intensity={motifIntensity}
+          // Strongest at the bottom-right corner, fading out toward the text.
+          className={cn(
+            'text-accent-gold-foreground',
+            isCompact || motifVariant === 'icon'
+              ? '[mask-image:linear-gradient(to_left,black,transparent_60%)]'
+              : '[mask-image:linear-gradient(to_bottom_right,transparent_5%,black_70%)]',
+          )}
+        />
+        <div className="relative">
         {isCompact ? (
           // Two rows, deliberately. Trading vertical space to stay narrow is the
           // whole point of this tier: the alternative was a single wide row that
@@ -256,23 +283,42 @@ export function ClientCallingCard({
           // so two cards sitting side by side in a header would misalign — and
           // staff would lose the signal that the record they are looking at has
           // no phone number on it.
-          <div className="min-w-0 space-y-1">
-            <CallingCardInline monogram={monogram} title={client.full_name} />
-            <div className="min-w-0 pl-[1.75rem]">
+          isNested ? (
+            // Nested as a secondary subject, the two rows collapse into one:
+            // name and contact side by side. The card below knows what kind of
+            // fact this is, so the label goes and the icon carries it, which is
+            // the trade `CallingCardFieldCompact` already makes elsewhere.
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-xs font-semibold text-foreground">
+                {client.full_name}
+              </span>
               <CallingCardFieldCompact
                 icon={<ContactIcon className="h-3 w-3" />}
                 label={primaryContact?.type ?? 'Contact'}
                 value={primaryContact?.value}
                 fallback="Not on file"
+                className="shrink-0"
               />
             </div>
-          </div>
+          ) : (
+            <div className="min-w-0 space-y-1">
+              <CallingCardInline monogram={monogram} title={client.full_name} />
+              <div className="min-w-0 pl-[1.75rem]">
+                <CallingCardFieldCompact
+                  icon={<ContactIcon className="h-3 w-3" />}
+                  label={primaryContact?.type ?? 'Contact'}
+                  value={primaryContact?.value}
+                  fallback="Not on file"
+                />
+              </div>
+            </div>
+          )
         ) : (
           <>
             <CallingCardHeader
-              monogram={monogram}
+              monogram={hideMonogram ? undefined : monogram}
               title={client.full_name}
-              eyebrow="Client"
+              eyebrow={hideEyebrow ? undefined : 'Client'}
               size={isLarge ? 'lg' : 'default'}
               trailing={
                 trailingProp ??
@@ -296,6 +342,7 @@ export function ClientCallingCard({
             )}
           </>
         )}
+        </div>
       </div>
 
       {/* Sibling of the padded body, not a row inside it, so the strip reaches

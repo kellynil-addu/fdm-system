@@ -4,11 +4,13 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import {
   recordLedgerPayment,
@@ -57,6 +59,12 @@ export interface BillingAccountsContextValue {
   counts: Record<BillingTab, number>;
   activeAccount: BillingAccountSummary | null;
   setActiveAccount: (account: BillingAccountSummary | null) => void;
+  /**
+   * The client this session arrived from, when the page was opened via a lot
+   * card's `?account=` link. Null for anyone who came to Billing directly, so
+   * the return link only appears when it would actually be a way back.
+   */
+  cameFromClient: string | null;
   activeModal: BillingModalState;
   setActiveModal: (modal: BillingModalState) => void;
   recordPayment: (input: RecordPaymentInput) => Promise<boolean>;
@@ -88,14 +96,40 @@ export function BillingAccountsProvider({
   children: ReactNode;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const accountIdParam = searchParams.get('account');
   const { hasPermission } = useSession();
   const canEdit = hasPermission('billing.update') || hasPermission('billing.create');
 
   const [accounts, setAccounts] = useState<BillingAccountSummary[]>(initialAccounts);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<BillingTab>('active');
-  const [activeAccount, setActiveAccount] = useState<BillingAccountSummary | null>(null);
+  const [activeAccount, setActiveAccount] = useState<BillingAccountSummary | null>(() =>
+    accountIdParam
+      ? (initialAccounts.find((a) => a.account_id === accountIdParam) ?? null)
+      : null
+  );
   const [activeModal, setActiveModal] = useState<BillingModalState>(null);
+
+  /**
+   * Open the account named in `?account=`, the way Legal opens `?titleId=`.
+   *
+   * The dialog is rendered outside the list, so the account does not have to be
+   * on the active tab for this to work — an account reached from a client's lot
+   * card is usually not the one the default tab shows.
+   *
+   * One-shot, and deliberately so: the param is a command ("show me this one"),
+   * not state. Without the ref, closing the dialog would be undone on the next
+   * render, and staff could not get back to the list without editing the URL.
+   */
+  const openedFromParamRef = useRef(false);
+  useEffect(() => {
+    if (!accountIdParam || openedFromParamRef.current) return;
+    const match = accounts.find((a) => a.account_id === accountIdParam);
+    if (!match) return;
+    openedFromParamRef.current = true;
+    setActiveAccount(match);
+  }, [accountIdParam, accounts]);
 
   const refreshAccount = useCallback(async (accountId: string) => {
     try {
@@ -294,6 +328,7 @@ export function BillingAccountsProvider({
     counts,
     activeAccount,
     setActiveAccount,
+    cameFromClient: accountIdParam ? searchParams.get('client') : null,
     activeModal,
     setActiveModal,
     recordPayment: recordPaymentMutation.execute,

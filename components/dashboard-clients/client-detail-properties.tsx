@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { IconBox } from '@/components/ui/icon-box';
 import { PropertyCallingCard } from '@/components/dashboard-properties/property-calling-card';
 import { PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
+import { lotDestinationHref } from '@/lib/utils/lot-destination';
 import { useClientDetail } from '@/lib/hooks/use-client-detail';
 import { ClientPropertyClearance } from './client-property-clearance';
 
@@ -69,14 +70,16 @@ export function ClientDetailProperties({
                 <div key={property.property_id} className="flex flex-col gap-2">
                   {/*
                     The card carries the lot, its project area, its area and its
-                    TCT, and links to the map — which is what the lot title here
-                    already did. The money is the one number the field list has
-                    no room for, so it goes in the bar beside the status: a
-                    buyer's first question about a lot is what it costs and how
-                    far along the payments are.
+                    TCT. Where it links depends on the lot's stage, not on the
+                    grid it happens to be rendered in — see `lotDestinationHref`
+                    for why. The money is the one number the field list has no
+                    room for, so it goes in the bar beside the status: a buyer's
+                    first question about a lot is what it costs and how far
+                    along the payments are.
                   */}
                   <PropertyCallingCard
                     property={property}
+                    href={lotDestinationHref(property, client.client_id)}
                     status={{
                       label: property.status,
                       tone: PROPERTY_STATUS_VARIANT[property.status] ?? 'muted',
@@ -88,8 +91,8 @@ export function ClientDetailProperties({
                     Deliberately outside the card, not tucked under the bar.
                     This is not a fact about the lot — it is the set of things
                     staff can *do* to it (clear it, forfeit it, undo a
-                    clearance, open its title record), and a bar that ends with
-                    buttons stops being a status strip.
+                    clearance), and a bar that ends with buttons stops being a
+                    status strip.
                   */}
                   {(property.account_id || property.has_title) && (
                     <ClientPropertyClearance property={property} />

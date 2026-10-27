@@ -1,3 +1,5 @@
+import type { ContactInfo } from '@/lib/types/client';
+
 export type PaymentMode = 'Cash' | 'Check' | 'Bank Transfer' | 'Online Deposit';
 export type CompromiseStatus = 'Pending' | 'Approved' | 'Fulfilled' | 'Lapsed' | 'Voided';
 export type NoticeType = '1st Notice' | '2nd Notice' | 'Final Demand';
@@ -82,6 +84,12 @@ export interface BillingAccountSummary {
     address: string | null;
     civil_status?: string | null;
     spouse_name?: string | null;
+    /**
+     * Selected with `*` by `BILLING_ACCOUNT_SELECT`, so this is the whole row
+     * and lines up with `ContactInfo` exactly — which is why a billing card can
+     * show a phone number instead of a fallback.
+     */
+    contact_info?: ContactInfo[] | null;
   } | null;
   property: {
     property_id: string;
