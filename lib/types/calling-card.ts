@@ -10,7 +10,11 @@
  *
  * `tone` is a string literal union rather than a colour so it can be handed
  * straight to `StatusBar` / `Badge` without the card importing a status map.
- */
+ *
+ * `teal`, `violet` and `slate` join the original set for the Legal grid, whose
+ * statuses are coloured by whose turn it is rather than by severity — see
+ * `TITLE_STATUS_VARIANT`. They live here rather than in that map alone so any
+ * domain that needs a neutral stage colour has one. */
 export type CallingCardTone =
   | 'default'
   | 'success'
@@ -18,7 +22,10 @@ export type CallingCardTone =
   | 'info'
   | 'destructive'
   | 'muted'
-  | 'purple';
+  | 'purple'
+  | 'slate'
+  | 'teal'
+  | 'violet';
 
 export interface CallingCardStatus {
   /** What the status is called, e.g. "Sold", "Delinquent", "For Review". */

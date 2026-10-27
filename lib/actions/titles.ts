@@ -112,7 +112,10 @@ interface RawClearedAccount {
     title_number?: string | null;
     land_title: { title_id: string }[] | { title_id: string } | null;
   } | null;
-  parties: { is_primary: boolean; client: { client_id: string; full_name: string } | null }[];
+  parties: {
+    is_primary: boolean;
+    client: { client_id: string; full_name: string; address: string | null } | null;
+  }[];
 }
 
 /**
@@ -126,7 +129,7 @@ export async function getAccountsAwaitingTitle(): Promise<AccountAwaitingTitle[]
     const { data, error } = await supabase
       .from("ledger_account")
       .select(
-        "account_id, cleared_at, property:property_id(property_id, location, block_number, lot_number, title_number, status, area_size, land_title(title_id)), parties:account_party(is_primary, client:client_id(client_id, full_name, contact_info(*)))"
+        "account_id, cleared_at, property:property_id(property_id, location, block_number, lot_number, title_number, status, area_size, land_title(title_id)), parties:account_party(is_primary, client:client_id(client_id, full_name, address, contact_info(*)))"
       )
       .eq("status", "Active")
       .not("cleared_at", "is", null)

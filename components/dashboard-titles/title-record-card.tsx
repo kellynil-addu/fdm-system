@@ -3,6 +3,7 @@
 import { FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardCallingRail } from '@/components/ui/card';
+import { SubjectSplitCard } from '@/components/ui/subject-split-card';
 import { IconBox } from '@/components/ui/icon-box';
 import { StatusBar } from '@/components/ui/status-bar';
 import {
@@ -11,12 +12,10 @@ import {
   CallingCardField,
   CallingCardFieldList,
 } from '@/components/ui/card-calling-parts';
-import { ClientCallingCard } from '@/components/dashboard-clients/client-calling-card';
-import { PropertyCallingCard } from '@/components/dashboard-properties/property-calling-card';
 import { getInitials } from '@/lib/utils/initials';
 import { formatActivityTime } from '@/lib/format-activity-time';
 import { calculateStorageFee } from '@/lib/storage-fee';
-import { TITLE_STATUS_VARIANT } from '@/lib/status-colors';
+import { TITLE_STATUS_VARIANT, titleStatusTone } from '@/lib/status-colors';
 import {
   documentsForLot,
   getMissingReleaseDocuments,
@@ -88,9 +87,9 @@ interface TitleRecordCardProps {
  * One title record as a card: the lot, the buyer, and a banded footer saying
  * where the record stands.
  *
- * The lot is the record and the buyer is a field of it — one rail, one
- * monogram, one status bar. See `BillingAccountCard` for why the two subjects
- * are nested rather than placed side by side, as they were before.
+ * The lot and the buyer sit side by side, each with its own accent bar — see
+ * `SubjectSplitCard`, which is also what `BillingAccountCard` renders, so a
+ * ledger account and a land title read as the same kind of thing.
  */
 export function TitleRecordCard({ item, onClick }: TitleRecordCardProps) {
   if (item.type === 'awaiting') {
@@ -99,64 +98,31 @@ export function TitleRecordCard({ item, onClick }: TitleRecordCardProps) {
 
     const status: CallingCardStatus = {
       label: 'Cleared by Billing',
+      // No exception check: an account awaiting title intake has no title
+      // record yet, so there are no notices and no storage fee to outweigh the
+      // stage colour. `titleStatusTone` takes the title because those
+      // exceptions live on it.
       tone: TITLE_STATUS_VARIANT['Cleared by Billing'],
       detail: sinceLabel(account.cleared_at),
     };
 
     return (
-      <Card
-        variant="calling-card"
-        padding="none"
+      <SubjectSplitCard
+        label={`Open title intake for ${clientName}`}
         onClick={onClick}
-        role="button"
-        tabIndex={0}
-        aria-label={`Open title intake for ${clientName}`}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault();
-            onClick();
-          }
-        }}
-        className="group flex cursor-pointer flex-col overflow-hidden text-left transition-shadow hover:shadow-md"
-      >
-        {/* One card, one rail, one status bar. See `BillingAccountCard` for why
-            the lot is the record and the buyer is a field of it. */}
-        {/*
-          No `status` here — it belongs to the title, not the lot, and this card
-          renders it once at the bottom. See `BillingAccountCard`. No rule above
-          the buyer either: the property card already draws one before its
-          `children`.
-        */}
-        <PropertyCallingCard
-          property={account.property}
-          embedded
-          className="border-0"
-        >
-          <ClientCallingCard
-            client={account.client ?? { full_name: clientName, client_id: null }}
-            tier="compact"
-            embedded
-            hideMonogram
-            hideEyebrow
-          />
-          {account.co_buyers.length > 0 && (
-            // `truncate` so a long list cannot push the card wider than its
-            // cell — the same treatment it had before.
-            <p className="w-full truncate pt-1.5 text-[11px] text-muted-foreground">
+        lot={account.property}
+        buyer={account.client}
+        buyerFallback={clientName}
+        status={status}
+        buyerNote={
+          account.co_buyers.length > 0 ? (
+            // Truncated so a long list cannot push the card wider than its cell.
+            <p className="truncate text-[11px] text-muted-foreground">
               With {account.co_buyers.join(', ')}
             </p>
-          )}
-        </PropertyCallingCard>
-        {/* Placed directly rather than through `RecordCard`, whose `p-3` body
-            would indent the lot card away from the rail it sits against. */}
-        <StatusBar
-          tone={status.tone}
-          status={status.label}
-          detail={status.detail}
-          progress={status.progress}
-          trailing={status.trailing}
-        />
-      </Card>
+          ) : undefined
+        }
+      />
     );
   }
 
@@ -217,33 +183,36 @@ export function TitleRecordCard({ item, onClick }: TitleRecordCardProps) {
 
   const status: CallingCardStatus = {
     label: title.status,
-    tone: TITLE_STATUS_VARIANT[title.status] ?? 'muted',
+    tone: titleStatusTone(title),
     detail,
   };
 
-  /**
-   * The buyer, as a field of the lot rather than a card beside it.
-   *
-   * A released legacy title has no lot row at all, so the client has nothing to
-   * nest inside and the card is built the other way round: the client is the
-   * subject and the lot, when there is one, is a field. That is a different card
-   * rather than a special case of the first — see the branch below.
-   */
-  const buyerBlock = title.client ? (
-    <div className="border-t border-border-warm-subtle pt-2.5">
-      <ClientCallingCard
-        client={title.client}
-        tier="compact"
-        embedded
-        hideMonogram
-        hideEyebrow
+  /*
+    A title with a lot is the split band. A released legacy title has no lot row
+    at all, so there is nothing to sit beside the buyer and the card is built the
+    other way round — the buyer leads and the status is a field. That is a
+    different card rather than a special case of the first, so it keeps its own
+    markup rather than bending `SubjectSplitCard` around a missing column.
+  */
+  if (title.property) {
+    return (
+      <SubjectSplitCard
+        label={`Open title record for ${clientName}`}
+        onClick={onClick}
+        lot={title.property}
+        buyer={title.client}
+        buyerFallback="No buyer recorded"
+        status={status}
+        buyerNote={
+          title.is_legacy_transferred ? (
+            <Badge variant="outline" className="text-[10px]">
+              Legacy Title
+            </Badge>
+          ) : undefined
+        }
       />
-    </div>
-  ) : (
-    <p className="border-t border-border-warm-subtle pt-2.5 text-xs italic text-muted-foreground">
-      No buyer recorded
-    </p>
-  );
+    );
+  }
 
   return (
     <Card
@@ -261,56 +230,38 @@ export function TitleRecordCard({ item, onClick }: TitleRecordCardProps) {
       }}
       className="group flex cursor-pointer flex-col overflow-hidden text-left transition-shadow hover:shadow-md"
     >
-      {title.property ? (
-        <PropertyCallingCard
-          property={title.property}
-          status={status}
-          embedded
-          className="border-0"
-        >
-          {buyerBlock}
+      {/* No lot to sit beside the buyer, so the buyer leads. Built from the same
+          parts rather than from `ClientCallingCard`, whose field list is fixed
+          and whose destination is the client profile — neither of which is right
+          for a card whose click opens a title record. */}
+      <div className="relative">
+        <CardCallingRail />
+        <div className="relative p-3 pl-5">
+          <CallingCardHeader
+            monogram={
+              <IconBox variant="canvas" size="md" shape="rounded-xl" className="shrink-0 text-xs font-semibold">
+                {getInitials(title.client?.full_name ?? clientName)}
+              </IconBox>
+            }
+            title={clientName}
+            eyebrow="Buyer"
+          />
+          <CallingCardRule />
+          <CallingCardFieldList>
+            <CallingCardField
+              icon={<FileText className="h-3.5 w-3.5" />}
+              label="Status"
+              value={title.status}
+              fallback="No status recorded"
+            />
+          </CallingCardFieldList>
           {title.is_legacy_transferred && (
-            <Badge variant="outline" className="mt-1.5 shrink-0 text-[10px]">
+            <Badge variant="outline" className="mt-2 shrink-0 text-[10px]">
               Legacy Title
             </Badge>
           )}
-        </PropertyCallingCard>
-      ) : (
-        // No lot to nest the buyer in, so the buyer leads. Built from the same
-        // parts rather than from `ClientCallingCard`, whose field list is fixed
-        // and whose destination is the client profile — neither of which is
-        // right for a card whose click opens a title record.
-        <div className="relative">
-          <CardCallingRail />
-          <div className="relative p-3 pl-5">
-            <CallingCardHeader
-              monogram={
-                <IconBox variant="canvas" size="md" shape="rounded-xl" className="shrink-0 text-xs font-semibold">
-                  {getInitials(title.client?.full_name ?? clientName)}
-                </IconBox>
-              }
-              title={clientName}
-              eyebrow="Buyer"
-            />
-            <CallingCardRule />
-            <CallingCardFieldList>
-              <CallingCardField
-                icon={<FileText className="h-3.5 w-3.5" />}
-                label="Status"
-                value={title.status}
-                fallback="No status recorded"
-              />
-            </CallingCardFieldList>
-            {title.is_legacy_transferred && (
-              <Badge variant="outline" className="mt-2 shrink-0 text-[10px]">
-                Legacy Title
-              </Badge>
-            )}
-          </div>
         </div>
-      )}
-      {/* Placed directly rather than through `RecordCard`, whose `p-3` body
-          would indent the lot card away from the rail it sits against. */}
+      </div>
       <StatusBar
         tone={status.tone}
         status={status.label}
@@ -322,17 +273,3 @@ export function TitleRecordCard({ item, onClick }: TitleRecordCardProps) {
   );
 }
 
-/*
-  The measurement these cards used to be tuned against is now obsolete and has
-  been removed rather than kept: it described two compact cards sitting side by
-  side, and the grid no longer does that. One fresh load per viewport was used;
-  the cards sat side by side at 1600px and wider (cell 405px, card 147px tall)
-  and stacked at 1440px and narrower (cell 351px, card 220px), missing by a
-  single pixel at a 385px cell because of the `min-w-[11rem]` floor on the
-  compact tier.
-
-  The nested card has not been measured at all. It is a single column, so the
-  floor that caused that crossover no longer applies to it — but "should be
-  fine" is not a measurement, and this is a layout claim. Confirm it in the
-  browser before trusting it.
-*/

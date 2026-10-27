@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { MapPin, ExternalLink, FileText, Ruler } from 'lucide-react';
+import { MapPin, ExternalLink, FileText, Ruler, Tag, LandPlot } from 'lucide-react';
 import { Card, CardCallingRail } from '@/components/ui/card';
 import { CardMotif } from '@/components/ui/card-motif';
 import { IconBox } from '@/components/ui/icon-box';
@@ -16,6 +16,13 @@ import {
   CallingCardFieldList,
 } from '@/components/ui/card-calling-parts';
 import { cn } from '@/lib/utils';
+import {
+  deriveLotPrice,
+  formatArea,
+  formatLotRef,
+  formatPriceAbbreviated,
+  formatPricePerSqm,
+} from '@/lib/utils/lot-pricing';
 import type { PropertyStatus, SubdivisionDisplayStatus } from '@/lib/types/property';
 import type { CallingCardStatus } from '@/lib/types/calling-card';
 import type { CallingCardTier } from '@/components/dashboard-clients/client-calling-card';
@@ -24,10 +31,13 @@ export interface PropertyCallingCardData {
   property_id?: string | null;
   block_number: number;
   lot_number: number;
+  /** The project area. Leads the card: staff identify a lot by where it is. */
   location?: string | null;
   status?: PropertyStatus | SubdivisionDisplayStatus | string | null;
   title_number?: string | null;
   area_size?: number | null;
+  /** Per square metre, in pesos. The card derives the lot's total from it. */
+  price_per_sqm?: number | null;
 }
 
 export interface PropertyCallingCardProps {
@@ -73,17 +83,28 @@ export interface PropertyCallingCardProps {
   className?: string;
 }
 
-export function formatLotRef(block: number, lot: number): string {
-  return `Block ${block} Lot ${lot}`;
-}
+// The pricing formatters moved to `lib/utils/lot-pricing` when the billing and
+// legal record cards needed the same numbers in the same format. Re-exported
+// here because this module is where callers already look for them.
+export {
+  formatLotRef,
+  formatPriceAbbreviated,
+  formatPricePerSqm,
+} from '@/lib/utils/lot-pricing';
 
 /**
  * The property counterpart to `ClientCallingCard`.
  *
  * Shares the document shell (rail, monogram slot, ruled field list) so the two
  * read as one family, and differs in every other cue: a cool blue accent
- * instead of a warm gold one, an angular plat grid instead of a document seal,
- * and a lot reference in the position where a client shows a name.
+ * instead of a warm gold one, and an angular plat grid instead of a document
+ * seal.
+ *
+ * The project area is the card's title and the block-and-lot reference sits
+ * under it, because that is the order staff identify a lot in: they know which
+ * subdivision they are working in and are looking for the lot inside it. The
+ * block-and-lot reference is never dropped — it moves to the eyebrow, or to the
+ * compact tier's first field row.
  *
  * The monogram slot holds a pin glyph rather than initials: "Block 4 Lot 12"
  * collapses to "B1", which is both meaningless and easy to misread.
@@ -102,6 +123,10 @@ export function PropertyCallingCard({
 }: PropertyCallingCardProps) {
   const lotLabel = formatLotRef(property.block_number, property.lot_number);
   const hasTct = Boolean(property.title_number?.trim());
+  const projectArea = property.location?.trim() || null;
+  const hasArea = Boolean(property.area_size);
+  const pricePerSqm = property.price_per_sqm ?? null;
+  const totalPrice = deriveLotPrice(property.area_size, pricePerSqm);
 
   const isCompact = tier === 'compact';
   const isLarge = tier === 'lg';
@@ -139,25 +164,63 @@ export function PropertyCallingCard({
     </IconBox>
   );
 
+  /**
+   * The lot's size and its price, on one line: area at the left, the total with
+   * its rate in brackets at the right. They belong together — neither means
+   * much about a lot without the other — and the eyebrow above already carries
+   * the project area, which is what used to take the first row.
+   *
+   * One row rather than two also buys back the height the price would otherwise
+   * have cost, which matters most in the title dialog's header where this card
+   * sits beside a client card of fixed height.
+   */
+  const areaAndPrice = (
+    <div className="flex items-baseline gap-2">
+      <span className="mt-0.5 shrink-0 text-muted-foreground">
+        <Ruler className="h-3.5 w-3.5" />
+      </span>
+      <dt className="sr-only">Area and price</dt>
+      {/* Wraps rather than shrinks. The price side cannot compress — it is two
+          numbers in brackets — so in a narrow card a single non-wrapping row
+          starves the area down to a few pixels and prints a stub. Letting the
+          price take its own line below is the honest degradation. */}
+      <dd className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
+        <span
+          className={cn(
+            'shrink-0',
+            hasArea ? 'font-medium text-foreground' : 'italic text-muted-foreground',
+          )}
+        >
+          {hasArea ? formatArea(property.area_size) : 'Area not recorded'}
+        </span>
+        <span className="ml-auto flex items-baseline gap-1.5 whitespace-nowrap">
+          <span className="text-muted-foreground">
+            <Tag className="h-3.5 w-3.5" />
+          </span>
+          {totalPrice && pricePerSqm ? (
+            <>
+              <span className="font-medium text-foreground">
+                {formatPriceAbbreviated(totalPrice)}
+              </span>
+              <span className="text-muted-foreground">
+                ({formatPricePerSqm(pricePerSqm)})
+              </span>
+            </>
+          ) : (
+            <span className="italic text-muted-foreground">Price not recorded</span>
+          )}
+        </span>
+      </dd>
+    </div>
+  );
+
   const fields = (
     <>
-      <CallingCardField
-        icon={<MapPin className="h-3.5 w-3.5" />}
-        label="Project area"
-        value={property.location}
-        fallback="No project area recorded"
-      />
-      <CallingCardField
-        icon={<Ruler className="h-3.5 w-3.5" />}
-        label="Area"
-        value={property.area_size ? `${property.area_size} sqm` : null}
-        fallback="Area not recorded"
-        mono
-      />
+      {areaAndPrice}
       <CallingCardField
         icon={<FileText className="h-3.5 w-3.5" />}
-        label="Title"
-        value={hasTct ? `TCT ${property.title_number}` : null}
+        label="TCT"
+        value={hasTct ? property.title_number : null}
         fallback="No TCT recorded"
         mono
       />
@@ -193,27 +256,33 @@ export function PropertyCallingCard({
           )}
         />
         {isCompact ? (
-          // Three rows: the lot, its project area, its TCT. The TCT earns a
+          // Three rows: the project area, the lot, its TCT. The TCT earns a
           // permanent row because it is the number staff cross-reference against
           // the physical certificate, and the reveal panel is a poor place to
           // hide a value people read out loud. The project area above it
           // truncates rather than wrapping — long ones are rare, and an ellipsis
           // costs nothing here because the full text is one hover away.
           <div className="min-w-0 space-y-1">
-            <CallingCardInline monogram={monogram} title={lotLabel} />
+            <CallingCardInline
+              monogram={monogram}
+              title={projectArea ?? lotLabel}
+              titleClassName={projectArea ? undefined : 'italic text-muted-foreground'}
+            />
             <div className="min-w-0 space-y-1 pl-[1.75rem]">
-              <CallingCardFieldCompact
-                icon={<MapPin className="h-3 w-3" />}
-                label="Project area"
-                value={property.location}
-                fallback="No project area recorded"
-              />
+              {projectArea && (
+                <CallingCardFieldCompact
+                  icon={<LandPlot className="h-3 w-3" />}
+                  label="Block and lot"
+                  value={lotLabel}
+                  fallback="Not recorded"
+                />
+              )}
               <CallingCardFieldCompact
                 icon={<FileText className="h-3 w-3" />}
                 label="TCT"
-                // Prefixed here, not just in the label: the number alone is
-                // ambiguous with a lot or account number in a dense column.
-                value={hasTct ? `TCT ${property.title_number}` : null}
+                // Unprefixed: the label says TCT, and the number reads clean
+                // underneath a project area that is already the card's subject.
+                value={hasTct ? property.title_number : null}
                 fallback="No TCT recorded"
                 mono
               />
@@ -223,8 +292,8 @@ export function PropertyCallingCard({
           <>
             <CallingCardHeader
               monogram={monogram}
-              title={lotLabel}
-              eyebrow="Property"
+              title={projectArea ?? lotLabel}
+              eyebrow={projectArea ? lotLabel : 'Property'}
               size={isLarge ? 'lg' : 'default'}
               trailing={
                 isInteractive ? (
@@ -247,7 +316,6 @@ export function PropertyCallingCard({
             )}
           </>
         )}
-        </div>
       </div>
 
       {/* Sibling of the padded body, not a row inside it, so the strip reaches
@@ -331,8 +399,8 @@ export function PropertyCallingCard({
               panel is open, so repeating the status would state it twice. */}
           <CallingCardHeader
             monogram={monogram}
-            title={lotLabel}
-            eyebrow="Property"
+            title={projectArea ?? lotLabel}
+            eyebrow={projectArea ? lotLabel : 'Property'}
           />
           <CallingCardRule />
           <CallingCardFieldList>{fields}</CallingCardFieldList>

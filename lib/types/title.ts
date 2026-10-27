@@ -115,6 +115,8 @@ export interface AccountAwaitingTitle {
   client: {
     client_id: string;
     full_name: string;
+    /** Shown in the split band's buyer column, beside the lot's project area. */
+    address?: string | null;
     /** Selected for the calling cards' contact line on the work queue. */
     contact_info?: ContactInfo[] | null;
   } | null;

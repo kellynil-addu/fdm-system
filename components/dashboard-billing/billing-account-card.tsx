@@ -4,10 +4,7 @@ import { useMemo } from 'react';
 import Link from 'next/link';
 import { Clock, Receipt, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
-import { StatusBar } from '@/components/ui/status-bar';
-import { ClientCallingCard } from '@/components/dashboard-clients/client-calling-card';
-import { PropertyCallingCard } from '@/components/dashboard-properties/property-calling-card';
+import { SubjectSplitCard } from '@/components/ui/subject-split-card';
 import { BILLING_STATUS_VARIANT } from '@/lib/status-colors';
 import { useBillingAccounts } from '@/lib/hooks/use-billing-accounts';
 import type { CallingCardStatus } from '@/lib/types/calling-card';
@@ -79,70 +76,29 @@ export function BillingAccountCard({ account }: BillingAccountCardProps) {
   };
 
   return (
-    <Card
-      variant="calling-card"
-      padding="none"
+    /*
+      The lot and the buyer sit side by side in the band, each with its own
+      accent bar — see `SubjectSplitCard`. The account's own status is not passed
+      to the band: it belongs to the account rather than to either subject, and
+      the card renders it once in the status bar at the bottom.
+    */
+    <SubjectSplitCard
+      label={`Open billing ledger for ${clientName}, ${lotLabel}`}
       onClick={() => setActiveAccount(account)}
-      role="button"
-      tabIndex={0}
-      aria-label={`Open billing ledger for ${clientName}, ${lotLabel}`}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          setActiveAccount(account);
-        }
+      lot={{
+        ...account.property,
+        // The account's own contract price, which is what it is actually billed
+        // on and can differ from area × rate.
+        total_price: tcp,
       }}
-      className="group flex cursor-pointer flex-col overflow-hidden text-left transition-shadow hover:shadow-md"
+      buyer={account.client}
+      buyerFallback={clientName}
+      status={cardStatus}
     >
       {/*
-        The lot is the record and the buyer is a field of it — one card, one
-        rail, one monogram, one status bar. Two side-by-side compact cards gave
-        a single record two identities for no gain: the second header repeated
-        the first, and the second rail and monogram re-announced a card that had
-        already started.
-
-        `default` rather than `compact` because the nesting needs a field list
-        to sit under, and compact deliberately has none.
-
-        Everything nested is `embedded`: this card is already the click target,
-        so a lot that linked to the map or a buyer that linked to their profile
-        would be a second destination inside it, and an anchor inside an anchor
-        is invalid markup.
-      */}
-      {/*
-        No `status` here. The status belongs to the account, not the lot, and
-        this card renders it once at the bottom — passing it here as well drew a
-        second bar in the middle of the card, because `embedded` drops the
-        border and the reveal but not the status strip.
-      */}
-      <PropertyCallingCard
-        property={account.property}
-        embedded
-        className="border-0"
-      >
-        {/*
-          No rule above the buyer: `PropertyCallingCard` already draws one
-          before its `children`, and adding another produced two lines a few
-          pixels apart.
-        */}
-        <ClientCallingCard
-          client={account.client ?? { full_name: clientName, client_id: null }}
-          tier="compact"
-          embedded
-          hideMonogram
-          hideEyebrow
-        />
-      </PropertyCallingCard>
-
-      {/*
-        The rail and the amortization line are no longer the only decoration, so
-        this is no longer a `RecordCard`: that primitive exists for a card whose
-        body is a set of small blocks above a status strip, and its `p-3`
-        wrapper would indent the nested lot card away from the rail it is
-        supposed to sit against. The status bar is placed directly instead.
-
-        The wrapper stops propagation so pressing Pay opens the payment modal
-        rather than also opening the ledger underneath it.
+        The amortization line and the account's actions. The wrapper stops
+        propagation so pressing Pay opens the payment modal rather than also
+        opening the ledger underneath it.
       */}
       <div
         className="flex flex-wrap items-center justify-between gap-2 px-3 pt-1 pb-2"
@@ -191,14 +147,6 @@ export function BillingAccountCard({ account }: BillingAccountCardProps) {
           </Button>
         </div>
       </div>
-
-      <StatusBar
-        tone={cardStatus.tone}
-        status={cardStatus.label}
-        detail={cardStatus.detail}
-        progress={cardStatus.progress}
-        trailing={cardStatus.trailing}
-      />
-    </Card>
+    </SubjectSplitCard>
   );
 }

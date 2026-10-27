@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TITLE_STATUS_VARIANT } from '@/lib/status-colors';
+import { TITLE_STATUS_VARIANT, titleStatusTone } from '@/lib/status-colors';
 import { getClearanceProgress } from './title-record-card';
 import {
   getMissingReleaseDocuments,
@@ -334,7 +334,13 @@ export function TitleDialog({
    */
   const currentStatus: CallingCardStatus = {
     label: currentStageStatus,
-    tone: TITLE_STATUS_VARIANT[currentStageStatus] ?? 'muted',
+    // Goes through the same resolver as the grid cards so a badge and a status
+    // bar can never disagree — including about the exceptions, which take the
+    // colour from the stage whenever the open title has a returned notice or an
+    // overdue storage fee.
+    tone: activeTitle
+      ? titleStatusTone(activeTitle, currentStageStatus)
+      : TITLE_STATUS_VARIANT[currentStageStatus] ?? 'muted',
     detail: (() => {
       if (currentStageStatus === 'Clearance Period') {
         const { targetDate, daysRemaining } = getClearanceProgress(

@@ -13,7 +13,6 @@ import {
   LandTitlesProvider,
   useLandTitles,
   lotRefLabel,
-  type TitleDialogItem,
 } from '@/lib/hooks/use-land-titles';
 import { useDialogPresence } from '@/lib/hooks/use-dialog-presence';
 import type {
@@ -89,8 +88,9 @@ function EmptyState({
 function TitleRecordsContent() {
   const {
     counts,
-    filteredTitles,
-    filteredAwaiting,
+    // Already in pipeline order — the provider sorts it, so the grid does not
+    // need to know how a record's stage maps to a position.
+    cardItems,
     search,
     setSearch,
     tab,
@@ -101,17 +101,6 @@ function TitleRecordsContent() {
 
   const { rendered: renderedDialog, isOpen: isDialogOpen } = useDialogPresence(activeDialog);
   const [isSuggestionListOpen, setIsSuggestionListOpen] = useState(false);
-
-  const cardItems = useMemo(() => {
-    const items: TitleDialogItem[] = [];
-    for (const a of filteredAwaiting) {
-      items.push({ type: 'awaiting', data: a });
-    }
-    for (const t of filteredTitles) {
-      items.push({ type: 'title', data: t });
-    }
-    return items;
-  }, [filteredAwaiting, filteredTitles]);
 
   const isSearching = search.trim() !== '';
   const suggestions = useMemo(() => {

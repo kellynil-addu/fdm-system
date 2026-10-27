@@ -1,5 +1,7 @@
 import type { PropertyStatus } from '@/lib/types/property';
-import type { TitleStatus } from '@/lib/types/title';
+import type { TitleStatus, LandTitle } from '@/lib/types/title';
+import type { CallingCardTone } from '@/lib/types/calling-card';
+import { calculateStorageFee } from '@/lib/storage-fee';
 
 /**
  * One source of truth for how a lot's status is coloured.
@@ -54,19 +56,69 @@ export const PROPERTY_STATUS_COLOR = PROPERTY_STATUS_VARIANT;
 
 
 
-/** Badge colour for each title release step, used by the Legal page. */
+/**
+ * Status bar colour for each title release step, keyed by **whose turn it is**
+ * rather than by severity.
+ *
+ * The pipeline is a relay — Legal prepares, the Legal head verifies,
+ * management signs, the clock runs, the buyer is chased, then handover — so a
+ * grid coloured by stage position would repeat the same hue down a column of
+ * cards that are all stuck on different desks. Colouring by owner instead lets
+ * Legal staff scan the grid for what is on them:
+ *
+ * | Tone | Whose turn | Stages |
+ * |---|---|---|
+ * | `info` (blue) | Legal — prepare and verify | Cleared by Billing, Document Preparation, For Review |
+ * | `violet` | Management signature — the hard gate | For Signature |
+ * | `slate` | Nobody; the 30-day window is running | Clearance Period |
+ * | `teal` | The buyer — contact and claim notice | Ready for Claim |
+ * | `success` | Done | Released |
+ *
+ * Amber and gold are deliberately unused here: they mean "problem" elsewhere in
+ * the app (delinquency, overdue fees, forfeiture), and a stage is not a
+ * problem. `violet` rather than `purple` because `purple` is the forfeiture
+ * tone and For Signature must not read as one.
+ */
 export const TITLE_STATUS_VARIANT: Record<
   TitleStatus,
-  'info' | 'muted' | 'warning' | 'success'
+  'info' | 'slate' | 'teal' | 'violet' | 'success'
 > = {
   'Cleared by Billing': 'info',
-  'Document Preparation': 'muted',
+  'Document Preparation': 'info',
   'For Review': 'info',
-  'For Signature': 'warning',
-  'Clearance Period': 'info',
-  'Ready for Claim': 'warning',
+  'For Signature': 'violet',
+  'Clearance Period': 'slate',
+  'Ready for Claim': 'teal',
   Released: 'success',
 };
+
+/**
+ * The stage colour, unless the record carries a problem that outranks it.
+ *
+ * Exceptions win over the stage so that the cards needing attention are the
+ * ones that stand out in a grid of otherwise-identical stage colours — the
+ * whole point of colouring by owner is lost if a real problem wears the same
+ * blue as its neighbours.
+ *
+ * `destructive` for the two facts that are the office's problem to fix:
+ * a notice returned to sender (the buyer never received it and the 30-day
+ * clock is running regardless) and storage fee months past the grace period.
+ * An elapsed clearance window is a deadline that has passed, not yet a broken
+ * thing — it keeps the neutral `slate` its stage carries, which is also why
+ * `warning` stays free for stages that EARN it rather than for exceptions.
+ */
+export function titleStatusTone(
+  title: LandTitle,
+  status: TitleStatus = title.status
+): CallingCardTone {
+  if (title.notices?.some((notice) => notice.status === 'returned_to_sender')) {
+    return 'destructive';
+  }
+  if (calculateStorageFee(title).isOverdue) {
+    return 'destructive';
+  }
+  return TITLE_STATUS_VARIANT[status] ?? 'muted';
+}
 
 /** Badge colour for account billing status */
 export const BILLING_STATUS_VARIANT: Record<

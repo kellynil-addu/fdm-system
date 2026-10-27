@@ -93,6 +93,20 @@
     --status-sold-fill: #FDF6DD;
     --status-forfeited-fill: #FDE8E8;
 
+    /* Title release stages, coloured by whose turn it is (see
+       `TITLE_STATUS_VARIANT`). These are StatusBar / Badge tones, so each hue
+       needs a tinted surface and a text colour that clears AA on it.
+       Deliberately complete tokens rather than literals in the variant maps:
+       the stages carry two of them (the ADJACENT sidebar teal and violet pairs
+       would have collided), amber/gold stays reserved for problems, and the
+       values have to flip per theme like every other tone does. */
+    --tone-teal: #0D9488;
+    --tone-teal-foreground: #0F766E;
+    --tone-violet: #8B5CF6;
+    --tone-violet-foreground: #6D28D9;
+    --tone-slate: #64748B;
+    --tone-slate-foreground: #475569;
+
     --row-hover: #F5F3EC;
     --row-active: #FDF5D9;
     --row-panel-shadow: color-mix(in srgb, #000000 18%, transparent);
@@ -162,6 +176,15 @@
 
     --row-hover: #35322C;
     --row-active: #4E4A33;
+    /* Title release tones (dark). The surfaces are dark mixes of these hues, so
+       the text colour moves to the LIGHT end of each ramp — the light-theme
+       values are dark, and would vanish against them. */
+    --tone-teal: #2DD4BF;
+    --tone-teal-foreground: #5EEAD4;
+    --tone-violet: #A78BFA;
+    --tone-violet-foreground: #C4B5FD;
+    --tone-slate: #94A3B8;
+    --tone-slate-foreground: #CBD5E1;
     --row-panel-shadow: color-mix(in srgb, #000000 55%, transparent);
     --row-accent: #F5CE42;
     --row-accent-foreground: #F5CE42;

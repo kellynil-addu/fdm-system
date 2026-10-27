@@ -22,14 +22,27 @@ import { cn } from "@/lib/utils";
 const statusBarVariants = cva("relative flex flex-col gap-1.5 border-t px-3 py-2", {
   variants: {
     tone: {
+      /* Surfaces mix into `--card`, never into white. A hardcoded `white` mix
+         renders a near-white strip in dark mode under a light-theme text
+         colour — measured at 1.3:1, i.e. invisible. Mixing into `--card` makes
+         the surface follow the theme, the same reasoning as `--status-*-fill`.
+         The pairs whose text colour comes from an already-flipping token
+         (`info`, `warning`, `muted`) do not need it. */
       success:
-        "border-transparent bg-[color-mix(in_srgb,var(--success)_12%,white)] text-success",
+        "border-transparent bg-[color-mix(in_srgb,var(--success)_12%,var(--card))] text-success",
       warning: "border-transparent bg-row-active text-accent-gold-foreground",
       info: "border-transparent bg-sidebar-accent text-accent-blue-foreground",
       destructive:
-        "border-transparent bg-[color-mix(in_srgb,var(--destructive)_10%,white)] text-destructive",
+        "border-transparent bg-[color-mix(in_srgb,var(--destructive)_10%,var(--card))] text-destructive",
       muted: "border-transparent bg-muted text-muted-foreground",
       purple: "border-transparent bg-[color-mix(in_srgb,#8B5CF6_12%,white)] text-[#7C3AED]",
+      /* Stage tones: the text colour is a token that flips per theme, so the
+         surface must flip with it or the two invert against each other. */
+      teal: "border-transparent bg-[color-mix(in_srgb,var(--tone-teal)_12%,var(--card))] text-[var(--tone-teal-foreground)]",
+      violet:
+        "border-transparent bg-[color-mix(in_srgb,var(--tone-violet)_12%,var(--card))] text-[var(--tone-violet-foreground)]",
+      slate:
+        "border-transparent bg-[color-mix(in_srgb,var(--tone-slate)_14%,var(--card))] text-[var(--tone-slate-foreground)]",
       default: "border-transparent bg-primary text-primary-foreground",
     },
   },

@@ -23,6 +23,7 @@ export function CallingCardHeader({
   monogram,
   title,
   eyebrow,
+  eyebrowTitle,
   badge,
   trailing,
   size = 'default',
@@ -36,6 +37,12 @@ export function CallingCardHeader({
   title: React.ReactNode;
   /** Optional for the mirror reason: a label the parent has already stated. */
   eyebrow?: string;
+  /**
+   * The eyebrow's full text, when it is long enough to be truncated on screen.
+   * A client card puts the address here, and an address that ellipsizes without
+   * a way to read the rest is worse than no address at all.
+   */
+  eyebrowTitle?: string;
   badge?: React.ReactNode;
   trailing?: React.ReactNode;
   size?: 'default' | 'lg';
@@ -57,7 +64,14 @@ export function CallingCardHeader({
           {badge}
         </div>
         {eyebrow && (
-          <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          // Truncated rather than wrapped: the eyebrow is a supporting label,
+          // and letting a long address run to three lines would push the card's
+          // field list down for every row in a grid. `eyebrowTitle` carries the
+          // full text for the case where it does not fit.
+          <p
+            className="mt-0.5 truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+            title={eyebrowTitle}
+          >
             {eyebrow}
           </p>
         )}

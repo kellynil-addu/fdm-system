@@ -208,8 +208,39 @@ export function ClientCallingCard({
     </IconBox>
   );
 
-  /** The full field set, shared by the expanded card and the reveal panel. */
+  const address = client.address?.trim() || null;
+
+  /**
+   * The card's own field list.
+   *
+   * Neither the primary contact nor the address is in it. The address is the
+   * eyebrow — it is what identifies a client in a grid where two people share a
+   * surname — and the contact is the row below the title in the compact tier and
+   * the directory's own contact list at every other tier, where a card that also
+   * printed the primary one said the same thing twice on the same card.
+   *
+   * See `revealFields` for why the reveal panel keeps both.
+   */
   const fields = (
+    <CallingCardField
+      icon={<FileText className="h-3.5 w-3.5" />}
+      label="TIN"
+      value={client.tin_number}
+      fallback="Not on file"
+      mono
+    />
+  );
+
+  /**
+   * The reveal panel's field set, which is the card's plus the two facts the
+   * card itself no longer prints.
+   *
+   * The compact tier is the reason this exists: in the title dialog's header the
+   * card has no `children` and no directory list beside it, so the panel is the
+   * only place its contact and address appear at all. Dropping them from the
+   * panel too would make the tier's whole reveal empty.
+   */
+  const revealFields = (
     <>
       <CallingCardField
         icon={<ContactIcon className="h-3.5 w-3.5" />}
@@ -220,16 +251,10 @@ export function ClientCallingCard({
       <CallingCardField
         icon={<MapPin className="h-3.5 w-3.5" />}
         label="Address"
-        value={client.address}
+        value={address}
         fallback="Not on file"
       />
-      <CallingCardField
-        icon={<FileText className="h-3.5 w-3.5" />}
-        label="TIN"
-        value={client.tin_number}
-        fallback="Not on file"
-        mono
-      />
+      {fields}
     </>
   );
 
@@ -306,7 +331,13 @@ export function ClientCallingCard({
             <CallingCardHeader
               monogram={hideMonogram ? undefined : monogram}
               title={client.full_name}
-              eyebrow={hideEyebrow ? undefined : 'Client'}
+              // The address stands in for the "Client" label: in a grid of
+              // people, where they are is what tells two of them apart. A
+              // missing address falls back to the label rather than leaving the
+              // slot empty — see `CallingCardHeader` on why the eyebrow is not
+              // dropped to save a line.
+              eyebrow={hideEyebrow ? undefined : address ?? 'Client'}
+              eyebrowTitle={address ?? undefined}
               size={isLarge ? 'lg' : 'default'}
               trailing={
                 trailingProp ??
@@ -330,7 +361,6 @@ export function ClientCallingCard({
             )}
           </>
         )}
-        </div>
       </div>
 
       {/* Sibling of the padded body, not a row inside it, so the strip reaches
@@ -359,10 +389,11 @@ export function ClientCallingCard({
       onClick={href ? undefined : embedded ? undefined : onClick}
       // Two reasons to be focusable, and both matter.
       //
-      // The reveal panel is the only place the address, TIN and TCT appear in
-      // the compact tier, so when it is enabled the card has to be reachable
-      // without a mouse — Radix opens the hover card on focus, but only if the
-      // trigger can take focus at all.
+      // The reveal panel is the only place a compact client card's contact and
+      // address appear at all — in the title dialog's header there is no
+      // directory list beside it — so when it is enabled the card has to be
+      // reachable without a mouse: Radix opens the hover card on focus, but only
+      // if the trigger can take focus at all.
       //
       // The second is a card driven by `onClick` rather than a link: with no
       // anchor to inherit focus from, an unfocusable div means the card's own
@@ -406,11 +437,18 @@ export function ClientCallingCard({
         // forcing `minWidth: 0` collapses the cards from 257px to 139px and pulls
         // the badge back onto the same line.
         //
-        // It is kept at 11rem because of what it protects: swept on the
-        // worst-case record, 10.5rem and below put the badge inline but start
-        // clipping the TCT (`T-121212121` loses 6px at 10rem), and a title number
-        // staff read out loud is worth more than one stage's badge staying on the
-        // first line.
+        // It is kept at 11rem because of what it protects, and after the TCT
+        // stopped carrying its `TCT ` prefix that is now the property card's
+        // block-and-lot row rather than the title number. Re-measured: the value
+        // column is 102px at 11rem, 94px at 10.5rem and 86px at 10rem, and the
+        // widest lot reference the three-digit block/lot format produces
+        // ("Block 104 Lot 127") is 98px. So 11rem is the last floor that fits
+        // it, and a lot reference staff read out loud is worth more than one
+        // stage's badge staying on the first line.
+        //
+        // The title number is no longer the binding constraint: unprefixed it
+        // renders 46px, and even the old prefixed worst case (`T-121212121`)
+        // was 66px — both fit at every floor down to 9rem.
         //
         // The cost is confined to xl and up, and it is close. Two cards at this
         // floor plus two 8px gaps plus the widest badge (169px, "Document
@@ -457,10 +495,11 @@ export function ClientCallingCard({
           <CallingCardHeader
             monogram={monogram}
             title={client.full_name}
-            eyebrow="Client"
+            eyebrow={address ?? 'Client'}
+            eyebrowTitle={address ?? undefined}
           />
           <CallingCardRule />
-          <CallingCardFieldList>{fields}</CallingCardFieldList>
+          <CallingCardFieldList>{revealFields}</CallingCardFieldList>
           {(client.civil_status || client.spouse_name) && (
             <>
               <CallingCardRule />
