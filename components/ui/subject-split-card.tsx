@@ -3,6 +3,7 @@
 import { FileText, MapPin, Ruler, Tag, UserRound } from 'lucide-react';
 
 import { Card, CardCallingRail } from '@/components/ui/card';
+import { CallingCardRule } from '@/components/ui/card-calling-parts';
 import { IconBox } from '@/components/ui/icon-box';
 import { StatusBar } from '@/components/ui/status-bar';
 import { cn } from '@/lib/utils';
@@ -88,9 +89,6 @@ function LotColumn({ lot }: { lot: SplitCardLot }) {
   const lotLabel = formatLotRef(lot.block_number, lot.lot_number);
   const projectArea = lot.location?.trim() || null;
   const hasTct = Boolean(lot.title_number?.trim());
-  const area = formatArea(lot.area_size);
-  const pricePerSqm = lot.price_per_sqm ?? null;
-  const total = lot.total_price ?? deriveLotPrice(lot.area_size, pricePerSqm);
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
@@ -120,24 +118,44 @@ function LotColumn({ lot }: { lot: SplitCardLot }) {
           <span className="italic">No TCT</span>
         )}
       </p>
+    </div>
+  );
+}
 
-      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px]">
-        <span className="flex items-center gap-1 text-muted-foreground">
-          <Ruler className="h-3 w-3 shrink-0" />
-          <span className={area ? 'text-foreground' : 'italic'}>{area ?? 'No area'}</span>
-        </span>
-        <span className="flex items-center gap-1 text-muted-foreground">
-          <Tag className="h-3 w-3 shrink-0" />
-          {total && pricePerSqm ? (
-            <>
-              <span className="text-foreground">{formatPriceAbbreviated(total)}</span>
-              <span>({formatPricePerSqm(pricePerSqm)})</span>
-            </>
-          ) : (
-            <span className="italic">No price</span>
-          )}
-        </span>
-      </div>
+/**
+ * The lot's two numbers, on their own row under the band rather than inside the
+ * lot's column.
+ *
+ * They were in the column first, and that was wrong twice over. The row belongs
+ * to the *record*, not to the lot: area and price describe the same lot the
+ * buyer's column is about, and putting them under one column reads as though
+ * they were that column's facts and the other column had none. And the column is
+ * half the card, so the price — two numbers in brackets that cannot compress —
+ * squeezed the area down to a stub. Full width, the two fit side by side at
+ * every grid width the cards are used at.
+ */
+function LotFacts({ lot }: { lot: SplitCardLot }) {
+  const area = formatArea(lot.area_size);
+  const pricePerSqm = lot.price_per_sqm ?? null;
+  const total = lot.total_price ?? deriveLotPrice(lot.area_size, pricePerSqm);
+
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[11px]">
+      <span className="flex items-center gap-1 text-muted-foreground">
+        <Ruler className="h-3 w-3 shrink-0" />
+        <span className={area ? 'text-foreground' : 'italic'}>{area ?? 'No area'}</span>
+      </span>
+      <span className="flex items-center gap-1 text-muted-foreground">
+        <Tag className="h-3 w-3 shrink-0" />
+        {total && pricePerSqm ? (
+          <>
+            <span className="text-foreground">{formatPriceAbbreviated(total)}</span>
+            <span>({formatPricePerSqm(pricePerSqm)})</span>
+          </>
+        ) : (
+          <span className="italic">No price</span>
+        )}
+      </span>
     </div>
   );
 }
@@ -241,6 +259,11 @@ export function SubjectSplitCard({
           <div className="w-px shrink-0 bg-border-warm-subtle" aria-hidden="true" />
           <BuyerColumn buyer={buyer} fallback={buyerFallback} note={buyerNote} />
         </div>
+
+        {/* The record's shared facts, below the band and above the caller's own
+            row — the same order C5 uses. */}
+        <CallingCardRule />
+        <LotFacts lot={lot} />
       </div>
 
       {children}

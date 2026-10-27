@@ -234,7 +234,11 @@ export function TitleRecordCard({ item, onClick }: TitleRecordCardProps) {
           parts rather than from `ClientCallingCard`, whose field list is fixed
           and whose destination is the client profile — neither of which is right
           for a card whose click opens a title record. */}
-      <div className="relative">
+      {/* `flex-1` so the status bar is pushed to the bottom when the grid
+          stretches this card to match a taller sibling. Without it the bar sits
+          directly under the fields and floats in the middle of the card —
+          measured at a 900px viewport, where a 168px card sat in a 192.5px row. */}
+      <div className="relative flex-1">
         <CardCallingRail />
         <div className="relative p-3 pl-5">
           <CallingCardHeader
