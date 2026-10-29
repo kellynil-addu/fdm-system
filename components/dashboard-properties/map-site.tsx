@@ -536,8 +536,8 @@ export function SiteMap({
         siteId: p.siteId,
         block: p.block,
         lot: p.lot,
-        areaSize: p.areaSize,
-        pricePerSqm: p.pricePerSqm,
+        areaSize: p.areaSize > 0 ? p.areaSize : undefined,
+        pricePerSqm: p.pricePerSqm > 0 ? p.pricePerSqm : undefined,
       });
     },
     [handleClosePopup]
@@ -708,8 +708,8 @@ export function SiteMap({
           const lot = lotMap.get(lotKey);
           const isRegistered = Boolean(lot);
           const status = lot?.status ?? 'Closed';
-          const areaSize = pendingUpdate ? pendingUpdate.areaSize : (lot?.area_size ?? 252);
-          const pricePerSqm = lot?.price_per_sqm ?? 6500;
+          const areaSize = pendingUpdate ? pendingUpdate.areaSize : (lot?.area_size ?? 0);
+          const pricePerSqm = lot?.price_per_sqm ?? 0;
 
           return {
             type: 'Feature' as const,
