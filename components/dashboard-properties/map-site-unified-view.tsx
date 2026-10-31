@@ -78,8 +78,8 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         }
       }
     }
-    // No auto-selection: an empty selection is the "all sites" view, and clicking a site
-    // marker or picking one in the editor is what makes a site active.
+    // No auto-selection: an empty selection is the "all project areas" view, and clicking a
+    // marker or picking one in the editor is what makes a project area active.
     return null;
   });
 
@@ -208,8 +208,8 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     [isEditorActive]
   );
 
-  /** Single site-selection entry point: drives the sidebar filter, the map focus, and the
-   * editor's edit target. In the editor this is reached only from the site chooser, where
+  /** Single project area selection entry point: drives the sidebar filter, the map focus, and the
+   * editor's edit target. In the editor this is reached only from the project area chooser, where
    * no drafts can exist yet, so switching needs no guard. */
   const handleSelectSite = useCallback((siteId: string | null) => {
     setActiveSiteId(siteId);
@@ -577,12 +577,12 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
           return;
         }
         const created = result.data;
-        toast.success(`Site "${created.name}" created successfully.`);
+        toast.success(`Project area "${created.name}" created successfully.`);
         setPendingSiteBoundary(null);
         setActiveSiteId(created.site_id);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to create site');
+        toast.error(err instanceof Error ? err.message : 'Failed to create project area');
       } finally {
         setIsSaving(false);
       }
@@ -630,10 +630,10 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
           toast.error(result.error);
           return;
         }
-        toast.success('Site archived successfully');
+        toast.success('Project area archived successfully');
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to archive site');
+        toast.error(err instanceof Error ? err.message : 'Failed to archive project area');
       } finally {
         setIsSaving(false);
       }
@@ -650,10 +650,10 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
           toast.error(result.error);
           return;
         }
-        toast.success('Site restored successfully');
+        toast.success('Project area restored successfully');
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to restore site');
+        toast.error(err instanceof Error ? err.message : 'Failed to restore project area');
       } finally {
         setIsSaving(false);
       }
@@ -670,11 +670,11 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
           toast.error(result.error);
           return;
         }
-        toast.success('Site deleted successfully');
+        toast.success('Project area deleted successfully');
         setActiveSiteId(null);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to delete site');
+        toast.error(err instanceof Error ? err.message : 'Failed to delete project area');
       } finally {
         setIsSaving(false);
       }
@@ -828,8 +828,8 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
                     <div className="flex items-start gap-1.5">
                       <span className="font-bold text-primary">•</span>
                       <span>
-                        You start by <strong>choosing a site</strong>, then edit only within it. Use{' '}
-                        <strong>Leave Site</strong> to go back and choose another.
+                        You start by <strong>choosing a project area</strong>, then edit only within
+                        it. Use <strong>Leave Project Area</strong> to go back and choose another.
                       </span>
                     </div>
                     <div className="flex items-start gap-1.5">
@@ -866,10 +866,10 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
               <AlertDialogDescription className="text-xs text-foreground leading-relaxed space-y-2">
                 <p>
                   You have <strong>{draftLots.length + pendingBoundaryUpdates.length}</strong> unsaved draft change(s) on{' '}
-                  <strong>{sites.find((s) => s.site_id === activeSiteId)?.name ?? 'this site'}</strong>.
+                  <strong>{sites.find((s) => s.site_id === activeSiteId)?.name ?? 'this project area'}</strong>.
                 </p>
                 <p className="text-muted-foreground">
-                  You cannot leave this site or exit the editor until you either commit all changes to the database or discard them.
+                  You cannot leave this project area or exit the editor until you either commit all changes to the database or discard them.
                 </p>
               </AlertDialogDescription>
             </AlertDialogHeader>

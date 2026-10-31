@@ -137,10 +137,10 @@ export function PropertyAssignmentWizard({
           setSelectedSiteId(data[0].site_id);
         }
       })
-      .catch((err) => console.error('Failed to load sites:', err));
+      .catch((err) => console.error('Failed to load project areas:', err));
   }, [selectedSiteId]);
 
-  // Load site data when site selection changes
+  // Load project area data when the project area selection changes
   useEffect(() => {
     if (!selectedSiteId) {
       setSiteData(null);
@@ -154,7 +154,7 @@ export function PropertyAssignmentWizard({
         if (isMounted) setSiteData(data);
       })
       .catch((err) => {
-        console.error('Failed to load site details:', err);
+        console.error('Failed to load project area details:', err);
         if (isMounted) setSiteData(null);
       })
       .finally(() => {
@@ -467,19 +467,19 @@ export function PropertyAssignmentWizard({
         ) : (
           <div className="space-y-2.5">
             <div className="grid gap-3 sm:grid-cols-[1fr_13rem]">
-              {/* Searchable Site Selector */}
+              {/* Searchable Project Area Selector */}
               <div className="space-y-1.5">
                 <Label htmlFor="site-selector" className="text-xs text-muted-foreground font-medium">
-                  Subdivision Site
+                  Project Area
                 </Label>
                 <SearchableSelect
                   id="site-selector"
                   options={siteOptions}
                   value={selectedSiteId}
                   onValueChange={handleSiteChange}
-                  placeholder="Choose a development site..."
-                  searchPlaceholder="Search site name or address..."
-                  emptyMessage="No matching sites found."
+                  placeholder="Choose a project area..."
+                  searchPlaceholder="Search project area name or address..."
+                  emptyMessage="No matching project areas found."
                 />
               </div>
 
@@ -545,7 +545,7 @@ export function PropertyAssignmentWizard({
                 <div className="flex flex-wrap items-center gap-1.5">
                   {isLoadingSite ? (
                     <Badge variant="muted" shape="pill">
-                      Loading site...
+                      Loading project area...
                     </Badge>
                   ) : !evaluatedStatus ? (
                     <Badge variant="muted" shape="pill">
@@ -591,16 +591,16 @@ export function PropertyAssignmentWizard({
                     isBlocked ? 'text-destructive' : 'text-muted-foreground'
                   )}
                 >
-                  {isLoadingSite && 'Fetching site lots and subdivision plan...'}
+                  {isLoadingSite && 'Fetching project area lots and subdivision plan...'}
                   {!isLoadingSite &&
                     !evaluatedStatus &&
                     (selectedSiteId
                       ? 'Focus Block or Lot to pick from grid, or enter numbers manually.'
-                      : 'Select a subdivision site first.')}
+                      : 'Select a project area first.')}
                   {evaluatedStatus?.type === 'open' &&
                     (evaluatedStatus.isRecordOnly
                       ? 'Selects existing open lot (no digital plat on file).'
-                      : 'Selects existing open lot from site plan.')}
+                      : 'Selects existing open lot from project area plan.')}
                   {evaluatedStatus?.type === 'unopened_plot' &&
                     'Plot exists on plan; will open lot and assign. Click Area and Price to set.'}
                   {evaluatedStatus?.type === 'new_record_only' &&

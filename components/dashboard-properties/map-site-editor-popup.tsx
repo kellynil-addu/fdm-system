@@ -45,7 +45,7 @@ export function MapSiteEditorPopup({ plot, onEditBoundary, onDeletePlot }: MapSi
             variant="danger"
             size="sm"
             disabled={plot.isSiteArchived}
-            title={plot.isSiteArchived ? 'Restore site before deleting plots' : undefined}
+            title={plot.isSiteArchived ? 'Restore project area before deleting plots' : undefined}
             onClick={plot.isSiteArchived ? undefined : onDeletePlot}
             className="w-full cursor-pointer gap-1.5"
           >

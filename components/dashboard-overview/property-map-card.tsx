@@ -40,7 +40,7 @@ export function PropertyMapCard({ preview }: { preview: DashboardMapPreview | nu
       <div>
         <MapPinned aria-hidden="true" className="mx-auto mb-3 h-8 w-8" />
         <p className="text-sm">
-          {preview === null ? 'Map preview is temporarily unavailable.' : 'No sites to preview yet.'}
+          {preview === null ? 'Map preview is temporarily unavailable.' : 'No project areas to preview yet.'}
         </p>
       </div>
     </div>
@@ -51,8 +51,8 @@ export function PropertyMapCard({ preview }: { preview: DashboardMapPreview | nu
       <Card variant="interactive" className="overflow-hidden group-hover:border-primary">
         <CardHeader className="flex-row items-start justify-between gap-3">
           <div>
-            <CardTitle>Site map</CardTitle>
-            <CardDescription className="mt-2">{site ? `${site.name} · site preview` : 'Explore your recorded properties'}</CardDescription>
+            <CardTitle>Project area map</CardTitle>
+            <CardDescription className="mt-2">{site ? `${site.name} · project area preview` : 'Explore your recorded properties'}</CardDescription>
           </div>
           <MapPinned aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />
         </CardHeader>
@@ -66,8 +66,8 @@ export function PropertyMapCard({ preview }: { preview: DashboardMapPreview | nu
           ) : fallback}
         </div>
         <CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">{site ? 'Site imagery and plotted lots. Open the map to explore.' : 'Open the site map to explore your properties.'}</p>
-          <div className="mt-4 flex items-center justify-between text-sm font-semibold">Open Site Map<ArrowUpRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" /></div>
+          <p className="text-xs text-muted-foreground">{site ? 'Project area imagery and plotted lots. Open the map to explore.' : 'Open the project area map to explore your properties.'}</p>
+          <div className="mt-4 flex items-center justify-between text-sm font-semibold">Open Project Area Map<ArrowUpRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" /></div>
         </CardContent>
       </Card>
     </Link>

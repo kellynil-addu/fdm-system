@@ -1,9 +1,10 @@
 /**
- * Plane geometry for the site map.
+ * Plane geometry for the project area map.
  *
- * Everything here works in the site's LOCAL coordinate space: metres from the
- * site origin, Y growing downward to match SVG. There is no projection and no
- * georeferencing; see the migration that adds `site.boundary` for the contract.
+ * Everything here works in the project area's LOCAL coordinate space: metres from the
+ * project area origin, Y growing downward to match SVG. There is no projection and no
+ * georeferencing; see the migration that adds `site.boundary` (renamed to `project_area`
+ * in the Stage 2 schema pass) for the contract.
  */
 
 /** A vertex pair, `[x, y]`, stored exactly this way in JSONB. */
@@ -117,8 +118,8 @@ export const AREA_TOLERANCE = 0.05;
 /**
  * A `viewBox` covering `bounds` with a margin, expressed in local units.
  *
- * The margin is proportional so it looks the same whether a site spans 40m or
- * 400m, with a floor so a degenerate (zero-width) site still renders.
+ * The margin is proportional so it looks the same whether a project area spans 40m or
+ * 400m, with a floor so a degenerate (zero-width) project area still renders.
  */
 export function fitViewBox(bounds: Bounds, marginRatio = 0.04, extraTopRatio = 0): string {
   const width = Math.max(bounds.maxX - bounds.minX, 1);

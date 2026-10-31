@@ -34,10 +34,10 @@ export function DeleteSiteDialog({
     <AlertDialog open={open} onOpenChange={(v) => !v && onOpenChange(false)}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Delete Site</AlertDialogTitle>
+          <AlertDialogTitle>Delete Project Area</AlertDialogTitle>
           <AlertDialogDescription>
             Are you sure you want to permanently delete <strong>{site.name}</strong>?
-            This action cannot be undone and will permanently remove this site and its subdivision plat plans.
+            This action cannot be undone and will permanently remove this project area and its subdivision plat plans.
           </AlertDialogDescription>
         </AlertDialogHeader>
 
@@ -59,7 +59,7 @@ export function DeleteSiteDialog({
             className="bg-destructive text-destructive-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_90%,black)]"
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-            Delete Site
+            Delete Project Area
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

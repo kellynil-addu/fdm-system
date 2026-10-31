@@ -91,7 +91,7 @@ export function BlockLotPopup({
   const anchorRef = useRef<HTMLDivElement>(null);
   const blockRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
-  // Group all known site lots and subdivision plots by block number
+  // Group all known project area lots and subdivision plots by block number
   const groupedBlocks = useMemo(() => {
     if (!siteData) return [];
 
@@ -162,7 +162,7 @@ export function BlockLotPopup({
       >
         <div className="flex items-center justify-between gap-2 border-b border-border bg-row-hover px-3 py-2">
           <span className="text-xs font-semibold text-foreground">
-            {siteData ? `${siteData.name} Lots` : 'Site Lots'}
+            {siteData ? `${siteData.name} Lots` : 'Project Area Lots'}
           </span>
 
           <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
@@ -179,7 +179,7 @@ export function BlockLotPopup({
           {groupedBlocks.length === 0 ? (
             <p className="py-6 text-center text-xs text-muted-foreground">
               {onlyOpenForSale
-                ? 'No lots currently marked open for sale on this site.'
+                ? 'No lots currently marked open for sale in this project area.'
                 : 'No lots or subdivision plots registered yet. Enter numbers manually.'}
             </p>
           ) : (

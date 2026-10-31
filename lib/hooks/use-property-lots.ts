@@ -171,8 +171,8 @@ export function PropertyLotsProvider({
         ui: {
           variant: 'single-select',
           id: 'site',
-          label: 'Site',
-          allLabel: 'All sites',
+          label: 'Project Area',
+          allLabel: 'All project areas',
           hidden: sites.length === 0,
           options: sites
             .filter((s) => !s.is_archived)

@@ -172,7 +172,7 @@ export function PropertiesSkeleton() {
 
 export function SiteMapSkeleton() {
   return (
-    <LoadingRegion label="Loading site map…">
+    <LoadingRegion label="Loading project area map…">
       <div className="relative flex flex-1 h-full min-h-0 w-full overflow-hidden">
         {/* Floating card skeleton */}
         <div className="absolute left-4 top-4 bottom-4 z-20 hidden sm:flex w-[420px] flex-col rounded-2xl border border-border bg-card p-4 space-y-4 shadow-2xl">

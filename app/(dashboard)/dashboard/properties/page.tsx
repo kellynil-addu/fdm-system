@@ -14,7 +14,7 @@ async function PropertiesContent() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Property Lots</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Raw land inventory across the company&apos;s sites.
+          Raw land inventory across the company&apos;s project areas.
         </p>
       </div>
       <PropertyLotsSection sites={sites} />

@@ -1210,7 +1210,7 @@ export function SiteMap({
             activeSiteRingRef.current &&
             !pointInPolygon(pt, activeSiteRingRef.current)
           ) {
-            notifyWarning('Plotted point must be inside the site boundary.');
+            notifyWarning('Plotted point must be inside the project area boundary.');
             return;
           }
           onAddDraftPointRef.current?.(pt);
@@ -1265,7 +1265,7 @@ export function SiteMap({
             activeSiteRingRef.current &&
             !pointInPolygon(pt, activeSiteRingRef.current)
           ) {
-            notifyWarning('Plotted point must be inside the site boundary.');
+            notifyWarning('Plotted point must be inside the project area boundary.');
             return;
           }
           onAddDraftPointRef.current?.(pt);
@@ -1325,7 +1325,7 @@ export function SiteMap({
         el.tabIndex = 0;
         el.setAttribute(
           'aria-label',
-          `${isSelected ? 'Selected site' : 'Select'}: ${targetSite.name}`
+          `${isSelected ? 'Selected project area' : 'Select'}: ${targetSite.name}`
         );
         if (isSelected) el.setAttribute('aria-current', 'true');
         const isVisible = map.getZoom() < DETAILS_ZOOM;

@@ -205,7 +205,7 @@ export async function getPropertyReportData(propertyId: string): Promise<Propert
     schema: uuidSchema,
     input: propertyId,
     handler: async (validPropertyId, { supabase }) => {
-      // Query property lot with site and ledger accounts
+      // Query property lot with project area and ledger accounts
       const { data: lot, error: lotErr } = await supabase
         .from("property_lot")
         .select(`

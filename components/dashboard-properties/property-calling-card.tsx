@@ -133,7 +133,7 @@ export function PropertyCallingCard({
   /** See `ClientCallingCard` — `embedded` overrides both the tier and the prop. */
   const showReveal = !embedded && (revealOnHover ?? isCompact);
   /**
-   * The lot's own view is the site map with the lot selected, not a detail
+   * The lot's own view is the project area map with the lot selected, not a detail
    * route: that is where `PropertyChip` sent people, and the map is the only
    * page that shows a lot in the context of its subdivision.
    */
@@ -230,7 +230,7 @@ export function PropertyCallingCard({
   const body = (
     <>
       {/* Blue rail: the primary accent is already "the land" colour elsewhere in
-          the app (site map fills, Reserved status pills), so the property side
+          the app (project area map fills, Reserved status pills), so the property side
           of the family uses it and the client side takes gold. */}
       {/* Width kept at the full rail; see the note in `ClientCallingCard`. */}
       <CardCallingRail className="bg-[color-mix(in_srgb,var(--primary)_70%,black)]" />

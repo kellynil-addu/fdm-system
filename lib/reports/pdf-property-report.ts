@@ -46,8 +46,8 @@ export function generatePropertyPdfReport(data: PropertyReportData): void {
       [
         'Location / Project',
         data.lot.location,
-        'Site / Subdivision',
-        data.site_name || 'Standard Plat',
+        'Project Area',
+        data.site_name || 'Unassigned Project Area',
       ],
       [
         'Lot Area',

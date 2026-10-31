@@ -255,11 +255,11 @@ export async function createPropertyLot(
           .select("name")
           .eq("site_id", validatedInput.site_id)
           .single<{ name: string }>();
-        location = site?.name ?? "Unknown Location";
+        location = site?.name ?? "Unassigned Project Area";
       }
 
       if (!location) {
-        throw new Error("Location or site is required to create a property lot");
+        throw new Error("Location or project area is required to create a property lot");
       }
 
       const { data, error } = await supabase
@@ -677,7 +677,7 @@ export async function openSubdivisionForSale(
         .eq("site_id", validatedInput.site_id)
         .single<{ name: string }>();
 
-      const location = site?.name ?? "Unknown Location";
+      const location = site?.name ?? "Unassigned Project Area";
 
       const { data, error } = await supabase
         .from("property_lot")

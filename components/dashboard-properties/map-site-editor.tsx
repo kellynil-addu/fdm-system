@@ -85,7 +85,7 @@ export interface MapSiteEditorProps {
   onConfirmDeletePlot: () => Promise<void>;
   onCancelDeletePlot: () => void;
 
-  // New site boundary
+  // New project area boundary
   pendingSiteBoundary: [number, number][] | null;
   onSaveSite: (data: { name: string; description?: string }) => Promise<void>;
   onDiscardSite: () => void;
@@ -102,7 +102,7 @@ export interface MapSiteEditorProps {
   onResumeStoredDraft?: () => void;
   onDiscardStoredDraft?: () => void;
 
-  // Site options
+  // Project area options
   onArchiveSite?: (siteId: string) => Promise<void>;
   onUnarchiveSite?: (siteId: string) => Promise<void>;
   onDeleteSite?: (siteId: string) => Promise<void>;
@@ -161,7 +161,7 @@ export function MapSiteEditor({
     }
   }, [activeDraft]);
 
-  // Save site form state
+  // Save project area form state
   const [siteName, setSiteName] = useState<string>('');
   const [siteDesc, setSiteDesc] = useState<string>('');
   const [isDeleteSiteOpen, setIsDeleteSiteOpen] = useState(false);
@@ -219,7 +219,7 @@ export function MapSiteEditor({
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
                   </span>
                   <span className="truncate text-xs font-semibold text-foreground">
-                    {plotType === 'lot' ? 'Plotting Lot' : 'Plotting New Site'}
+                    {plotType === 'lot' ? 'Plotting Lot' : 'Plotting New Project Area'}
                   </span>
                   <span className="rounded-full bg-sidebar-accent px-2 py-0.5 text-[11px] font-mono text-accent-blue-foreground shrink-0">
                     {draftPointsCount} {draftPointsCount === 1 ? 'pt' : 'pts'}
@@ -266,7 +266,7 @@ export function MapSiteEditor({
                     draftPointsCount < 3
                       ? 'Plot at least 3 points to finish'
                       : hasOutOfBoundsVertex
-                        ? 'All points must be inside the site boundary to finish'
+                        ? 'All points must be inside the project area boundary to finish'
                         : 'Close shape and enter details'
                   }
                 >
@@ -276,8 +276,8 @@ export function MapSiteEditor({
               </div>
             </>
           ) : !activeSite ? (
-            /* State: Site Chooser — the top of the decision tree. Pick a site to focus on,
-               or start a brand-new one. Nothing is editable until a site is chosen. */
+            /* State: Project Area Chooser — the top of the decision tree. Pick a project area to
+               focus on, or start a brand-new one. Nothing is editable until one is chosen. */
             <>
               <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
                 <div className="flex items-center gap-1.5">
@@ -298,11 +298,11 @@ export function MapSiteEditor({
 
               <div className="pt-0.5">
                 <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
-                  Choose a site to edit
+                  Choose a project area to edit
                 </p>
                 {sites.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-border px-2.5 py-3 text-[11px] text-muted-foreground">
-                    No sites yet. Plot a new one below.
+                    No project areas yet. Plot a new one below.
                   </p>
                 ) : (
                   <div className="max-h-[300px] space-y-1 overflow-y-auto pr-0.5">
@@ -351,13 +351,13 @@ export function MapSiteEditor({
                   title="Plot a new project area boundary"
                 >
                   <MapPin className="h-3.5 w-3.5 text-primary" />
-                  <span>+ New Site</span>
+                  <span>+ New Project Area</span>
                 </Button>
               </div>
             </>
           ) : (
-            /* State: Site Focused — editing is scoped to this one site. "+ New Site" is
-               deliberately absent; use Leave Site to go back up the tree. */
+            /* State: Project Area Focused — editing is scoped to this one project area.
+               "+ New Project Area" is deliberately absent; use Leave Project Area to go back up the tree. */
             <>
               <div className="flex items-center justify-between gap-3 border-b border-border pb-2">
                 <div className="flex min-w-0 items-center gap-1.5">
@@ -381,9 +381,9 @@ export function MapSiteEditor({
                     type="button"
                     onClick={onLeaveSite}
                     className="cursor-pointer px-1 text-[11px] font-medium text-primary hover:underline"
-                    title="Leave this site and choose another"
+                    title="Leave this project area and choose another"
                   >
-                    Leave Site
+                    Leave Project Area
                   </button>
 
                   {isSystemAdmin && (
@@ -393,14 +393,14 @@ export function MapSiteEditor({
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 shrink-0 text-muted-foreground hover:bg-row-active hover:text-foreground"
-                          aria-label={`Site options for ${activeSite.name}`}
+                          aria-label={`Project area options for ${activeSite.name}`}
                         >
                           <MoreVertical className="h-3 w-3" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-44">
                         <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Site Options
+                          Project Area Options
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
@@ -409,7 +409,7 @@ export function MapSiteEditor({
                           disabled={isSaving}
                           onSelect={() => onUnarchiveSite?.(activeSite.site_id)}
                         >
-                          Restore Site
+                          Restore Project Area
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           hidden={activeSite.is_archived}
@@ -417,7 +417,7 @@ export function MapSiteEditor({
                           disabled={isSaving}
                           onSelect={() => onArchiveSite?.(activeSite.site_id)}
                         >
-                          Archive Site
+                          Archive Project Area
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           hidden={!activeSite.is_archived || !isSystemAdmin}
@@ -428,7 +428,7 @@ export function MapSiteEditor({
                           icon={<Trash2 className="h-4 w-4" />}
                           onSelect={() => setIsDeleteSiteOpen(true)}
                         >
-                          Delete Site
+                          Delete Project Area
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -456,8 +456,8 @@ export function MapSiteEditor({
                   className="h-8 w-full gap-1.5 border-border bg-card text-xs font-medium text-foreground hover:bg-row-hover disabled:cursor-not-allowed disabled:opacity-50"
                   title={
                     activeSite.is_archived
-                      ? 'Restore site before plotting new lots'
-                      : 'Plot a new lot polygon on this site'
+                      ? 'Restore project area before plotting new lots'
+                      : 'Plot a new lot polygon on this project area'
                   }
                 >
                   <LandPlot className="h-3.5 w-3.5 text-primary" />
@@ -628,11 +628,11 @@ export function MapSiteEditor({
         </div>
       )}
 
-      {/* Save New Site Modal (when plotting a new site boundary) */}
+      {/* Save New Project Area Modal (when plotting a new project area boundary) */}
       <Dialog open={pendingSiteBoundary !== null} onOpenChange={(open) => !open && onDiscardSite()}>
         <DialogContent className="max-w-sm bg-card">
           <DialogHeader>
-            <DialogTitle className="text-base font-semibold">Save New Site</DialogTitle>
+            <DialogTitle className="text-base font-semibold">Save New Project Area</DialogTitle>
           </DialogHeader>
 
           <form onSubmit={handleSiteSubmit} className="space-y-3.5 py-1">
@@ -653,7 +653,7 @@ export function MapSiteEditor({
 
             <div className="space-y-1">
               <Label htmlFor="site-name-input" className="text-xs font-medium">
-                Site Name *
+                Project Area Name *
               </Label>
               <Input
                 id="site-name-input"
@@ -699,7 +699,7 @@ export function MapSiteEditor({
                 loadingText="Creating..."
                 className="text-xs bg-primary text-primary-foreground"
               >
-                Create Site
+                Create Project Area
               </LoadingButton>
             </DialogFooter>
           </form>

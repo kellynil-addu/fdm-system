@@ -223,7 +223,7 @@ function PropertyLotsContent() {
               >
                 <Link href="/dashboard/properties/map">
                   <Map className="h-4 w-4" />
-                  Site map
+                  Project Area Map
                 </Link>
               </Button>
               <Button

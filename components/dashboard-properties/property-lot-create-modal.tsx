@@ -145,10 +145,10 @@ export function CreatePropertyLotModal({
             </Alert>
           )}
 
-          {/* Site picker */}
+          {/* Project area picker */}
           <div className="space-y-1.5">
             <Label htmlFor="site_id" className="text-sm font-medium text-foreground">
-              Site
+              Project Area
             </Label>
             <Controller
               name="site_id"
@@ -160,8 +160,8 @@ export function CreatePropertyLotModal({
                   value={field.value}
                   onValueChange={field.onChange}
                   disabled={isPending || sites.length === 0}
-                  placeholder={sites.length === 0 ? 'No sites available' : 'Select a site'}
-                  searchPlaceholder="Search site name or address..."
+                  placeholder={sites.length === 0 ? 'No project areas available' : 'Select a project area'}
+                  searchPlaceholder="Search project area name or address..."
                 />
               )}
             />
@@ -245,7 +245,7 @@ export function CreatePropertyLotModal({
 
           <p className="text-xs text-muted-foreground">
             New lots start as <strong className="font-medium text-foreground">Open</strong>. If the block and
-            lot match a subdivision on the site plan, it will visually appear on the map.
+            lot match a subdivision on the project area plan, it will visually appear on the map.
           </p>
 
           <DialogFooter>

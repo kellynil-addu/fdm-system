@@ -536,7 +536,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-card">
-      {/* Header with back navigation, single lot/site identity, and overflow actions */}
+      {/* Header with back navigation, single lot/project area identity, and overflow actions */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4">
         <div className="flex items-center gap-2 min-w-0">
           <Button

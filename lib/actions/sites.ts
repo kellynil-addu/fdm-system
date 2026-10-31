@@ -41,7 +41,7 @@ export async function getSites(): Promise<Site[]> {
       .returns<Site[]>();
 
     if (error) {
-      throw new Error(`Failed to fetch sites: ${error.message}`);
+      throw new Error(`Failed to fetch project areas: ${error.message}`);
     }
 
     return data ?? [];
@@ -60,7 +60,7 @@ export async function getSiteWithLots(siteId: string): Promise<SiteWithLots> {
         .single<Site>();
 
       if (siteError || !site) {
-        throw new Error(`Site not found: ${siteError?.message ?? "Unknown error"}`);
+        throw new Error(`Project area not found: ${siteError?.message ?? "Unknown error"}`);
       }
 
       const [subdivisionsResult, lotsResult] = await Promise.all([
@@ -84,7 +84,7 @@ export async function getSiteWithLots(siteId: string): Promise<SiteWithLots> {
         throw new Error(`Failed to fetch subdivisions: ${subdivisionsResult.error.message}`);
       }
       if (lotsResult.error) {
-        throw new Error(`Failed to fetch lots for site: ${lotsResult.error.message}`);
+        throw new Error(`Failed to fetch lots for project area: ${lotsResult.error.message}`);
       }
 
       return {
@@ -154,7 +154,7 @@ export async function getAllSitesWithLots(): Promise<SiteWithLots[]> {
     ]);
 
     if (sitesResult.error) {
-      throw new Error(`Failed to fetch sites: ${sitesResult.error.message}`);
+      throw new Error(`Failed to fetch project areas: ${sitesResult.error.message}`);
     }
     if (subdivisionsResult.error) {
       throw new Error(`Failed to fetch subdivisions: ${subdivisionsResult.error.message}`);
@@ -203,7 +203,7 @@ export async function createSite(input: CreateSiteInput): Promise<ActionResult<S
         .single<Site>();
 
       if (error || !data) {
-        throw new Error(`Failed to create site: ${error?.message ?? "Unknown error"}`);
+        throw new Error(`Failed to create project area: ${error?.message ?? "Unknown error"}`);
       }
 
       return data;
@@ -224,7 +224,7 @@ export async function deleteSite(siteId: string): Promise<ActionResult<void>> {
         .in("status", ["Reserved", "Sold"]);
 
       if (activeLots && activeLots.length > 0) {
-        throw new Error("Cannot delete site with active reserved or sold lots.");
+        throw new Error("Cannot delete a project area with active reserved or sold lots.");
       }
 
       await supabase.from("property_lot").delete().eq("site_id", validSiteId);
@@ -232,7 +232,7 @@ export async function deleteSite(siteId: string): Promise<ActionResult<void>> {
       const { error } = await supabase.from("site").delete().eq("site_id", validSiteId);
 
       if (error) {
-        throw new Error(`Failed to delete site: ${error.message}`);
+        throw new Error(`Failed to delete project area: ${error.message}`);
       }
     },
   });
@@ -416,7 +416,7 @@ export async function archiveSite(siteId: string): Promise<ActionResult<Site>> {
         .single<Site>();
 
       if (error || !data) {
-        throw new Error(`Failed to archive site: ${error?.message ?? "Unknown error"}`);
+        throw new Error(`Failed to archive project area: ${error?.message ?? "Unknown error"}`);
       }
 
       return data;
@@ -437,7 +437,7 @@ export async function unarchiveSite(siteId: string): Promise<ActionResult<Site>>
         .single<Site>();
 
       if (error || !data) {
-        throw new Error(`Failed to unarchive site: ${error?.message ?? "Unknown error"}`);
+        throw new Error(`Failed to unarchive project area: ${error?.message ?? "Unknown error"}`);
       }
 
       return data;

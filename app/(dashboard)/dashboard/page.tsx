@@ -350,7 +350,7 @@ async function DashboardContent() {
                 Property portfolio
               </h2>
               <p className="text-sm text-muted-foreground">
-                Map layout and inventory availability across company sites.
+                Map layout and inventory availability across company project areas.
               </p>
             </div>
             <div className="grid gap-6 lg:grid-cols-2">

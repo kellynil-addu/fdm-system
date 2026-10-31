@@ -45,7 +45,7 @@ const pricePerSqmSchema = amountSchema("Price per sqm", LOT_LIMITS.pricePerSqm);
 const contractPriceSchema = amountSchema("Contract price", LOT_LIMITS.contractPrice);
 
 export const createPropertyLotSchema = z.object({
-  site_id: z.string().min(1, "Please select a site").optional(),
+  site_id: z.string().min(1, "Please select a project area").optional(),
   location: z.string().trim().min(1, "Location is required").optional(),
   block_number: blockOrLotNumberSchema("Block number"),
   lot_number: blockOrLotNumberSchema("Lot number"),
@@ -134,7 +134,7 @@ export const removeAccountPartyActionSchema = z.object({
 });
 
 export const createSiteSchema = z.object({
-  name: z.string().trim().min(1, "Site name is required"),
+  name: z.string().trim().min(1, "Project area name is required"),
   description: z.string().trim().nullable().optional(),
   boundary: polygonBoundarySchema,
 });

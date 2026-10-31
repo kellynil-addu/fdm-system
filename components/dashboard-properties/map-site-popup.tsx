@@ -238,7 +238,7 @@ export function MapSitePopup({
           <Button
             size="sm"
             disabled={plot.isSiteArchived}
-            title={plot.isSiteArchived ? 'Restore site before registering lots' : undefined}
+            title={plot.isSiteArchived ? 'Restore project area before registering lots' : undefined}
             className="w-full cursor-pointer gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={plot.isSiteArchived ? undefined : onRegisterLot}
           >

@@ -238,7 +238,7 @@ export interface PropertyLotsSidebarProps {
   onSelectLot?: (lot: PropertyLotWithClient | null) => void;
   onHoverLot?: (lotKey: string | null) => void;
   onSiteFilterChange?: (siteId: string | null) => void;
-  /** Site selected outside the toolbar (e.g. by clicking a site marker on the map). */
+  /** Project area selected outside the toolbar (e.g. by clicking a map marker). */
   siteFilter?: string | null;
   createInitialValues?: {
     site_id?: string;
@@ -276,9 +276,9 @@ function PropertyLotsSidebarContent({
   const wasDialogOpenedRef = useRef(false);
   const { setFilter } = controller;
 
-  // Push an externally selected site (e.g. a map marker click) into the Site filter, so
-  // the map and the list always agree on which site is selected. The first run is skipped
-  // so a ?site= deep link keeps ownership of the initial filter value.
+  // Push an externally selected project area (e.g. a map marker click) into the Project
+  // Area filter, so the map and the list always agree on which area is selected. The first
+  // run is skipped so a ?projectArea= deep link keeps ownership of the initial filter value.
   const pushedSiteFilterRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     const isFirstRun = pushedSiteFilterRef.current === undefined;

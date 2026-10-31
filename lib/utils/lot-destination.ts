@@ -2,7 +2,7 @@
  * Where a lot card sends staff.
  *
  * Not "the property details page", because there is no such page: the route
- * this replaces is the site map with the lot selected, and which of the three
+ * this replaces is the project area map with the lot selected, and which of the three
  * destinations is useful depends entirely on where the lot is in its life.
  *
  * The pipeline decides it. §9 of the domain notes is a strict, gated sequence

@@ -443,7 +443,7 @@ describe("Property Lot Management Actions", () => {
     expect(restored.archived_at).toBeNull();
 
     unwrap(await deleteSite(site.site_id));
-    await expect(getSiteWithLots(site.site_id)).rejects.toThrow("Site not found");
+    await expect(getSiteWithLots(site.site_id)).rejects.toThrow("Project area not found");
   });
 });
 

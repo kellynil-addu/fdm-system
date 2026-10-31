@@ -185,7 +185,7 @@ export function GenerateDeedModal({
   const spouse = title.client?.spouse_name;
   const blockNum = title.property?.block_number ?? '—';
   const lotNum = title.property?.lot_number ?? '—';
-  const location = title.property?.location ?? 'Property Site';
+  const location = title.property?.location ?? 'Project Area';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
