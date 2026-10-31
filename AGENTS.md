@@ -45,14 +45,14 @@ fdm-system/
 │   ├── dashboard-clients/      # Client management table, modals & dialogs
 │   ├── dashboard-layout/       # Dashboard shell (sidebar, top-bar, skeletons, page-container)
 │   ├── dashboard-overview/     # Role-aware overview, record follow-ups, portfolio charts & quick links
-│   ├── dashboard-properties/   # Property lots table & subdivision map components
+│   ├── dashboard-properties/   # Property lots table & project area map components
 │   ├── dashboard-settings/     # Dashboard settings forms
 │   ├── dashboard-titles/       # Land title records (Legal page)
 │   ├── landing/                # Landing page components (navbar, hero, features)
 │   ├── shared/                 # Global cross-cutting shared brand & utility components
 │   └── ui/                     # shadcn/ui primitives and custom base components
 ├── lib/
-│   ├── actions/                # Server actions & action scopes (action-handler, auth guards, clients, properties, admin, reports)
+│   ├── actions/                # Server actions & action scopes (action-handler, auth guards, clients, properties, project areas, admin, reports)
 │   ├── arcgis/                 # ArcGIS REST integration & token service
 │   ├── hooks/                  # Client-side React hooks
 │   ├── storage/                # Cloud storage integration helpers (Backblaze B2)
@@ -72,7 +72,7 @@ fdm-system/
 │       ├── arcgis/             # ArcGIS token service & auth guard tests
 │       ├── auth/               # Authentication & password tests
 │       ├── clients/            # Client CRUD, search, area, archive, documents & interaction tests
-│       ├── properties/         # Property lot, map layout & positioning tests
+│       ├── properties/         # Property lot, project area map layout & positioning tests
 │       ├── titles/             # Land title CRUD & property relationship tests
 │       ├── reports/            # Operational summary report tests
 │       ├── permissions/        # Permission & guard tests
