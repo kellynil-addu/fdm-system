@@ -43,7 +43,7 @@ import {
   lotLabel,
   totalPrice,
 } from '@/lib/hooks/use-property-lots';
-import type { PropertyLotWithClient, PropertyStatus, Site } from '@/lib/types/property';
+import type { PropertyLotWithClient, PropertyStatus, ProjectArea } from '@/lib/types/property';
 import { PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
 import { Badge } from '@/components/ui/badge';
 import { IconBox } from '@/components/ui/icon-box';
@@ -197,7 +197,7 @@ function PropertyLotsContent() {
     error,
     activeDialog,
     openDialog,
-    sites,
+    projectAreas,
   } = usePropertyLots();
 
   const { rendered: renderedDialog, isOpen: isDialogOpen } = useDialogPresence(activeDialog);
@@ -292,7 +292,7 @@ function PropertyLotsContent() {
         )}
       </Card>
 
-      {renderedDialog?.type === 'create' && <CreatePropertyLotModal open={isDialogOpen} sites={sites} />}
+      {renderedDialog?.type === 'create' && <CreatePropertyLotModal open={isDialogOpen} projectAreas={projectAreas} />}
       {renderedDialog?.type === 'assign' && (
         <AssignLotClientDialog lot={renderedDialog.lot} open={isDialogOpen} />
       )}
@@ -300,9 +300,9 @@ function PropertyLotsContent() {
   );
 }
 
-export function PropertyLotsSection({ sites }: { sites: Site[] }) {
+export function PropertyLotsSection({ projectAreas }: { projectAreas: ProjectArea[] }) {
   return (
-    <PropertyLotsProvider sites={sites}>
+    <PropertyLotsProvider projectAreas={projectAreas}>
       <PropertyLotsContent />
     </PropertyLotsProvider>
   );

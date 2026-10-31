@@ -1,26 +1,26 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { SiteMap } from "@/components/dashboard-properties/map-site";
+import { ProjectAreaMap } from "@/components/dashboard-properties/map-project-area";
 import { useMapLibreMap } from "@/lib/hooks/use-maplibre-map";
 import { getArcGISApplicationToken } from "@/lib/arcgis";
-import { getAllSitesWithLots } from "@/lib/actions/sites";
-import { seedAllSampleSites } from "@/scripts/seed-sample-site";
+import { getAllProjectAreasWithLots } from "@/lib/actions/project-areas";
+import { seedAllSampleProjectAreas } from "@/scripts/seed-sample-project-area";
 import { getTestAdminClient, withTemporaryUser } from "../framework/session";
 
-describe("SiteMap Component & MapLibre Integration", () => {
+describe("ProjectAreaMap Component & MapLibre Integration", () => {
   beforeAll(async () => {
     const admin = getTestAdminClient();
     const { data: existing } = await admin
-      .from("site")
-      .select("site_id")
+      .from("project_area")
+      .select("project_area_id")
       .in("name", ["Barangay Limao", "San Augustin", "Kaputian", "Caliclic"]);
 
     if (!existing || existing.length < 4) {
-      await seedAllSampleSites();
+      await seedAllSampleProjectAreas();
     }
   });
 
-  it("exports SiteMap and useMapLibreMap correctly", () => {
-    expect(typeof SiteMap).toBe("function");
+  it("exports ProjectAreaMap and useMapLibreMap correctly", () => {
+    expect(typeof ProjectAreaMap).toBe("function");
     expect(typeof useMapLibreMap).toBe("function");
   });
 
@@ -54,26 +54,26 @@ describe("SiteMap Component & MapLibre Integration", () => {
     expect(osmTile).toBe("https://tiles.versatiles.org/tiles/osm/14/13908/7868");
   });
 
-  it("verifies the 4 real-world Samal Island sites exist in database with WGS84 coordinates", async () => {
+  it("verifies the 4 real-world Samal Island projectAreas exist in database with WGS84 coordinates", async () => {
     const admin = getTestAdminClient();
-    const expectedSiteNames = [
+    const expectedProjectAreaNames = [
       "Barangay Limao",
       "San Augustin",
       "Kaputian",
       "Caliclic",
     ];
 
-    const { data: sites, error } = await admin
-      .from("site")
-      .select("site_id, name, boundary")
-      .in("name", expectedSiteNames);
+    const { data: projectAreas, error } = await admin
+      .from("project_area")
+      .select("project_area_id, name, boundary")
+      .in("name", expectedProjectAreaNames);
 
     expect(error).toBeNull();
-    expect(sites).toBeDefined();
-    expect(sites?.length).toBe(4);
+    expect(projectAreas).toBeDefined();
+    expect(projectAreas?.length).toBe(4);
 
-    for (const site of sites!) {
-      const boundary = site.boundary as [number, number][];
+    for (const projectArea of projectAreas!) {
+      const boundary = projectArea.boundary as [number, number][];
       expect(Array.isArray(boundary)).toBe(true);
       expect(boundary.length).toBeGreaterThanOrEqual(4);
 
@@ -87,20 +87,20 @@ describe("SiteMap Component & MapLibre Integration", () => {
     }
   });
 
-  it("verifies 48 subdivisions are seeded with partial registration (3-5 property lots per site)", async () => {
+  it("verifies 48 subdivisions are seeded with partial registration (3-5 property lots per projectArea)", async () => {
     const admin = getTestAdminClient();
-    const { data: sites } = await admin
-      .from("site")
-      .select("site_id, name")
+    const { data: projectAreas } = await admin
+      .from("project_area")
+      .select("project_area_id, name")
       .in("name", ["Barangay Limao", "San Augustin", "Kaputian", "Caliclic"]);
 
-    expect(sites?.length).toBe(4);
-    const siteIds = sites!.map((s) => s.site_id);
+    expect(projectAreas?.length).toBe(4);
+    const projectAreaIds = projectAreas!.map((s) => s.project_area_id);
 
     const { data: subdivisions, error: subError } = await admin
-      .from("site_subdivision")
-      .select("subdivision_id, block_number, lot_number, boundary, site_id")
-      .in("site_id", siteIds);
+      .from("project_area_subdivision")
+      .select("subdivision_id, block_number, lot_number, boundary, project_area_id")
+      .in("project_area_id", projectAreaIds);
 
     expect(subError).toBeNull();
     expect(subdivisions).toBeDefined();
@@ -114,38 +114,38 @@ describe("SiteMap Component & MapLibre Integration", () => {
 
     const { data: propertyLots, error: lotError } = await admin
       .from("property_lot")
-      .select("property_id, block_number, lot_number, status, site_id")
-      .in("site_id", siteIds);
+      .select("property_id, block_number, lot_number, status, project_area_id")
+      .in("project_area_id", projectAreaIds);
 
     expect(lotError).toBeNull();
     expect(propertyLots).toBeDefined();
     expect(propertyLots!.length).toBe(16);
 
-    // Each site should have between 3 and 5 registered lots
-    for (const siteId of siteIds) {
-      const siteSubdivisions = subdivisions!.filter((s) => s.site_id === siteId);
-      const siteLots = propertyLots!.filter((l) => l.site_id === siteId);
+    // Each projectArea should have between 3 and 5 registered lots
+    for (const projectAreaId of projectAreaIds) {
+      const projectAreaSubdivisions = subdivisions!.filter((s) => s.project_area_id === projectAreaId);
+      const projectAreaLots = propertyLots!.filter((l) => l.project_area_id === projectAreaId);
 
-      expect(siteSubdivisions.length).toBe(12);
-      expect(siteLots.length).toBeGreaterThanOrEqual(3);
-      expect(siteLots.length).toBeLessThanOrEqual(5);
+      expect(projectAreaSubdivisions.length).toBe(12);
+      expect(projectAreaLots.length).toBeGreaterThanOrEqual(3);
+      expect(projectAreaLots.length).toBeLessThanOrEqual(5);
     }
   });
 
-  it("verifies getAllSitesWithLots returns all sites with populated subdivisions and lots", async () => {
+  it("verifies getAllProjectAreasWithLots returns all projectAreas with populated subdivisions and lots", async () => {
     await withTemporaryUser({ roleNames: ["system_admin"] }, async () => {
-      const allSites = await getAllSitesWithLots();
-      expect(allSites.length).toBeGreaterThanOrEqual(4);
+      const allProjectAreas = await getAllProjectAreasWithLots();
+      expect(allProjectAreas.length).toBeGreaterThanOrEqual(4);
 
-      const samalSites = allSites.filter((s) =>
+      const samalProjectAreas = allProjectAreas.filter((s) =>
         ["Barangay Limao", "San Augustin", "Kaputian", "Caliclic"].includes(s.name)
       );
-      expect(samalSites.length).toBe(4);
+      expect(samalProjectAreas.length).toBe(4);
 
-      for (const site of samalSites) {
-        expect(site.subdivisions.length).toBe(12);
-        expect(site.lots.length).toBeGreaterThanOrEqual(3);
-        expect(site.lots.length).toBeLessThanOrEqual(5);
+      for (const projectArea of samalProjectAreas) {
+        expect(projectArea.subdivisions.length).toBe(12);
+        expect(projectArea.lots.length).toBeGreaterThanOrEqual(3);
+        expect(projectArea.lots.length).toBeLessThanOrEqual(5);
       }
     });
   });

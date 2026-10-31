@@ -36,7 +36,7 @@ export interface ClientReportData {
 
 export interface PropertyReportData {
   lot: PropertyLot;
-  site_name: string | null;
+  project_area_name: string | null;
   calculated_total_price: number;
   active_account: {
     account_id: string;

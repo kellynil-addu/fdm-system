@@ -20,10 +20,10 @@ import { cn } from '@/lib/utils';
 export interface LotPlotProperties {
   id: string;
   lotKey: string;
-  siteLotKey: string;
+  projectAreaLotKey: string;
   propertyId: string;
-  siteId: string;
-  siteName: string;
+  projectAreaId: string;
+  projectAreaName: string;
   block: number;
   lot: number;
   name: string;
@@ -37,14 +37,14 @@ export interface LotPlotProperties {
   clientId?: string;
   titleNumber?: string;
   forfeitedAt?: string;
-  isSiteArchived?: boolean;
+  isProjectAreaArchived?: boolean;
   hasUnsavedChange: boolean;
   centerLng: number;
   centerLat: number;
   topLat: number;
 }
 
-export interface MapSitePopupProps {
+export interface MapProjectAreaPopupProps {
   plot: LotPlotProperties;
   onViewDetails: () => void;
   onRegisterLot: () => void;
@@ -60,11 +60,11 @@ export const STATUS_PILL_MAP: Record<string, string> = {
   Unregistered: 'bg-muted text-muted-foreground',
 };
 
-export function MapSitePopup({
+export function MapProjectAreaPopup({
   plot,
   onViewDetails,
   onRegisterLot,
-}: MapSitePopupProps) {
+}: MapProjectAreaPopupProps) {
   const router = useRouter();
   const [isReopenOpen, setIsReopenOpen] = useState(false);
   const [isReopening, setIsReopening] = useState(false);
@@ -115,9 +115,9 @@ export function MapSitePopup({
       <div className="flex items-start justify-between gap-2 border-b border-border pb-2">
         <div>
           <p className="text-sm font-bold text-foreground">{plot.name}</p>
-          <p className="text-xs text-muted-foreground">{plot.siteName}</p>
+          <p className="text-xs text-muted-foreground">{plot.projectAreaName}</p>
         </div>
-        {plot.isSiteArchived && (
+        {plot.isProjectAreaArchived && (
           <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground border border-border bg-muted">
             Archived
           </span>
@@ -237,10 +237,10 @@ export function MapSitePopup({
           </Button>
           <Button
             size="sm"
-            disabled={plot.isSiteArchived}
-            title={plot.isSiteArchived ? 'Restore project area before registering lots' : undefined}
+            disabled={plot.isProjectAreaArchived}
+            title={plot.isProjectAreaArchived ? 'Restore project area before registering lots' : undefined}
             className="w-full cursor-pointer gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={plot.isSiteArchived ? undefined : onRegisterLot}
+            onClick={plot.isProjectAreaArchived ? undefined : onRegisterLot}
           >
             <Plus className="h-3.5 w-3.5" />
             <span>Open Lot for Sale</span>

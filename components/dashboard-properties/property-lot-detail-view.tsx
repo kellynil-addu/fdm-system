@@ -345,7 +345,7 @@ export interface PropertyLotDetailViewProps {
 }
 
 export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetailViewProps) {
-  const { createLot, updateLot, archiveLot, unarchiveLot, reopenLot, deleteLot, sites } = usePropertyLots();
+  const { createLot, updateLot, archiveLot, unarchiveLot, reopenLot, deleteLot, projectAreas } = usePropertyLots();
   const { isSystemAdmin, hasPermission } = useSession();
   const canDeleteLot = hasPermission('properties.delete');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -367,7 +367,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
     setDraftArea(lot.area_size);
     setDraftPrice(lot.price_per_sqm);
     setDraftTitle(lot.title_number ?? null);
-  }, [lot.property_id, lot.site_id, lot.block_number, lot.lot_number, lot.area_size, lot.price_per_sqm, lot.title_number]);
+  }, [lot.property_id, lot.project_area_id, lot.block_number, lot.lot_number, lot.area_size, lot.price_per_sqm, lot.title_number]);
 
   const isRegistered = Boolean(lot.property_id);
   const displayStatus: SubdivisionDisplayStatus = isRegistered ? lot.status : 'Closed';
@@ -458,7 +458,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
   async function handleEnsureRegistered(): Promise<string | null> {
     if (lot.property_id) return lot.property_id;
     const res = await createLot({
-      site_id: lot.site_id,
+      project_area_id: lot.project_area_id,
       location: lot.location,
       block_number: lot.block_number,
       lot_number: lot.lot_number,
@@ -1076,9 +1076,9 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
         <CreatePropertyLotModal
           open={isCreateModalOpen}
           onOpenChange={setIsCreateModalOpen}
-          sites={sites}
+          projectAreas={projectAreas}
           initialValues={{
-            site_id: lot.site_id ?? undefined,
+            project_area_id: lot.project_area_id ?? undefined,
             block_number: lot.block_number,
             lot_number: lot.lot_number,
             area_size: currentArea,

@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { pointInPolygon, isPolygonContained, calculatePolygonAreaSqm } from '@/lib/geometry';
 import { updateSubdivisionBoundarySchema } from '@/lib/validations/property';
-import { getSiteDraft, saveSiteDraft, clearSiteDraft } from '@/lib/storage/map-draft-storage';
+import { getProjectAreaDraft, saveProjectAreaDraft, clearProjectAreaDraft } from '@/lib/storage/map-draft-storage';
 
 describe('Map Editor v2 Utilities & Algorithms', () => {
-  // A test site boundary around Samal Island coordinates
-  const siteRing: [number, number][] = [
+  // A test projectArea boundary around Samal Island coordinates
+  const projectAreaRing: [number, number][] = [
     [125.70, 7.04],
     [125.75, 7.04],
     [125.75, 7.08],
@@ -15,14 +15,14 @@ describe('Map Editor v2 Utilities & Algorithms', () => {
   describe('Ray-casting pointInPolygon & isPolygonContained', () => {
     it('accurately identifies points inside the polygon', () => {
       const insidePoint: [number, number] = [125.72, 7.06];
-      expect(pointInPolygon(insidePoint, siteRing)).toBe(true);
+      expect(pointInPolygon(insidePoint, projectAreaRing)).toBe(true);
     });
 
     it('accurately rejects points outside the polygon', () => {
       const outsidePointNorth: [number, number] = [125.72, 7.10];
       const outsidePointWest: [number, number] = [125.68, 7.06];
-      expect(pointInPolygon(outsidePointNorth, siteRing)).toBe(false);
-      expect(pointInPolygon(outsidePointWest, siteRing)).toBe(false);
+      expect(pointInPolygon(outsidePointNorth, projectAreaRing)).toBe(false);
+      expect(pointInPolygon(outsidePointWest, projectAreaRing)).toBe(false);
     });
 
     it('validates entire shape containment correctly', () => {
@@ -40,12 +40,12 @@ describe('Map Editor v2 Utilities & Algorithms', () => {
         [125.71, 7.07],
       ];
 
-      expect(isPolygonContained(fullyContainedShape, siteRing)).toBe(true);
-      expect(isPolygonContained(partiallyOutOfBoundsShape, siteRing)).toBe(false);
+      expect(isPolygonContained(fullyContainedShape, projectAreaRing)).toBe(true);
+      expect(isPolygonContained(partiallyOutOfBoundsShape, projectAreaRing)).toBe(false);
     });
 
     it('returns false for empty shapes', () => {
-      expect(isPolygonContained([], siteRing)).toBe(false);
+      expect(isPolygonContained([], projectAreaRing)).toBe(false);
       expect(isPolygonContained([[125.72, 7.06]], [])).toBe(false);
     });
   });
@@ -74,7 +74,7 @@ describe('Map Editor v2 Utilities & Algorithms', () => {
   });
 
   describe('LocalStorage draft persistence', () => {
-    const siteId = '11111111-2222-3333-4444-555555555555';
+    const projectAreaId = '11111111-2222-3333-4444-555555555555';
     const store = new Map<string, string>();
 
     beforeEach(() => {
@@ -85,18 +85,18 @@ describe('Map Editor v2 Utilities & Algorithms', () => {
         removeItem: (k: string) => store.delete(k),
         clear: () => store.clear(),
       };
-      clearSiteDraft(siteId);
+      clearProjectAreaDraft(projectAreaId);
     });
 
-    it('saves, retrieves, and clears draft payloads per site', () => {
-      expect(getSiteDraft(siteId)).toBeNull();
+    it('saves, retrieves, and clears draft payloads per projectArea', () => {
+      expect(getProjectAreaDraft(projectAreaId)).toBeNull();
 
       const mockPayload = {
-        siteId,
+        projectAreaId,
         draftLots: [
           {
             draftId: 'draft-1',
-            siteId,
+            projectAreaId,
             boundary: [[125.71, 7.05], [125.72, 7.05], [125.72, 7.06]] as [number, number][],
             block: 1,
             lot: 5,
@@ -107,17 +107,17 @@ describe('Map Editor v2 Utilities & Algorithms', () => {
         pendingBoundaryUpdates: [],
       };
 
-      saveSiteDraft(siteId, mockPayload);
+      saveProjectAreaDraft(projectAreaId, mockPayload);
 
-      const retrieved = getSiteDraft(siteId);
+      const retrieved = getProjectAreaDraft(projectAreaId);
       expect(retrieved).not.toBeNull();
-      expect(retrieved?.siteId).toBe(siteId);
+      expect(retrieved?.projectAreaId).toBe(projectAreaId);
       expect(retrieved?.draftLots).toHaveLength(1);
       expect(retrieved?.draftLots[0].block).toBe(1);
       expect(retrieved?.draftLots[0].lot).toBe(5);
 
-      clearSiteDraft(siteId);
-      expect(getSiteDraft(siteId)).toBeNull();
+      clearProjectAreaDraft(projectAreaId);
+      expect(getProjectAreaDraft(projectAreaId)).toBeNull();
     });
   });
 
@@ -125,7 +125,7 @@ describe('Map Editor v2 Utilities & Algorithms', () => {
     it('validates correct subdivision boundary input', () => {
       const valid = {
         subdivision_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-        site_id: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+        project_area_id: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
         block_number: 2,
         lot_number: 14,
         boundary: [
@@ -142,7 +142,7 @@ describe('Map Editor v2 Utilities & Algorithms', () => {
     it('rejects invalid boundaries with fewer than 3 vertices', () => {
       const invalid = {
         subdivision_id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
-        site_id: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+        project_area_id: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
         block_number: 2,
         lot_number: 14,
         boundary: [

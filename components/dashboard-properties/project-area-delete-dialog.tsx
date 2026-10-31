@@ -12,23 +12,23 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { getArchiveEligibility } from '@/lib/utils/archive-rules';
-import type { Site, SiteWithLots } from '@/lib/types/property';
+import type { ProjectArea, ProjectAreaWithLots } from '@/lib/types/property';
 
-export function DeleteSiteDialog({
-  site,
+export function DeleteProjectAreaDialog({
+  projectArea,
   open,
   onOpenChange,
   onConfirm,
   isPending,
 }: {
-  site: Site | SiteWithLots;
+  projectArea: ProjectArea | ProjectAreaWithLots;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: () => Promise<void>;
   isPending: boolean;
 }) {
-  const isArchived = Boolean(site.is_archived);
-  const eligibility = getArchiveEligibility(isArchived, site.archived_at);
+  const isArchived = Boolean(projectArea.is_archived);
+  const eligibility = getArchiveEligibility(isArchived, projectArea.archived_at);
 
   return (
     <AlertDialog open={open} onOpenChange={(v) => !v && onOpenChange(false)}>
@@ -36,7 +36,7 @@ export function DeleteSiteDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Delete Project Area</AlertDialogTitle>
           <AlertDialogDescription>
-            Are you sure you want to permanently delete <strong>{site.name}</strong>?
+            Are you sure you want to permanently delete <strong>{projectArea.name}</strong>?
             This action cannot be undone and will permanently remove this project area and its subdivision plat plans.
           </AlertDialogDescription>
         </AlertDialogHeader>

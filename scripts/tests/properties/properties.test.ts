@@ -13,12 +13,12 @@ import {
   assignPropertyFullyPaid,
 } from "@/lib/actions/properties";
 import {
-  createSite,
-  archiveSite,
-  unarchiveSite,
-  deleteSite,
-  getSiteWithLots,
-} from "@/lib/actions/sites";
+  createProjectArea,
+  archiveProjectArea,
+  unarchiveProjectArea,
+  deleteProjectArea,
+  getProjectAreaWithLots,
+} from "@/lib/actions/project-areas";
 import { createClient } from "@/lib/actions/clients";
 import {
   loginAsAdmin,
@@ -26,7 +26,7 @@ import {
   getTestAdminClient,
   hardDeleteTestProperty,
   hardDeleteTestClient,
-  hardDeleteTestSite,
+  hardDeleteTestProjectArea,
   runTrackedCleanups,
 } from "../framework/session";
 import { unwrap } from "../framework/action-helper";
@@ -34,7 +34,7 @@ import { unwrap } from "../framework/action-helper";
 describe("Property Lot Management Actions", () => {
   const testPropertyIds: string[] = [];
   const testClientIds: string[] = [];
-  const testSiteIds: string[] = [];
+  const testProjectAreaIds: string[] = [];
 
   beforeAll(async () => {
     await loginAsAdmin();
@@ -55,9 +55,9 @@ describe("Property Lot Management Actions", () => {
         // Ignore cleanup errors
       }
     }
-    for (const id of testSiteIds) {
+    for (const id of testProjectAreaIds) {
       try {
-        await hardDeleteTestSite(id);
+        await hardDeleteTestProjectArea(id);
       } catch {
         // Ignore cleanup errors
       }
@@ -425,25 +425,25 @@ describe("Property Lot Management Actions", () => {
     expect(restored.archived_at).toBeNull();
   });
 
-  it("archiveSite, unarchiveSite, and deleteSite manage site lifecycle", async () => {
-    const siteName = `Test Site ${Date.now()}`;
-    const site = unwrap(await createSite({
-      name: siteName,
-      description: "Test site description",
+  it("archiveProjectArea, unarchiveProjectArea, and deleteProjectArea manage projectArea lifecycle", async () => {
+    const projectAreaName = `Test ProjectArea ${Date.now()}`;
+    const projectArea = unwrap(await createProjectArea({
+      name: projectAreaName,
+      description: "Test projectArea description",
       boundary: [[0, 0], [10, 0], [10, 10], [0, 10]],
     }));
-    testSiteIds.push(site.site_id);
+    testProjectAreaIds.push(projectArea.project_area_id);
 
-    const archived = unwrap(await archiveSite(site.site_id));
+    const archived = unwrap(await archiveProjectArea(projectArea.project_area_id));
     expect(archived.is_archived).toBe(true);
     expect(archived.archived_at).not.toBeNull();
 
-    const restored = unwrap(await unarchiveSite(site.site_id));
+    const restored = unwrap(await unarchiveProjectArea(projectArea.project_area_id));
     expect(restored.is_archived).toBe(false);
     expect(restored.archived_at).toBeNull();
 
-    unwrap(await deleteSite(site.site_id));
-    await expect(getSiteWithLots(site.site_id)).rejects.toThrow("Project area not found");
+    unwrap(await deleteProjectArea(projectArea.project_area_id));
+    await expect(getProjectAreaWithLots(projectArea.project_area_id)).rejects.toThrow("Project area not found");
   });
 });
 

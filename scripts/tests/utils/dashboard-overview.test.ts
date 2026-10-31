@@ -54,16 +54,16 @@ describe('Dashboard overview presentation', () => {
     expect(html).toContain('Archived clients are excluded');
   });
 
-  it('renders a scaled site map linking to the full map without nested controls', () => {
-    const html = renderToStaticMarkup(createElement(PropertyMapCard, { preview: { site: {
-      site_id: 'site-1', name: 'Sample Site', description: null,
+  it('renders a scaled projectArea map linking to the full map without nested controls', () => {
+    const html = renderToStaticMarkup(createElement(PropertyMapCard, { preview: { projectArea: {
+      project_area_id: 'projectArea-1', name: 'Sample ProjectArea', description: null,
       created_at: '', updated_at: '',
       is_archived: false, archived_at: null,
       boundary: [[125, 7], [125.01, 7], [125.01, 7.01]], subdivisions: [], lots: [],
     } } }));
     expect(html).toContain('href="/dashboard/properties/map"');
     expect(html).toContain('data-engine="maplibre"');
-    expect(html).toContain('Sample Site');
+    expect(html).toContain('Sample ProjectArea');
     expect(html).toContain('inert=""');
     expect(html).not.toContain('<button');
     expect(html).not.toContain('Zoom:');
@@ -73,8 +73,8 @@ describe('Dashboard overview presentation', () => {
     const unavailable = renderToStaticMarkup(createElement(PropertyMapCard, { preview: null }));
     expect(unavailable).toContain('temporarily unavailable');
     expect(unavailable).toContain('href="/dashboard/properties/map"');
-    const empty = renderToStaticMarkup(createElement(PropertyMapCard, { preview: { site: null } }));
-    expect(empty).toContain('No sites to preview');
+    const empty = renderToStaticMarkup(createElement(PropertyMapCard, { preview: { projectArea: null } }));
+    expect(empty).toContain('No projectAreas to preview');
     expect(empty).not.toContain('data-engine="maplibre"');
   });
 

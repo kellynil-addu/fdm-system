@@ -170,7 +170,7 @@ export function PropertiesSkeleton() {
   );
 }
 
-export function SiteMapSkeleton() {
+export function ProjectAreaMapSkeleton() {
   return (
     <LoadingRegion label="Loading project area map…">
       <div className="relative flex flex-1 h-full min-h-0 w-full overflow-hidden">

@@ -1,4 +1,4 @@
-import type { SiteWithLots } from '@/lib/types/property';
+import type { ProjectAreaWithLots } from '@/lib/types/property';
 import type { ClientFollowUp } from '@/lib/client-record-review';
 
 export interface DashboardStats {
@@ -15,5 +15,5 @@ export interface DashboardStats {
 }
 
 export interface DashboardMapPreview {
-  site: SiteWithLots | null;
+  projectArea: ProjectAreaWithLots | null;
 }

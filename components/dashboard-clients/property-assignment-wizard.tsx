@@ -28,7 +28,7 @@ import {
   assignPropertyParties,
   assignPropertyFullyPaid,
 } from '@/lib/actions/properties';
-import { getSites, getSiteWithLots } from '@/lib/actions/sites';
+import { getProjectAreas, getProjectAreaWithLots } from '@/lib/actions/project-areas';
 import { getClientRequirements, formatMissingRequirements } from '@/lib/utils/client-requirements';
 import { PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
 import {
@@ -37,7 +37,7 @@ import {
   type SelectedLotDetails,
 } from './block-lot-popup';
 import { useClientDetail } from '@/lib/hooks/use-client-detail';
-import type { Site, SiteWithLots } from '@/lib/types/property';
+import type { ProjectArea, ProjectAreaWithLots } from '@/lib/types/property';
 
 const PESO = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -90,9 +90,9 @@ export function PropertyAssignmentWizard({
 }: PropertyAssignmentWizardProps) {
   const { client } = useClientDetail();
   const router = useRouter();
-  const [selectedSiteId, setSelectedSiteId] = useState<string>('');
-  const [siteData, setSiteData] = useState<SiteWithLots | null>(null);
-  const [isLoadingSite, setIsLoadingSite] = useState(false);
+  const [selectedProjectAreaId, setSelectedProjectAreaId] = useState<string>('');
+  const [projectAreaData, setProjectAreaData] = useState<ProjectAreaWithLots | null>(null);
+  const [isLoadingProjectArea, setIsLoadingProjectArea] = useState(false);
 
   // Inline Block, Lot, Area & Price state
   const [blockInput, setBlockInput] = useState<string>('');
@@ -113,58 +113,58 @@ export function PropertyAssignmentWizard({
   const [titleNumber, setTitleNumber] = useState<string>('');
   const [isLegacyTransferred, setIsLegacyTransferred] = useState<boolean>(false);
 
-  const [sites, setSites] = useState<Site[]>([]);
+  const [projectAreas, setProjectAreas] = useState<ProjectArea[]>([]);
   const [isLoadingPreSelected, setIsLoadingPreSelected] = useState(false);
 
   const requirements = getClientRequirements(client, client.client_document);
 
-  const siteOptions = useMemo(
+  const projectAreaOptions = useMemo(
     () =>
-      sites.map((site) => ({
-        value: site.site_id,
-        label: site.name,
-        description: site.description ?? undefined,
+      projectAreas.map((projectArea) => ({
+        value: projectArea.project_area_id,
+        label: projectArea.name,
+        description: projectArea.description ?? undefined,
       })),
-    [sites]
+    [projectAreas]
   );
 
-  // Load sites on mount
+  // Load projectAreas on mount
   useEffect(() => {
-    getSites()
+    getProjectAreas()
       .then((data) => {
-        setSites(data);
-        if (data.length === 1 && !selectedSiteId) {
-          setSelectedSiteId(data[0].site_id);
+        setProjectAreas(data);
+        if (data.length === 1 && !selectedProjectAreaId) {
+          setSelectedProjectAreaId(data[0].project_area_id);
         }
       })
       .catch((err) => console.error('Failed to load project areas:', err));
-  }, [selectedSiteId]);
+  }, [selectedProjectAreaId]);
 
   // Load project area data when the project area selection changes
   useEffect(() => {
-    if (!selectedSiteId) {
-      setSiteData(null);
+    if (!selectedProjectAreaId) {
+      setProjectAreaData(null);
       return;
     }
 
     let isMounted = true;
-    setIsLoadingSite(true);
-    getSiteWithLots(selectedSiteId)
+    setIsLoadingProjectArea(true);
+    getProjectAreaWithLots(selectedProjectAreaId)
       .then((data) => {
-        if (isMounted) setSiteData(data);
+        if (isMounted) setProjectAreaData(data);
       })
       .catch((err) => {
         console.error('Failed to load project area details:', err);
-        if (isMounted) setSiteData(null);
+        if (isMounted) setProjectAreaData(null);
       })
       .finally(() => {
-        if (isMounted) setIsLoadingSite(false);
+        if (isMounted) setIsLoadingProjectArea(false);
       });
 
     return () => {
       isMounted = false;
     };
-  }, [selectedSiteId]);
+  }, [selectedProjectAreaId]);
 
   // Pre-load lot if passed via query params (e.g. from subdivision map)
   useEffect(() => {
@@ -173,8 +173,8 @@ export function PropertyAssignmentWizard({
     setIsLoadingPreSelected(true);
     getPropertyLotById(preSelectedPropertyId)
       .then((lot) => {
-        const siteId = lot.site_id || '';
-        if (siteId) setSelectedSiteId(siteId);
+        const projectAreaId = lot.project_area_id || '';
+        if (projectAreaId) setSelectedProjectAreaId(projectAreaId);
         setBlockInput(lot.block_number.toString());
         setLotInput(lot.lot_number.toString());
         setAreaInput(lot.area_size.toString());
@@ -193,8 +193,8 @@ export function PropertyAssignmentWizard({
     !isNaN(blockNumber) && blockNumber > 0 && !isNaN(lotNumber) && lotNumber > 0;
 
   const evaluatedStatus = useMemo(
-    () => evaluateLotStatus(siteData, blockNumber, lotNumber),
-    [siteData, blockNumber, lotNumber]
+    () => evaluateLotStatus(projectAreaData, blockNumber, lotNumber),
+    [projectAreaData, blockNumber, lotNumber]
   );
 
   const isBlocked = evaluatedStatus?.type === 'already_assigned';
@@ -210,7 +210,7 @@ export function PropertyAssignmentWizard({
   // Derive active SelectedLotDetails when inputs and status are valid
   const selectedLotDetails: SelectedLotDetails | null = useMemo(() => {
     if (
-      !siteData ||
+      !projectAreaData ||
       !hasValidBlockAndLot ||
       !evaluatedStatus ||
       evaluatedStatus.type === 'already_assigned' ||
@@ -220,8 +220,8 @@ export function PropertyAssignmentWizard({
     }
 
     const base = {
-      siteId: siteData.site_id,
-      siteName: siteData.name,
+      projectAreaId: projectAreaData.project_area_id,
+      projectAreaName: projectAreaData.name,
       blockNumber,
       lotNumber,
       areaSize: numericArea,
@@ -255,7 +255,7 @@ export function PropertyAssignmentWizard({
       isManualNew: true,
     };
   }, [
-    siteData,
+    projectAreaData,
     hasValidBlockAndLot,
     evaluatedStatus,
     computedTotalPrice,
@@ -282,7 +282,7 @@ export function PropertyAssignmentWizard({
     setIsEditingPrice(false);
 
     const nextStatus = evaluateLotStatus(
-      siteData,
+      projectAreaData,
       parseInt(nextBlock, 10),
       parseInt(nextLot, 10)
     );
@@ -296,8 +296,8 @@ export function PropertyAssignmentWizard({
     }
   }
 
-  function handleSiteChange(newSiteId: string) {
-    setSelectedSiteId(newSiteId);
+  function handleProjectAreaChange(newProjectAreaId: string) {
+    setSelectedProjectAreaId(newProjectAreaId);
     setBlockInput('');
     setLotInput('');
     setAreaInput('');
@@ -330,8 +330,8 @@ export function PropertyAssignmentWizard({
       // Create/open lot in property_lot first if unopened plot or new record-only lot
       if (!targetPropertyId) {
         const createResult = await createPropertyLot({
-          site_id: selectedLotDetails.siteId,
-          location: selectedLotDetails.siteName,
+          project_area_id: selectedLotDetails.projectAreaId,
+          location: selectedLotDetails.projectAreaName,
           block_number: selectedLotDetails.blockNumber,
           lot_number: selectedLotDetails.lotNumber,
           area_size: selectedLotDetails.areaSize,
@@ -469,14 +469,14 @@ export function PropertyAssignmentWizard({
             <div className="grid gap-3 sm:grid-cols-[1fr_13rem]">
               {/* Searchable Project Area Selector */}
               <div className="space-y-1.5">
-                <Label htmlFor="site-selector" className="text-xs text-muted-foreground font-medium">
+                <Label htmlFor="project-area-selector" className="text-xs text-muted-foreground font-medium">
                   Project Area
                 </Label>
                 <SearchableSelect
-                  id="site-selector"
-                  options={siteOptions}
-                  value={selectedSiteId}
-                  onValueChange={handleSiteChange}
+                  id="project-area-selector"
+                  options={projectAreaOptions}
+                  value={selectedProjectAreaId}
+                  onValueChange={handleProjectAreaChange}
                   placeholder="Choose a project area..."
                   searchPlaceholder="Search project area name or address..."
                   emptyMessage="No matching project areas found."
@@ -485,9 +485,9 @@ export function PropertyAssignmentWizard({
 
               {/* Inline Block & Lot Fields with Focus Grid Popup */}
               <BlockLotPopup
-                open={isLotPopupOpen && Boolean(selectedSiteId) && !isLoadingSite}
+                open={isLotPopupOpen && Boolean(selectedProjectAreaId) && !isLoadingProjectArea}
                 onOpenChange={setIsLotPopupOpen}
-                siteData={siteData}
+                projectAreaData={projectAreaData}
                 activeBlock={!isNaN(blockNumber) && blockNumber > 0 ? blockNumber : null}
                 activeLot={!isNaN(lotNumber) && lotNumber > 0 ? lotNumber : null}
                 onSelectLot={(blk, lot) => updateBlockAndLot(blk.toString(), lot.toString())}
@@ -503,7 +503,7 @@ export function PropertyAssignmentWizard({
                       min={1}
                       step={1}
                       placeholder="e.g. 1"
-                      disabled={!selectedSiteId || isLoadingSite}
+                      disabled={!selectedProjectAreaId || isLoadingProjectArea}
                       value={blockInput}
                       onFocus={() => setIsLotPopupOpen(true)}
                       onChange={(e) => updateBlockAndLot(e.target.value, lotInput)}
@@ -520,7 +520,7 @@ export function PropertyAssignmentWizard({
                       min={1}
                       step={1}
                       placeholder="e.g. 5"
-                      disabled={!selectedSiteId || isLoadingSite}
+                      disabled={!selectedProjectAreaId || isLoadingProjectArea}
                       value={lotInput}
                       onFocus={() => setIsLotPopupOpen(true)}
                       onChange={(e) => updateBlockAndLot(blockInput, e.target.value)}
@@ -543,7 +543,7 @@ export function PropertyAssignmentWizard({
               {/* Left: Consolidated state & action preview */}
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {isLoadingSite ? (
+                  {isLoadingProjectArea ? (
                     <Badge variant="muted" shape="pill">
                       Loading project area...
                     </Badge>
@@ -591,10 +591,10 @@ export function PropertyAssignmentWizard({
                     isBlocked ? 'text-destructive' : 'text-muted-foreground'
                   )}
                 >
-                  {isLoadingSite && 'Fetching project area lots and subdivision plan...'}
-                  {!isLoadingSite &&
+                  {isLoadingProjectArea && 'Fetching project area lots and subdivision plan...'}
+                  {!isLoadingProjectArea &&
                     !evaluatedStatus &&
-                    (selectedSiteId
+                    (selectedProjectAreaId
                       ? 'Focus Block or Lot to pick from grid, or enter numbers manually.'
                       : 'Select a project area first.')}
                   {evaluatedStatus?.type === 'open' &&

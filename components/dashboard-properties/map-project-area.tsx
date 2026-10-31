@@ -14,7 +14,7 @@ import {
 import { getArcGISHybridStyle } from '@/lib/actions/arcgis';
 import { useMapLibreMap } from '@/lib/hooks/use-maplibre-map';
 import { parseRing, ringBounds, ringCentroid, pointInPolygon, isPolygonContained, type Ring } from '@/lib/geometry';
-import type { PropertyLotWithClient, PropertyStatus, Site, SiteWithLots, DraftLot, PendingBoundaryUpdate } from '@/lib/types/property';
+import type { PropertyLotWithClient, PropertyStatus, ProjectArea, ProjectAreaWithLots, DraftLot, PendingBoundaryUpdate } from '@/lib/types/property';
 import type {
   ErrorEvent as MapLibreErrorEvent,
   GeoJSONSource,
@@ -23,8 +23,8 @@ import type {
   ExpressionSpecification,
 } from 'maplibre-gl';
 import { cn } from '@/lib/utils';
-import { MapSitePopup, type LotPlotProperties } from '@/components/dashboard-properties/map-site-popup';
-import { MapSiteEditorPopup } from '@/components/dashboard-properties/map-site-editor-popup';
+import { MapProjectAreaPopup, type LotPlotProperties } from '@/components/dashboard-properties/map-project-area-popup';
+import { MapProjectAreaEditorPopup } from '@/components/dashboard-properties/map-project-area-editor-popup';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
 function notifyWarning(message: string) {
@@ -33,15 +33,15 @@ function notifyWarning(message: string) {
   }
 }
 
-export interface SiteMapProps {
-  site?: SiteWithLots;
-  sites?: (SiteWithLots | Site)[];
+export interface ProjectAreaMapProps {
+  projectArea?: ProjectAreaWithLots;
+  projectAreas?: (ProjectAreaWithLots | ProjectArea)[];
   selectedLotId?: string | null;
   onSelectLot?: (lotId: string | null) => void;
   hoveredLotKey?: string | null;
   onSelectLotProperty?: (lot: PropertyLotWithClient) => void;
   onSelectUnregistered?: (data: {
-    siteId: string;
+    projectAreaId: string;
     block: number;
     lot: number;
     areaSize?: number;
@@ -53,15 +53,15 @@ export interface SiteMapProps {
   initialZoom?: number;
   isEditorMode?: boolean;
   isPlotting?: boolean;
-  plotType?: 'lot' | 'site' | null;
+  plotType?: 'lot' | 'project-area' | null;
   draftPoints?: [number, number][];
   onAddDraftPoint?: (point: [number, number]) => void;
-  onDeletePlot?: (plot: { subdivisionId?: string; siteId: string; siteName: string; block: number; lot: number; status: string }) => void;
+  onDeletePlot?: (plot: { subdivisionId?: string; projectAreaId: string; projectAreaName: string; block: number; lot: number; status: string }) => void;
   onEditBoundary?: (plot: LotPlotProperties) => void;
-  focusedSiteId?: string | null;
-  onSelectSite?: (siteId: string) => void;
+  focusedProjectAreaId?: string | null;
+  onSelectProjectArea?: (projectAreaId: string) => void;
   preview?: boolean;
-  activeSiteRing?: Ring | null;
+  activeProjectAreaRing?: Ring | null;
   draftLots?: DraftLot[];
   pendingBoundaryUpdates?: PendingBoundaryUpdate[];
   onUpdateDraftPoints?: (points: [number, number][]) => void;
@@ -130,7 +130,7 @@ function buildLotFillOpacity(activeLotId: string | null, isEditorMode: boolean):
   if (isEditorMode) {
     return [
       'case',
-      ['boolean', ['get', 'isSiteArchived'], false],
+      ['boolean', ['get', 'isProjectAreaArchived'], false],
       0.06,
       isActiveLotExpr(activeLotId),
       0.3,
@@ -141,7 +141,7 @@ function buildLotFillOpacity(activeLotId: string | null, isEditorMode: boolean):
   }
   return [
     'case',
-    ['boolean', ['get', 'isSiteArchived'], false],
+    ['boolean', ['get', 'isProjectAreaArchived'], false],
     0.25,
     [
       'case',
@@ -162,7 +162,7 @@ function buildLotStrokeColor(activeLotId: string | null, isEditorMode: boolean):
       EDITOR_LOT_COLORS.selectedStroke,
       ['boolean', ['get', 'hasUnsavedChange'], false],
       EDITOR_LOT_COLORS.unsavedStroke,
-      ['boolean', ['get', 'isSiteArchived'], false],
+      ['boolean', ['get', 'isProjectAreaArchived'], false],
       EDITOR_LOT_COLORS.archivedStroke,
       EDITOR_LOT_COLORS.stroke,
     ];
@@ -171,7 +171,7 @@ function buildLotStrokeColor(activeLotId: string | null, isEditorMode: boolean):
     'case',
     isActiveLotExpr(activeLotId),
     '#ef4444',
-    ['case', ['boolean', ['get', 'isSiteArchived'], false], '#d97706', '#ffffff'],
+    ['case', ['boolean', ['get', 'isProjectAreaArchived'], false], '#d97706', '#ffffff'],
   ];
 }
 
@@ -295,9 +295,9 @@ let cachedScaledNormalStyle: StyleSpecification | null = null;
 let cachedScaledArcgisStyle: StyleSpecification | null = null;
 let cachedArcgisToken: string | null = null;
 
-export function SiteMap({
-  site,
-  sites = [],
+export function ProjectAreaMap({
+  projectArea,
+  projectAreas = [],
   selectedLotId,
   onSelectLot,
   hoveredLotKey,
@@ -314,15 +314,15 @@ export function SiteMap({
   onAddDraftPoint,
   onDeletePlot,
   onEditBoundary,
-  focusedSiteId,
-  onSelectSite,
+  focusedProjectAreaId,
+  onSelectProjectArea,
   preview = false,
-  activeSiteRing,
+  activeProjectAreaRing,
   draftLots = [],
   pendingBoundaryUpdates = [],
   onUpdateDraftPoints,
   isAdjustingVertices = false,
-}: SiteMapProps) {
+}: ProjectAreaMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const hoveredLotKeyRef = useRef<string | null>(hoveredLotKey ?? null);
   hoveredLotKeyRef.current = hoveredLotKey ?? null;
@@ -340,12 +340,12 @@ export function SiteMap({
   onDeletePlotRef.current = onDeletePlot;
   const onEditBoundaryRef = useRef(onEditBoundary);
   onEditBoundaryRef.current = onEditBoundary;
-  const onSelectSiteRef = useRef(onSelectSite);
-  onSelectSiteRef.current = onSelectSite;
+  const onSelectProjectAreaRef = useRef(onSelectProjectArea);
+  onSelectProjectAreaRef.current = onSelectProjectArea;
   const isEditorModeRef = useRef(isEditorMode);
   isEditorModeRef.current = isEditorMode;
-  const activeSiteRingRef = useRef(activeSiteRing);
-  activeSiteRingRef.current = activeSiteRing;
+  const activeProjectAreaRingRef = useRef(activeProjectAreaRing);
+  activeProjectAreaRingRef.current = activeProjectAreaRing;
   const draftPointsRef = useRef(draftPoints);
   draftPointsRef.current = draftPoints;
   const onUpdateDraftPointsRef = useRef(onUpdateDraftPoints);
@@ -464,27 +464,27 @@ export function SiteMap({
     };
   }, [map]);
 
-  // Combined site collection
-  const allSites = useMemo(() => {
-    if (sites.length > 0) return sites;
-    if (site) return [site];
+  // Combined projectArea collection
+  const allProjectAreas = useMemo(() => {
+    if (projectAreas.length > 0) return projectAreas;
+    if (projectArea) return [projectArea];
     return [];
-  }, [sites, site]);
+  }, [projectAreas, projectArea]);
 
   // Map of registered property lots indexed by id and block-lot key
   const registeredLotsMap = useMemo(() => {
     const map = new Map<string, PropertyLotWithClient>();
-    allSites.forEach((s) => {
+    allProjectAreas.forEach((s) => {
       if ('lots' in s && Array.isArray(s.lots)) {
         s.lots.forEach((l) => {
           if (l.property_id) map.set(l.property_id, l);
-          map.set(`${s.site_id}:${l.block_number}-${l.lot_number}`, l);
+          map.set(`${s.project_area_id}:${l.block_number}-${l.lot_number}`, l);
           map.set(`${l.block_number}-${l.lot_number}`, l);
         });
       }
     });
     return map;
-  }, [allSites]);
+  }, [allProjectAreas]);
   const registeredLotsMapRef = useRef(registeredLotsMap);
   registeredLotsMapRef.current = registeredLotsMap;
 
@@ -512,15 +512,15 @@ export function SiteMap({
       handleClosePopup();
       const lotObj =
         (p.propertyId ? registeredLotsMapRef.current.get(p.propertyId) : undefined) ??
-        (p.siteId
-          ? registeredLotsMapRef.current.get(`${p.siteId}:${p.block}-${p.lot}`)
+        (p.projectAreaId
+          ? registeredLotsMapRef.current.get(`${p.projectAreaId}:${p.block}-${p.lot}`)
           : registeredLotsMapRef.current.get(`${p.block}-${p.lot}`)) ??
         ({
           property_id: p.propertyId,
-          site_id: p.siteId,
+          project_area_id: p.projectAreaId,
           block_number: p.block,
           lot_number: p.lot,
-          location: p.siteName,
+          location: p.projectAreaName,
           // Required on the type, but an unregistered lot has no recorded area or price. This
           // placeholder reaches the detail view only as a pre-registration preview on the
           // "Open for Sale" path, which supplies the real values before saving.
@@ -546,7 +546,7 @@ export function SiteMap({
       // Only called for unregistered lots, which carry no area or price — leave both blank in the
       // create form so staff enter real figures instead of inheriting a placeholder.
       onSelectUnregisteredRef.current?.({
-        siteId: p.siteId,
+        projectAreaId: p.projectAreaId,
         block: p.block,
         lot: p.lot,
         areaSize: p.areaSize > 0 ? p.areaSize : undefined,
@@ -562,8 +562,8 @@ export function SiteMap({
       handleClosePopup();
       onDeletePlotRef.current?.({
         subdivisionId: p.id,
-        siteId: p.siteId,
-        siteName: p.siteName,
+        projectAreaId: p.projectAreaId,
+        projectAreaName: p.projectAreaName,
         block: p.block,
         lot: p.lot,
         status: p.status,
@@ -572,11 +572,11 @@ export function SiteMap({
     [handleClosePopup]
   );
 
-  // Focus view on an individual site boundary
-  const focusSite = useCallback(
-    (targetSite: Site) => {
+  // Focus view on an individual projectArea boundary
+  const focusProjectArea = useCallback(
+    (targetProjectArea: ProjectArea) => {
       if (!map) return;
-      const ring = parseRing(targetSite.boundary);
+      const ring = parseRing(targetProjectArea.boundary);
       if (!ring) return;
       const b = ringBounds(ring);
       map.fitBounds(
@@ -594,20 +594,20 @@ export function SiteMap({
     [map, preview]
   );
 
-  // Filter visible sites on map canvas (archived sites only visible in editor mode)
-  const activeVisibleSites = useMemo(() => {
-    return isEditorMode ? allSites : allSites.filter((s) => !s.is_archived);
-  }, [allSites, isEditorMode]);
+  // Filter visible projectAreas on map canvas (archived projectAreas only visible in editor mode)
+  const activeVisibleProjectAreas = useMemo(() => {
+    return isEditorMode ? allProjectAreas : allProjectAreas.filter((s) => !s.is_archived);
+  }, [allProjectAreas, isEditorMode]);
 
-  // Focus view when focusedSiteId changes, or zoom out to regional overview when cleared
+  // Focus view when focusedProjectAreaId changes, or zoom out to regional overview when cleared
   const isFirstFocusMountRef = useRef(true);
   useEffect(() => {
     if (!map) return;
     if (isFirstFocusMountRef.current) {
       isFirstFocusMountRef.current = false;
-      if (!focusedSiteId) return;
+      if (!focusedProjectAreaId) return;
     }
-    if (!focusedSiteId) {
+    if (!focusedProjectAreaId) {
       map.flyTo({
         center: REGIONAL_CENTER,
         zoom: REGIONAL_ZOOM,
@@ -616,27 +616,27 @@ export function SiteMap({
       });
       return;
     }
-    const targetSite = allSites.find((s) => s.site_id === focusedSiteId);
-    if (targetSite) focusSite(targetSite);
-  }, [map, focusedSiteId, allSites, focusSite, preview]);
+    const targetProjectArea = allProjectAreas.find((s) => s.project_area_id === focusedProjectAreaId);
+    if (targetProjectArea) focusProjectArea(targetProjectArea);
+  }, [map, focusedProjectAreaId, allProjectAreas, focusProjectArea, preview]);
 
   // Dynamic GeoJSON for plotted draft points, connecting lines, and polygon fill
   const draftGeoJson = useMemo(() => {
     const pts = draftPoints ?? [];
     const features: GeoJSON.Feature[] = [];
 
-    // Site plotting is unconstrained: a new site boundary never has to sit inside an
-    // existing site ring, so the containment error only applies while plotting lots.
-    const isConstrainedToSite = plotType === 'lot';
+    // ProjectArea plotting is unconstrained: a new projectArea boundary never has to sit inside an
+    // existing projectArea ring, so the containment error only applies while plotting lots.
+    const isConstrainedToProjectArea = plotType === 'lot';
     const isContained =
-      isConstrainedToSite && activeSiteRing && pts.length > 0
-        ? isPolygonContained(pts, activeSiteRing)
+      isConstrainedToProjectArea && activeProjectAreaRing && pts.length > 0
+        ? isPolygonContained(pts, activeProjectAreaRing)
         : true;
     const hasError = !isContained;
 
     pts.forEach((p, idx) => {
       const isOutOfBounds =
-        isConstrainedToSite && activeSiteRing ? !pointInPolygon(p, activeSiteRing) : false;
+        isConstrainedToProjectArea && activeProjectAreaRing ? !pointInPolygon(p, activeProjectAreaRing) : false;
       features.push({
         type: 'Feature',
         properties: {
@@ -669,7 +669,7 @@ export function SiteMap({
       type: 'FeatureCollection' as const,
       features,
     };
-  }, [draftPoints, activeSiteRing, isAdjustingVertices, plotType]);
+  }, [draftPoints, activeProjectAreaRing, isAdjustingVertices, plotType]);
 
   // Set map crosshair cursor when plotting
   useEffect(() => {
@@ -677,18 +677,18 @@ export function SiteMap({
     map.getCanvas().style.cursor = isPlotting ? 'crosshair' : '';
   }, [map, isPlotting]);
 
-  // GeoJSON features for all site boundaries
-  const sitesGeoJson = useMemo(() => {
-    const features = activeVisibleSites
+  // GeoJSON features for all projectArea boundaries
+  const projectAreasGeoJson = useMemo(() => {
+    const features = activeVisibleProjectAreas
       .map((s) => {
         const ring = parseRing(s.boundary);
         if (!ring) return null;
         return {
           type: 'Feature' as const,
           properties: {
-            siteId: s.site_id,
+            projectAreaId: s.project_area_id,
             name: s.name,
-            isSiteArchived: Boolean(s.is_archived),
+            isProjectAreaArchived: Boolean(s.is_archived),
           },
           geometry: {
             type: 'Polygon' as const,
@@ -702,19 +702,19 @@ export function SiteMap({
       type: 'FeatureCollection' as const,
       features,
     };
-  }, [activeVisibleSites]);
+  }, [activeVisibleProjectAreas]);
 
-  // GeoJSON features for all subdivisions across visible sites
+  // GeoJSON features for all subdivisions across visible projectAreas
   const lotsGeoJson = useMemo(() => {
     const pendingUpdatesMap = new Map(pendingBoundaryUpdates.map((u) => [u.subdivisionId, u]));
 
-    const features = activeVisibleSites
+    const features = activeVisibleProjectAreas
       .flatMap((s) => {
-        const siteLots = 'lots' in s && Array.isArray(s.lots) ? s.lots : [];
-        const siteSubs = 'subdivisions' in s && Array.isArray(s.subdivisions) ? s.subdivisions : [];
-        const lotMap = new Map(siteLots.map((l) => [`${l.block_number}-${l.lot_number}`, l]));
+        const projectAreaLots = 'lots' in s && Array.isArray(s.lots) ? s.lots : [];
+        const projectAreaSubs = 'subdivisions' in s && Array.isArray(s.subdivisions) ? s.subdivisions : [];
+        const lotMap = new Map(projectAreaLots.map((l) => [`${l.block_number}-${l.lot_number}`, l]));
 
-        const subFeatures = siteSubs.map((sub) => {
+        const subFeatures = projectAreaSubs.map((sub) => {
           const pendingUpdate = pendingUpdatesMap.get(sub.subdivision_id);
           const rawBoundary = pendingUpdate ? pendingUpdate.boundary : sub.boundary;
           const ring = parseRing(rawBoundary);
@@ -724,7 +724,7 @@ export function SiteMap({
           const centerLat = (b.minY + b.maxY) / 2;
           const topLat = b.maxY;
           const lotKey = `${sub.block_number}-${sub.lot_number}`;
-          const siteLotKey = `${s.site_id}:${sub.block_number}-${sub.lot_number}`;
+          const projectAreaLotKey = `${s.project_area_id}:${sub.block_number}-${sub.lot_number}`;
           const lot = lotMap.get(lotKey);
           const isRegistered = Boolean(lot);
           const status = lot?.status ?? 'Closed';
@@ -736,11 +736,11 @@ export function SiteMap({
             properties: {
               id: sub.subdivision_id,
               lotKey,
-              siteLotKey,
+              projectAreaLotKey,
               propertyId: lot?.property_id ?? '',
-              siteId: s.site_id,
-              siteName: s.name,
-              isSiteArchived: Boolean(s.is_archived),
+              projectAreaId: s.project_area_id,
+              projectAreaName: s.name,
+              isProjectAreaArchived: Boolean(s.is_archived),
               block: sub.block_number,
               lot: sub.lot_number,
               name: `Block ${sub.block_number} Lot ${sub.lot_number}`,
@@ -767,10 +767,10 @@ export function SiteMap({
         });
 
         // If in editor mode, also render confirmed draft lots
-        const siteDraftLots = isEditorMode
+        const projectAreaDraftLots = isEditorMode
           ? draftLots.filter(
               (d) =>
-                d.siteId === s.site_id &&
+                d.projectAreaId === s.project_area_id &&
                 d.block &&
                 d.lot &&
                 Array.isArray(d.boundary) &&
@@ -778,7 +778,7 @@ export function SiteMap({
             )
           : [];
 
-        const draftFeatures = siteDraftLots.map((d) => {
+        const draftFeatures = projectAreaDraftLots.map((d) => {
           const ring = parseRing(d.boundary);
           if (!ring) return null;
           const b = ringBounds(ring);
@@ -786,18 +786,18 @@ export function SiteMap({
           const centerLat = (b.minY + b.maxY) / 2;
           const topLat = b.maxY;
           const lotKey = `${d.block}-${d.lot}`;
-          const siteLotKey = `${s.site_id}:${d.block}-${d.lot}`;
+          const projectAreaLotKey = `${s.project_area_id}:${d.block}-${d.lot}`;
 
           return {
             type: 'Feature' as const,
             properties: {
               id: d.draftId,
               lotKey,
-              siteLotKey,
+              projectAreaLotKey,
               propertyId: '',
-              siteId: s.site_id,
-              siteName: s.name,
-              isSiteArchived: false,
+              projectAreaId: s.project_area_id,
+              projectAreaName: s.name,
+              isProjectAreaArchived: false,
               block: d.block!,
               lot: d.lot!,
               name: `Block ${d.block} Lot ${d.lot} (Draft)`,
@@ -830,7 +830,7 @@ export function SiteMap({
       type: 'FeatureCollection' as const,
       features,
     };
-  }, [activeVisibleSites, pendingBoundaryUpdates, draftLots, isEditorMode]);
+  }, [activeVisibleProjectAreas, pendingBoundaryUpdates, draftLots, isEditorMode]);
 
   // Focus and fly to the selected property on map viewport
   const prevSelectedLotIdRef = useRef<string | null>(null);
@@ -858,34 +858,34 @@ export function SiteMap({
     });
   }, [map, isReady, selectedLotId, lotsGeoJson]);
 
-  // Mount site boundaries and house lot vector layers
+  // Mount projectArea boundaries and house lot vector layers
   useEffect(() => {
     if (!map || !isReady) return;
 
     try {
       if (!map.getStyle()) return;
 
-      // Site boundary sources and layers
-    if (!map.getSource('sites-data')) {
-      map.addSource('sites-data', {
+      // ProjectArea boundary sources and layers
+    if (!map.getSource('project-areas-data')) {
+      map.addSource('project-areas-data', {
         type: 'geojson',
-        data: sitesGeoJson,
+        data: projectAreasGeoJson,
       });
 
       map.addLayer({
-        id: 'sites-boundary-fill',
+        id: 'project-areas-boundary-fill',
         type: 'fill',
-        source: 'sites-data',
+        source: 'project-areas-data',
         paint: {
           'fill-color': [
             'case',
-            ['boolean', ['get', 'isSiteArchived'], false],
+            ['boolean', ['get', 'isProjectAreaArchived'], false],
             '#f59e0b',
             '#0284c7',
           ],
           'fill-opacity': [
             'case',
-            ['boolean', ['get', 'isSiteArchived'], false],
+            ['boolean', ['get', 'isProjectAreaArchived'], false],
             0.08,
             0.15,
           ],
@@ -893,13 +893,13 @@ export function SiteMap({
       });
 
       map.addLayer({
-        id: 'sites-boundary-stroke',
+        id: 'project-areas-boundary-stroke',
         type: 'line',
-        source: 'sites-data',
+        source: 'project-areas-data',
         paint: {
           'line-color': [
             'case',
-            ['boolean', ['get', 'isSiteArchived'], false],
+            ['boolean', ['get', 'isProjectAreaArchived'], false],
             '#d97706',
             '#38bdf8',
           ],
@@ -908,7 +908,7 @@ export function SiteMap({
         },
       });
     } else {
-      (map.getSource('sites-data') as GeoJSONSource).setData(sitesGeoJson);
+      (map.getSource('project-areas-data') as GeoJSONSource).setData(projectAreasGeoJson);
     }
 
     // House subdivisions sources and layers
@@ -948,7 +948,7 @@ export function SiteMap({
         filter: [
           'any',
           ['==', ['get', 'lotKey'], hoveredLotKeyRef.current ?? ''],
-          ['==', ['get', 'siteLotKey'], hoveredLotKeyRef.current ?? ''],
+          ['==', ['get', 'projectAreaLotKey'], hoveredLotKeyRef.current ?? ''],
         ],
         layout: {
           'line-join': 'round',
@@ -1058,7 +1058,7 @@ export function SiteMap({
   } catch (err) {
     console.warn('Map style is reloading, layer mounting deferred:', err);
   }
-}, [map, isReady, styleRevision, sitesGeoJson, lotsGeoJson, draftGeoJson]);
+}, [map, isReady, styleRevision, projectAreasGeoJson, lotsGeoJson, draftGeoJson]);
 
   // Vertex dragging interaction when isAdjustingVertices is active
   useEffect(() => {
@@ -1151,7 +1151,7 @@ export function SiteMap({
       map.setFilter('lots-hover-stroke', [
         'any',
         ['==', ['get', 'lotKey'], hoveredLotKey ?? ''],
-        ['==', ['get', 'siteLotKey'], hoveredLotKey ?? ''],
+        ['==', ['get', 'projectAreaLotKey'], hoveredLotKey ?? ''],
       ]);
     } catch {
       // Style is reloading; will be reapplied on style.load
@@ -1207,8 +1207,8 @@ export function SiteMap({
           const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
           if (
             plotTypeRef.current === 'lot' &&
-            activeSiteRingRef.current &&
-            !pointInPolygon(pt, activeSiteRingRef.current)
+            activeProjectAreaRingRef.current &&
+            !pointInPolygon(pt, activeProjectAreaRingRef.current)
           ) {
             notifyWarning('Plotted point must be inside the project area boundary.');
             return;
@@ -1262,8 +1262,8 @@ export function SiteMap({
           const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
           if (
             plotTypeRef.current === 'lot' &&
-            activeSiteRingRef.current &&
-            !pointInPolygon(pt, activeSiteRingRef.current)
+            activeProjectAreaRingRef.current &&
+            !pointInPolygon(pt, activeProjectAreaRingRef.current)
           ) {
             notifyWarning('Plotted point must be inside the project area boundary.');
             return;
@@ -1301,31 +1301,31 @@ export function SiteMap({
     };
   }, [map, isReady, styleRevision, onSelectLot]);
 
-  // Mount site pin icons and labels at low zoom levels
+  // Mount projectArea pin icons and labels at low zoom levels
   useEffect(() => {
     if (!map || !isReady) return;
 
     const markers: import('maplibre-gl').Marker[] = [];
 
-    async function mountSitePins() {
+    async function mountProjectAreaPins() {
       if (!map) return;
       const { Marker } = await import('maplibre-gl');
 
-      activeVisibleSites.forEach((targetSite) => {
-        const ring = parseRing(targetSite.boundary);
+      activeVisibleProjectAreas.forEach((targetProjectArea) => {
+        const ring = parseRing(targetProjectArea.boundary);
         if (!ring) return;
         const center = ringCentroid(ring);
-        const isArchived = Boolean(targetSite.is_archived);
-        const isSelected = targetSite.site_id === focusedSiteId;
+        const isArchived = Boolean(targetProjectArea.is_archived);
+        const isSelected = targetProjectArea.project_area_id === focusedProjectAreaId;
 
         // Marker element with SVG pin icon and title
         const el = document.createElement('div');
-        el.className = 'site-pin group flex flex-col items-center cursor-pointer transition-transform hover:scale-110';
+        el.className = 'project-area-pin group flex flex-col items-center cursor-pointer transition-transform hover:scale-110';
         el.setAttribute('role', 'button');
         el.tabIndex = 0;
         el.setAttribute(
           'aria-label',
-          `${isSelected ? 'Selected project area' : 'Select'}: ${targetSite.name}`
+          `${isSelected ? 'Selected project area' : 'Select'}: ${targetProjectArea.name}`
         );
         if (isSelected) el.setAttribute('aria-current', 'true');
         const isVisible = map.getZoom() < DETAILS_ZOOM;
@@ -1344,22 +1344,22 @@ export function SiteMap({
               ? 'bg-primary text-primary-foreground border-primary'
               : 'bg-card text-foreground border-border'
           }">
-            ${targetSite.name}${isArchived ? ' (Archived)' : ''}
+            ${targetProjectArea.name}${isArchived ? ' (Archived)' : ''}
           </div>
         `;
 
-        // Selecting a site is the single gesture: it drives the sidebar filter, the map
+        // Selecting a projectArea is the single gesture: it drives the sidebar filter, the map
         // focus, and the editor's edit target all at once.
-        const selectSite = () => {
-          onSelectSiteRef.current?.(targetSite.site_id);
-          focusSite(targetSite);
+        const selectProjectArea = () => {
+          onSelectProjectAreaRef.current?.(targetProjectArea.project_area_id);
+          focusProjectArea(targetProjectArea);
         };
 
-        el.addEventListener('click', selectSite);
+        el.addEventListener('click', selectProjectArea);
         el.addEventListener('keydown', (event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            selectSite();
+            selectProjectArea();
           }
         });
 
@@ -1368,19 +1368,19 @@ export function SiteMap({
       });
     }
 
-    mountSitePins();
+    mountProjectAreaPins();
 
     return () => {
       markers.forEach((m) => m.remove());
     };
-  }, [map, isReady, activeVisibleSites, focusSite, focusedSiteId]);
+  }, [map, isReady, activeVisibleProjectAreas, focusProjectArea, focusedProjectAreaId]);
 
   // Toggle marker pin visibility based on zoom threshold
   useEffect(() => {
     if (!map) return;
     const updatePinVisibility = () => {
       const isVisible = map.getZoom() < DETAILS_ZOOM;
-      document.querySelectorAll('.site-pin').forEach((el) => {
+      document.querySelectorAll('.project-area-pin').forEach((el) => {
         (el as HTMLElement).style.display = isVisible ? 'flex' : 'none';
       });
     };
@@ -1632,7 +1632,7 @@ export function SiteMap({
       {/* Interactive plot popup mounted inside MapLibre container */}
       {selectedPlot && popupContainerRef.current && createPortal(
         isEditorMode ? (
-          <MapSiteEditorPopup
+          <MapProjectAreaEditorPopup
             plot={selectedPlot}
             onDeletePlot={() => handleDeletePlot(selectedPlot)}
             onEditBoundary={() => {
@@ -1641,7 +1641,7 @@ export function SiteMap({
             }}
           />
         ) : (
-          <MapSitePopup
+          <MapProjectAreaPopup
             plot={selectedPlot}
             onViewDetails={() => handleViewDetails(selectedPlot)}
             onRegisterLot={() => handleRegisterLot(selectedPlot)}

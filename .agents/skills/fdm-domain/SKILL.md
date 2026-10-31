@@ -107,7 +107,7 @@ Ranked. When effort is scarce, work down this list.
 ## 5. Lot & Inventory Invariants
 
 - Properties are **raw lots** (*yuta lang jud*), demarcated by concrete monuments (*muhon*) per approved geodetic subdivision plans. There is no developer obligation for roads, drainage, or housing — sales are **as-is-where-is**, and buyers do litigate the condition of unbuilt roads.
-- Lots are referenced by **Block and Lot** within a named **project area** (the company's own term; the schema calls it a site).
+- Lots are referenced by **Block and Lot** within a named **project area** (the company's own term, and the schema now uses it too).
 - **Status lifecycle**
 
   ```

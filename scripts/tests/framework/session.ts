@@ -69,12 +69,12 @@ export async function hardDeleteTestProperty(propertyId: string) {
   return hardDeleteTestProperties([propertyId]);
 }
 
-export async function hardDeleteTestSite(siteId: string) {
+export async function hardDeleteTestProjectArea(projectAreaId: string) {
   const admin = getTestAdminClient();
-  // Clean subdivisions and detached lots before site deletion
-  await admin.from("site_subdivision").delete().eq("site_id", siteId);
-  await admin.from("property_lot").delete().eq("site_id", siteId);
-  await admin.from("site").delete().eq("site_id", siteId);
+  // Clean subdivisions and detached lots before projectArea deletion
+  await admin.from("project_area_subdivision").delete().eq("project_area_id", projectAreaId);
+  await admin.from("property_lot").delete().eq("project_area_id", projectAreaId);
+  await admin.from("project_area").delete().eq("project_area_id", projectAreaId);
 }
 
 export function trackTestClient(clientId: string) {
@@ -85,8 +85,8 @@ export function trackTestProperty(propertyId: string) {
   trackCleanup(() => hardDeleteTestProperty(propertyId));
 }
 
-export function trackTestSite(siteId: string) {
-  trackCleanup(() => hardDeleteTestSite(siteId));
+export function trackTestProjectArea(projectAreaId: string) {
+  trackCleanup(() => hardDeleteTestProjectArea(projectAreaId));
 }
 
 let testerProvisioned = false;

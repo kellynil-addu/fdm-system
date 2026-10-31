@@ -9,14 +9,14 @@ import {
   createPropertyLot,
   assignPropertyParties,
 } from "@/lib/actions/properties";
-import { createSite, getSiteWithLots } from "@/lib/actions/sites";
+import { createProjectArea, getProjectAreaWithLots } from "@/lib/actions/project-areas";
 import { createClient, getClientById } from "@/lib/actions/clients";
 import { deleteLandTitle } from "@/lib/actions/titles";
 import {
   loginAsAdmin,
   hardDeleteTestProperty,
   hardDeleteTestClient,
-  hardDeleteTestSite,
+  hardDeleteTestProjectArea,
   getTestAdminClient,
 } from "../framework/session";
 import { unwrap } from "../framework/action-helper";
@@ -26,7 +26,7 @@ import { undoBillingClearance } from "@/lib/actions/billing";
 describe("Property Lifecycle & Subdivision Transitions", () => {
   const testPropertyIds: string[] = [];
   const testClientIds: string[] = [];
-  const testSiteIds: string[] = [];
+  const testProjectAreaIds: string[] = [];
 
   beforeAll(async () => {
     await loginAsAdmin();
@@ -47,9 +47,9 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
         // Ignore cleanup errors
       }
     }
-    for (const id of testSiteIds) {
+    for (const id of testProjectAreaIds) {
       try {
-        await hardDeleteTestSite(id);
+        await hardDeleteTestProjectArea(id);
       } catch {
         // Ignore cleanup errors
       }
@@ -57,18 +57,18 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
   });
 
   it("openSubdivisionForSale creates an Open property_lot matching subdivision", async () => {
-    const site = unwrap(
-      await createSite({
+    const projectArea = unwrap(
+      await createProjectArea({
         name: `Plat Estate ${Date.now()}`,
         boundary: [[0, 0], [50, 0], [50, 50], [0, 50]],
       })
     );
-    testSiteIds.push(site.site_id);
+    testProjectAreaIds.push(projectArea.project_area_id);
 
-    // Insert cosmetic site_subdivision directly
+    // Insert cosmetic project_area_subdivision directly
     const admin = getTestAdminClient();
-    await admin.from("site_subdivision").insert({
-      site_id: site.site_id,
+    await admin.from("project_area_subdivision").insert({
+      project_area_id: projectArea.project_area_id,
       block_number: 1,
       lot_number: 5,
       boundary: [[0, 0], [10, 0], [10, 10], [0, 10]],
@@ -76,7 +76,7 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
 
     const lot = unwrap(
       await openSubdivisionForSale({
-        site_id: site.site_id,
+        project_area_id: projectArea.project_area_id,
         block_number: 1,
         lot_number: 5,
         area_size: 150,
@@ -91,8 +91,8 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
     expect(lot.area_size).toBe(150);
     expect(lot.price_per_sqm).toBe(9000);
 
-    const siteWithLots = await getSiteWithLots(site.site_id);
-    expect(siteWithLots.lots.some((l) => l.property_id === lot.property_id)).toBe(true);
+    const projectAreaWithLots = await getProjectAreaWithLots(projectArea.project_area_id);
+    expect(projectAreaWithLots.lots.some((l) => l.property_id === lot.property_id)).toBe(true);
   });
 
   it("assignPropertyFullyPaid transitions lot to Sold and records land_title", async () => {
@@ -106,7 +106,7 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
     const blockNum = faker.number.int({ min: 100, max: 999 });
     const lot = unwrap(
       await openSubdivisionForSale({
-        site_id: testSiteIds[0] ?? (unwrap(await createSite({ name: `Site-${Date.now()}`, boundary: [[0, 0], [10, 0], [10, 10], [0, 10]] }))).site_id,
+        project_area_id: testProjectAreaIds[0] ?? (unwrap(await createProjectArea({ name: `ProjectArea-${Date.now()}`, boundary: [[0, 0], [10, 0], [10, 10], [0, 10]] }))).project_area_id,
         block_number: blockNum,
         lot_number: 1,
         area_size: 200,
@@ -159,13 +159,13 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
   });
 
   it("createAndAssignPropertyFromSubdivision handles installment and fully-paid flows", async () => {
-    const site = unwrap(
-      await createSite({
-        name: `Direct Assign Site ${Date.now()}`,
+    const projectArea = unwrap(
+      await createProjectArea({
+        name: `Direct Assign ProjectArea ${Date.now()}`,
         boundary: [[0, 0], [20, 0], [20, 20], [0, 20]],
       })
     );
-    testSiteIds.push(site.site_id);
+    testProjectAreaIds.push(projectArea.project_area_id);
 
     const installmentClient = unwrap(
       await createClient({
@@ -184,7 +184,7 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
     // 1. Installment flow
     const installmentLot = unwrap(
       await createAndAssignPropertyFromSubdivision({
-        site_id: site.site_id,
+        project_area_id: projectArea.project_area_id,
         block_number: 1,
         lot_number: 10,
         area_size: 180,
@@ -205,7 +205,7 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
     // 2. Fully-paid flow
     const paidLot = unwrap(
       await createAndAssignPropertyFromSubdivision({
-        site_id: site.site_id,
+        project_area_id: projectArea.project_area_id,
         block_number: 1,
         lot_number: 11,
         area_size: 220,
@@ -233,35 +233,35 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
   });
 
   it("handles opening a closed subdivision lot and assigning it to client while guarding against double sale", async () => {
-    const site = unwrap(
-      await createSite({
-        name: `Subdivision Selector Site ${Date.now()}`,
+    const projectArea = unwrap(
+      await createProjectArea({
+        name: `Subdivision Selector ProjectArea ${Date.now()}`,
         boundary: [[0, 0], [40, 0], [40, 40], [0, 40]],
       })
     );
-    testSiteIds.push(site.site_id);
+    testProjectAreaIds.push(projectArea.project_area_id);
 
-    // Create a closed subdivision slot on the site map
+    // Create a closed subdivision slot on the projectArea map
     const admin = getTestAdminClient();
-    await admin.from("site_subdivision").insert({
-      site_id: site.site_id,
+    await admin.from("project_area_subdivision").insert({
+      project_area_id: projectArea.project_area_id,
       block_number: 2,
       lot_number: 8,
       boundary: [[10, 10], [20, 10], [20, 20], [10, 20]],
     });
 
     // 1. Verify it is closed on the map (exists in subdivisions, not in lots)
-    const siteBefore = await getSiteWithLots(site.site_id);
-    const subExists = siteBefore.subdivisions.some((s) => s.block_number === 2 && s.lot_number === 8);
-    const lotExists = siteBefore.lots.some((l) => l.block_number === 2 && l.lot_number === 8);
+    const projectAreaBefore = await getProjectAreaWithLots(projectArea.project_area_id);
+    const subExists = projectAreaBefore.subdivisions.some((s) => s.block_number === 2 && s.lot_number === 8);
+    const lotExists = projectAreaBefore.lots.some((l) => l.block_number === 2 && l.lot_number === 8);
     expect(subExists).toBe(true);
     expect(lotExists).toBe(false);
 
     // 2. Open the closed lot
     const openedLot = unwrap(
       await createPropertyLot({
-        site_id: site.site_id,
-        location: site.name,
+        project_area_id: projectArea.project_area_id,
+        location: projectArea.name,
         block_number: 2,
         lot_number: 8,
         area_size: 100,
@@ -296,14 +296,14 @@ describe("Property Lifecycle & Subdivision Transitions", () => {
     expect(assignedA.status).toBe("Reserved");
     expect(assignedA.active_account).not.toBeNull();
 
-    // 4. Verify site now reflects this lot as Reserved (assigned)
-    const siteAfter = await getSiteWithLots(site.site_id);
-    const assignedInSite = siteAfter.lots.find((l) => l.property_id === openedLot.property_id);
-    expect(assignedInSite?.status).toBe("Reserved");
-    expect(assignedInSite?.client?.client_id).toBe(clientA.client_id);
+    // 4. Verify projectArea now reflects this lot as Reserved (assigned)
+    const projectAreaAfter = await getProjectAreaWithLots(projectArea.project_area_id);
+    const assignedInProjectArea = projectAreaAfter.lots.find((l) => l.property_id === openedLot.property_id);
+    expect(assignedInProjectArea?.status).toBe("Reserved");
+    expect(assignedInProjectArea?.client?.client_id).toBe(clientA.client_id);
 
     // 5. Verify the lot's status is Reserved with Client A assigned
-    expect(assignedInSite?.status).toBe("Reserved");
-    expect(assignedInSite?.client?.client_id).toBe(clientA.client_id);
+    expect(assignedInProjectArea?.status).toBe("Reserved");
+    expect(assignedInProjectArea?.client?.client_id).toBe(clientA.client_id);
   });
 });

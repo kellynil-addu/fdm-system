@@ -3,7 +3,7 @@
  *
  * Everything here works in the project area's LOCAL coordinate space: metres from the
  * project area origin, Y growing downward to match SVG. There is no projection and no
- * georeferencing; see the migration that adds `site.boundary` (renamed to `project_area`
+ * georeferencing; see the migration that adds `projectArea.boundary` (renamed to `project_area`
  * in the Stage 2 schema pass) for the contract.
  */
 

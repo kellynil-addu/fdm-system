@@ -29,7 +29,7 @@ interface RawFeature {
 export interface LotHandle {
   block: number;
   lot: number;
-  siteName: string;
+  projectAreaName: string;
   status: string;
   isRegistered: boolean;
   /** Screen position of the lot's centre, in page coordinates. */
@@ -74,7 +74,7 @@ export async function readLots(page: Page): Promise<LotHandle[]> {
       return {
         block: f.properties.block as number,
         lot: f.properties.lot as number,
-        siteName: f.properties.siteName as string,
+        projectAreaName: f.properties.projectAreaName as string,
         status: f.properties.status as string,
         isRegistered: Boolean(f.properties.isRegistered),
         x: rect.x + pt.x,
@@ -102,7 +102,7 @@ export async function focusLot(page: Page, lot: LotHandle): Promise<LotHandle> {
 
   await page.waitForTimeout(600);
   const refreshed = (await readLots(page)).find(
-    (l) => l.block === lot.block && l.lot === lot.lot && l.siteName === lot.siteName
+    (l) => l.block === lot.block && l.lot === lot.lot && l.projectAreaName === lot.projectAreaName
   );
   if (!refreshed) throw new Error(`Lot ${lot.block}-${lot.lot} vanished after focus`);
   return refreshed;

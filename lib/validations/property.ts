@@ -45,7 +45,7 @@ const pricePerSqmSchema = amountSchema("Price per sqm", LOT_LIMITS.pricePerSqm);
 const contractPriceSchema = amountSchema("Contract price", LOT_LIMITS.contractPrice);
 
 export const createPropertyLotSchema = z.object({
-  site_id: z.string().min(1, "Please select a project area").optional(),
+  project_area_id: z.string().min(1, "Please select a project area").optional(),
   location: z.string().trim().min(1, "Location is required").optional(),
   block_number: blockOrLotNumberSchema("Block number"),
   lot_number: blockOrLotNumberSchema("Lot number"),
@@ -133,7 +133,7 @@ export const removeAccountPartyActionSchema = z.object({
   clientId: uuidSchema,
 });
 
-export const createSiteSchema = z.object({
+export const createProjectAreaSchema = z.object({
   name: z.string().trim().min(1, "Project area name is required"),
   description: z.string().trim().nullable().optional(),
   boundary: polygonBoundarySchema,
@@ -141,7 +141,7 @@ export const createSiteSchema = z.object({
 
 export const createSubdivisionLotSchema = z
   .object({
-    site_id: uuidSchema,
+    project_area_id: uuidSchema,
     block_number: blockOrLotNumberSchema("Block number"),
     lot_number: blockOrLotNumberSchema("Lot number"),
     boundary: polygonBoundarySchema,
@@ -157,14 +157,14 @@ export const createSubdivisionLotSchema = z
   });
 
 export const deleteSubdivisionLotSchema = z.object({
-  site_id: uuidSchema,
+  project_area_id: uuidSchema,
   block_number: z.number().int().positive(),
   lot_number: z.number().int().positive(),
   subdivision_id: uuidSchema.optional(),
 });
 
 export const openSubdivisionForSaleSchema = z.object({
-  site_id: uuidSchema,
+  project_area_id: uuidSchema,
   block_number: blockOrLotNumberSchema("Block number"),
   lot_number: blockOrLotNumberSchema("Lot number"),
   area_size: areaSchema,
@@ -179,7 +179,7 @@ export const assignPropertyFullyPaidActionSchema = z.object({
 });
 
 export const createAndAssignPropertyFromSubdivisionSchema = z.object({
-  site_id: uuidSchema,
+  project_area_id: uuidSchema,
   block_number: blockOrLotNumberSchema("Block number"),
   lot_number: blockOrLotNumberSchema("Lot number"),
   area_size: areaSchema,
@@ -204,7 +204,7 @@ export const reopenPropertyLotForSaleSchema = z.object({
 
 export const updateSubdivisionBoundarySchema = z.object({
   subdivision_id: uuidSchema,
-  site_id: uuidSchema,
+  project_area_id: uuidSchema,
   block_number: blockOrLotNumberSchema("Block number"),
   lot_number: blockOrLotNumberSchema("Lot number"),
   boundary: polygonBoundarySchema,

@@ -63,9 +63,9 @@ fdm-system/
 ├── scripts/                    # Standalone scripts & test suite
 │   ├── seed-baseline.ts        # Baseline superadmin & system_admin role seeding
 │   ├── seed-admin.ts           # Admin user seeding script (delegates to seed-baseline)
-│   ├── seed-dev.ts             # Full development seeding (baseline + sample sites)
+│   ├── seed-dev.ts             # Full development seeding (baseline + sample project areas)
 │   ├── seed-production.ts      # Production baseline seeding with Vercel env & safety guards
-│   ├── seed-sample-site.ts     # Sample development sites & property subdivisions
+│   ├── seed-sample-project-area.ts  # Sample project areas & property subdivisions
 │   └── tests/                  # Vitest E2E integration test suite
 │       ├── framework/          # Setup, session management, Next.js mocks
 │       ├── admin/              # User management & role tests
@@ -145,7 +145,7 @@ Avoid Tailwind slash-opacity modifiers (e.g. `bg-primary/90`, `bg-success/10`) b
 All component folders must remain strictly **1 level deep** directly under `components/`. Never create nested subfolders inside component folders (e.g. do **NOT** create `components/dashboard-properties/maps/`).
 
 - **Dashboard Domains**: Use the `dashboard-<plural-feature>` prefix (e.g. `dashboard-clients`, `dashboard-properties`, `dashboard-admin`, `dashboard-overview`, `dashboard-layout`, `dashboard-settings`).
-- **Subcategories via Filename Prefixes**: If a feature has a distinct subcategory, prefix the filenames rather than nesting subfolders (e.g. `map-site.tsx`, `map-site-editor.tsx` inside `components/dashboard-properties/`).
+- **Subcategories via Filename Prefixes**: If a feature has a distinct subcategory, prefix the filenames rather than nesting subfolders (e.g. `map-project-area.tsx`, `map-project-area-editor.tsx` inside `components/dashboard-properties/`).
 - **Cross-App Assets**: Shared global brand/utility components live in `components/shared/`.
 - **Auth Forms**: Public authentication, reset, and password recovery forms live in `components/auth/`.
 - **Direct Imports**: Always import components directly from their file path without barrel `index.ts` files (e.g. `@/components/dashboard-clients/client-section`).

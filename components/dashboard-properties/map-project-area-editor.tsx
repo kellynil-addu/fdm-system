@@ -24,8 +24,8 @@ import { useSession } from '@/lib/hooks/use-session';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { calculatePolygonAreaSqm } from '@/lib/geometry';
 import { getArchiveEligibility } from '@/lib/utils/archive-rules';
-import { DeleteSiteDialog } from './site-delete-dialog';
-import type { Site, SiteWithLots } from '@/lib/types/property';
+import { DeleteProjectAreaDialog } from './project-area-delete-dialog';
+import type { ProjectArea, ProjectAreaWithLots } from '@/lib/types/property';
 import {
   Undo2,
   X,
@@ -44,8 +44,8 @@ import {
 
 export interface SelectedPlotInfo {
   subdivisionId?: string;
-  siteId: string;
-  siteName?: string;
+  projectAreaId: string;
+  projectAreaName?: string;
   block: number;
   lot: number;
   status: string;
@@ -59,15 +59,15 @@ export interface ActiveDraftState {
   isEditingExisting?: boolean;
 }
 
-export interface MapSiteEditorProps {
-  sites: (SiteWithLots | Site)[];
-  activeSiteId: string | null;
-  onSelectSite: (siteId: string) => void;
-  onLeaveSite: () => void;
+export interface MapProjectAreaEditorProps {
+  projectAreas: (ProjectAreaWithLots | ProjectArea)[];
+  activeProjectAreaId: string | null;
+  onSelectProjectArea: (projectAreaId: string) => void;
+  onLeaveProjectArea: () => void;
   isEditorActive: boolean;
   onToggleEditor: (active: boolean) => void;
-  plotType: 'lot' | 'site' | null;
-  onStartPlotting: (type: 'lot' | 'site') => void;
+  plotType: 'lot' | 'project-area' | null;
+  onStartPlotting: (type: 'lot' | 'project-area') => void;
   onCancelPlotting: () => void;
   draftPointsCount: number;
   onUndoPoint: () => void;
@@ -86,9 +86,9 @@ export interface MapSiteEditorProps {
   onCancelDeletePlot: () => void;
 
   // New project area boundary
-  pendingSiteBoundary: [number, number][] | null;
-  onSaveSite: (data: { name: string; description?: string }) => Promise<void>;
-  onDiscardSite: () => void;
+  pendingProjectAreaBoundary: [number, number][] | null;
+  onSaveProjectArea: (data: { name: string; description?: string }) => Promise<void>;
+  onDiscardProjectArea: () => void;
 
   // Draft session & batch commit
   draftLotsCount: number;
@@ -103,16 +103,16 @@ export interface MapSiteEditorProps {
   onDiscardStoredDraft?: () => void;
 
   // Project area options
-  onArchiveSite?: (siteId: string) => Promise<void>;
-  onUnarchiveSite?: (siteId: string) => Promise<void>;
-  onDeleteSite?: (siteId: string) => Promise<void>;
+  onArchiveProjectArea?: (projectAreaId: string) => Promise<void>;
+  onUnarchiveProjectArea?: (projectAreaId: string) => Promise<void>;
+  onDeleteProjectArea?: (projectAreaId: string) => Promise<void>;
 }
 
-export function MapSiteEditor({
-  sites,
-  activeSiteId,
-  onSelectSite,
-  onLeaveSite,
+export function MapProjectAreaEditor({
+  projectAreas,
+  activeProjectAreaId,
+  onSelectProjectArea,
+  onLeaveProjectArea,
   isEditorActive,
   onToggleEditor,
   plotType,
@@ -129,9 +129,9 @@ export function MapSiteEditor({
   selectedPlotToDelete,
   onConfirmDeletePlot,
   onCancelDeletePlot,
-  pendingSiteBoundary,
-  onSaveSite,
-  onDiscardSite,
+  pendingProjectAreaBoundary,
+  onSaveProjectArea,
+  onDiscardProjectArea,
   draftLotsCount,
   pendingUpdatesCount,
   onSaveAll,
@@ -140,10 +140,10 @@ export function MapSiteEditor({
   hasStoredDraft = false,
   onResumeStoredDraft,
   onDiscardStoredDraft,
-  onArchiveSite,
-  onUnarchiveSite,
-  onDeleteSite,
-}: MapSiteEditorProps) {
+  onArchiveProjectArea,
+  onUnarchiveProjectArea,
+  onDeleteProjectArea,
+}: MapProjectAreaEditorProps) {
   const { isSystemAdmin } = useSession();
 
   // Controlled inputs for inline lot-details slide-in panel
@@ -162,21 +162,21 @@ export function MapSiteEditor({
   }, [activeDraft]);
 
   // Save project area form state
-  const [siteName, setSiteName] = useState<string>('');
-  const [siteDesc, setSiteDesc] = useState<string>('');
-  const [isDeleteSiteOpen, setIsDeleteSiteOpen] = useState(false);
+  const [projectAreaName, setProjectAreaName] = useState<string>('');
+  const [projectAreaDesc, setProjectAreaDesc] = useState<string>('');
+  const [isDeleteProjectAreaOpen, setIsDeleteProjectAreaOpen] = useState(false);
 
   if (!isEditorActive) {
     return null;
   }
 
-  const activeSite = sites.find((s) => s.site_id === activeSiteId);
-  const activeSiteEligibility = getArchiveEligibility(
-    Boolean(activeSite?.is_archived),
-    activeSite?.archived_at
+  const activeProjectArea = projectAreas.find((s) => s.project_area_id === activeProjectAreaId);
+  const activeProjectAreaEligibility = getArchiveEligibility(
+    Boolean(activeProjectArea?.is_archived),
+    activeProjectArea?.archived_at
   );
-  const calculatedSiteArea = pendingSiteBoundary
-    ? Math.round(calculatePolygonAreaSqm(pendingSiteBoundary))
+  const calculatedProjectAreaArea = pendingProjectAreaBoundary
+    ? Math.round(calculatePolygonAreaSqm(pendingProjectAreaBoundary))
     : 0;
 
   function handleDraftSubmit(e: React.FormEvent) {
@@ -191,17 +191,17 @@ export function MapSiteEditor({
     });
   }
 
-  async function handleSiteSubmit(e: React.FormEvent) {
+  async function handleProjectAreaSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!siteName.trim()) return;
+    if (!projectAreaName.trim()) return;
 
-    await onSaveSite({
-      name: siteName.trim(),
-      description: siteDesc.trim() || undefined,
+    await onSaveProjectArea({
+      name: projectAreaName.trim(),
+      description: projectAreaDesc.trim() || undefined,
     });
 
-    setSiteName('');
-    setSiteDesc('');
+    setProjectAreaName('');
+    setProjectAreaDesc('');
   }
 
   return (
@@ -275,7 +275,7 @@ export function MapSiteEditor({
                 </Button>
               </div>
             </>
-          ) : !activeSite ? (
+          ) : !activeProjectArea ? (
             /* State: Project Area Chooser — the top of the decision tree. Pick a project area to
                focus on, or start a brand-new one. Nothing is editable until one is chosen. */
             <>
@@ -300,19 +300,19 @@ export function MapSiteEditor({
                 <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
                   Choose a project area to edit
                 </p>
-                {sites.length === 0 ? (
+                {projectAreas.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-border px-2.5 py-3 text-[11px] text-muted-foreground">
                     No project areas yet. Plot a new one below.
                   </p>
                 ) : (
                   <div className="max-h-[300px] space-y-1 overflow-y-auto pr-0.5">
-                    {sites.map((s) => {
+                    {projectAreas.map((s) => {
                       const lotCount = 'lots' in s && Array.isArray(s.lots) ? s.lots.length : 0;
                       return (
                         <button
-                          key={s.site_id}
+                          key={s.project_area_id}
                           type="button"
-                          onClick={() => onSelectSite(s.site_id)}
+                          onClick={() => onSelectProjectArea(s.project_area_id)}
                           className="group flex w-full items-center justify-between gap-2 rounded-lg border border-border bg-card px-2.5 py-2 text-left transition-colors hover:border-primary hover:bg-row-hover"
                         >
                           <span className="flex min-w-0 items-center gap-2">
@@ -346,7 +346,7 @@ export function MapSiteEditor({
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => onStartPlotting('site')}
+                  onClick={() => onStartPlotting('project-area')}
                   className="h-8 w-full gap-1.5 border-border bg-card text-xs font-medium text-foreground hover:bg-row-hover"
                   title="Plot a new project area boundary"
                 >
@@ -364,11 +364,11 @@ export function MapSiteEditor({
                   <MapPin className="h-3.5 w-3.5 shrink-0 text-primary" />
                   <span
                     className="truncate text-xs font-semibold text-foreground"
-                    title={activeSite.name}
+                    title={activeProjectArea.name}
                   >
-                    {activeSite.name}
+                    {activeProjectArea.name}
                   </span>
-                  {activeSite.is_archived && (
+                  {activeProjectArea.is_archived && (
                     <span className="flex shrink-0 items-center gap-1 rounded-md border border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] px-1.5 py-0.5 text-[10px] font-semibold text-destructive">
                       <Archive className="h-3 w-3" />
                       <span>Archived</span>
@@ -379,7 +379,7 @@ export function MapSiteEditor({
                 <div className="flex shrink-0 items-center gap-1">
                   <button
                     type="button"
-                    onClick={onLeaveSite}
+                    onClick={onLeaveProjectArea}
                     className="cursor-pointer px-1 text-[11px] font-medium text-primary hover:underline"
                     title="Leave this project area and choose another"
                   >
@@ -393,7 +393,7 @@ export function MapSiteEditor({
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 shrink-0 text-muted-foreground hover:bg-row-active hover:text-foreground"
-                          aria-label={`Project area options for ${activeSite.name}`}
+                          aria-label={`Project area options for ${activeProjectArea.name}`}
                         >
                           <MoreVertical className="h-3 w-3" />
                         </Button>
@@ -404,29 +404,29 @@ export function MapSiteEditor({
                         </DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          hidden={!activeSite.is_archived}
+                          hidden={!activeProjectArea.is_archived}
                           icon={<ArchiveRestore className="h-4 w-4" />}
                           disabled={isSaving}
-                          onSelect={() => onUnarchiveSite?.(activeSite.site_id)}
+                          onSelect={() => onUnarchiveProjectArea?.(activeProjectArea.project_area_id)}
                         >
                           Restore Project Area
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          hidden={activeSite.is_archived}
+                          hidden={activeProjectArea.is_archived}
                           icon={<Archive className="h-4 w-4" />}
                           disabled={isSaving}
-                          onSelect={() => onArchiveSite?.(activeSite.site_id)}
+                          onSelect={() => onArchiveProjectArea?.(activeProjectArea.project_area_id)}
                         >
                           Archive Project Area
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          hidden={!activeSite.is_archived || !isSystemAdmin}
-                          disabled={!activeSiteEligibility.isEligibleForDelete}
-                          disabledReason={activeSiteEligibility.tooltipReason}
+                          hidden={!activeProjectArea.is_archived || !isSystemAdmin}
+                          disabled={!activeProjectAreaEligibility.isEligibleForDelete}
+                          disabledReason={activeProjectAreaEligibility.tooltipReason}
                           tooltipSide="right"
                           variant="destructive"
                           icon={<Trash2 className="h-4 w-4" />}
-                          onSelect={() => setIsDeleteSiteOpen(true)}
+                          onSelect={() => setIsDeleteProjectAreaOpen(true)}
                         >
                           Delete Project Area
                         </DropdownMenuItem>
@@ -452,10 +452,10 @@ export function MapSiteEditor({
                   size="sm"
                   variant="outline"
                   onClick={() => onStartPlotting('lot')}
-                  disabled={activeSite.is_archived}
+                  disabled={activeProjectArea.is_archived}
                   className="h-8 w-full gap-1.5 border-border bg-card text-xs font-medium text-foreground hover:bg-row-hover disabled:cursor-not-allowed disabled:opacity-50"
                   title={
-                    activeSite.is_archived
+                    activeProjectArea.is_archived
                       ? 'Restore project area before plotting new lots'
                       : 'Plot a new lot polygon on this project area'
                   }
@@ -469,12 +469,12 @@ export function MapSiteEditor({
         </div>
 
         {/* LocalStorage Session Recovery Banner */}
-        {hasStoredDraft && activeSite && (
+        {hasStoredDraft && activeProjectArea && (
           <div className="flex items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--warning)_40%,transparent)] bg-card px-3.5 py-2 shadow-xl">
             <div className="flex items-center gap-2 text-xs text-foreground">
               <RotateCcw className="h-3.5 w-3.5 text-warning shrink-0" />
               <span>
-                Unsaved draft for <strong>{activeSite.name}</strong>
+                Unsaved draft for <strong>{activeProjectArea.name}</strong>
               </span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -508,7 +508,7 @@ export function MapSiteEditor({
                 {activeDraft.isEditingExisting ? 'Edit Lot Boundary' : 'New Lot Details'}
               </span>
               <span className="rounded-md bg-row-hover px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                {activeSite?.name}
+                {activeProjectArea?.name}
               </span>
             </div>
 
@@ -629,54 +629,54 @@ export function MapSiteEditor({
       )}
 
       {/* Save New Project Area Modal (when plotting a new project area boundary) */}
-      <Dialog open={pendingSiteBoundary !== null} onOpenChange={(open) => !open && onDiscardSite()}>
+      <Dialog open={pendingProjectAreaBoundary !== null} onOpenChange={(open) => !open && onDiscardProjectArea()}>
         <DialogContent className="max-w-sm bg-card">
           <DialogHeader>
             <DialogTitle className="text-base font-semibold">Save New Project Area</DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleSiteSubmit} className="space-y-3.5 py-1">
+          <form onSubmit={handleProjectAreaSubmit} className="space-y-3.5 py-1">
             <div className="rounded-lg bg-row-hover p-2.5 text-xs space-y-1 border border-border">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Plotted Perimeter:</span>
                 <span className="font-semibold text-foreground">
-                  {pendingSiteBoundary?.length ?? 0} corners
+                  {pendingProjectAreaBoundary?.length ?? 0} corners
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Est. Land Area:</span>
                 <span className="font-semibold text-foreground">
-                  {calculatedSiteArea.toLocaleString()} sqm
+                  {calculatedProjectAreaArea.toLocaleString()} sqm
                 </span>
               </div>
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="site-name-input" className="text-xs font-medium">
+              <Label htmlFor="project-area-name-input" className="text-xs font-medium">
                 Project Area Name *
               </Label>
               <Input
-                id="site-name-input"
+                id="project-area-name-input"
                 type="text"
                 required
                 autoFocus
                 placeholder="e.g. San Isidro Heights"
-                value={siteName}
-                onChange={(e) => setSiteName(e.target.value)}
+                value={projectAreaName}
+                onChange={(e) => setProjectAreaName(e.target.value)}
                 className="h-8 text-xs"
               />
             </div>
 
             <div className="space-y-1">
-              <Label htmlFor="site-desc-input" className="text-xs font-medium">
+              <Label htmlFor="project-area-desc-input" className="text-xs font-medium">
                 Description (Optional)
               </Label>
               <Input
-                id="site-desc-input"
+                id="project-area-desc-input"
                 type="text"
                 placeholder="Residential subdivision..."
-                value={siteDesc}
-                onChange={(e) => setSiteDesc(e.target.value)}
+                value={projectAreaDesc}
+                onChange={(e) => setProjectAreaDesc(e.target.value)}
                 className="h-8 text-xs"
               />
             </div>
@@ -686,7 +686,7 @@ export function MapSiteEditor({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={onDiscardSite}
+                onClick={onDiscardProjectArea}
                 disabled={isSaving}
                 className="text-xs border-border"
               >
@@ -725,7 +725,7 @@ export function MapSiteEditor({
               <strong className="font-semibold">
                 Block {selectedPlotToDelete?.block} Lot {selectedPlotToDelete?.lot}
               </strong>
-              {selectedPlotToDelete?.siteName ? ` in ${selectedPlotToDelete.siteName}` : ''}?
+              {selectedPlotToDelete?.projectAreaName ? ` in ${selectedPlotToDelete.projectAreaName}` : ''}?
             </p>
 
             {selectedPlotToDelete?.status &&
@@ -777,16 +777,16 @@ export function MapSiteEditor({
         </DialogContent>
       </Dialog>
 
-      {activeSite && (
-        <DeleteSiteDialog
-          site={activeSite}
-          open={isDeleteSiteOpen}
-          onOpenChange={setIsDeleteSiteOpen}
+      {activeProjectArea && (
+        <DeleteProjectAreaDialog
+          projectArea={activeProjectArea}
+          open={isDeleteProjectAreaOpen}
+          onOpenChange={setIsDeleteProjectAreaOpen}
           onConfirm={async () => {
-            if (onDeleteSite) {
-              await onDeleteSite(activeSite.site_id);
+            if (onDeleteProjectArea) {
+              await onDeleteProjectArea(activeProjectArea.project_area_id);
             }
-            setIsDeleteSiteOpen(false);
+            setIsDeleteProjectAreaOpen(false);
           }}
           isPending={isSaving}
         />

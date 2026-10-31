@@ -5,7 +5,7 @@ import { createScope } from "@/lib/actions/action-handler";
 import type { ActionResult } from "@/lib/actions/action-result";
 import { uuidSchema } from "@/lib/validations/client";
 import {
-  createSiteSchema,
+  createProjectAreaSchema,
   createSubdivisionLotSchema,
   deleteSubdivisionLotSchema,
   updateSubdivisionBoundarySchema,
@@ -17,11 +17,11 @@ import {
   type RawLotRow,
 } from "@/lib/property-lots";
 import type {
-  Site,
-  SiteWithLots,
-  SiteSubdivision,
+  ProjectArea,
+  ProjectAreaWithLots,
+  ProjectAreaSubdivision,
   PropertyLot,
-  CreateSiteInput,
+  CreateProjectAreaInput,
   CreateSubdivisionLotInput,
   DeleteSubdivisionLotInput,
   UpdateSubdivisionBoundaryInput,
@@ -32,13 +32,13 @@ const propertyCreate = property.extend(["properties.create"]);
 const propertyWrite = property.extend(["properties.update"]);
 const propertyDelete = property.extend(["properties.delete"]);
 
-export async function getSites(): Promise<Site[]> {
+export async function getProjectAreas(): Promise<ProjectArea[]> {
   return property.query(async ({ supabase }) => {
     const { data, error } = await supabase
-      .from("site")
+      .from("project_area")
       .select("*")
       .order("name", { ascending: true })
-      .returns<Site[]>();
+      .returns<ProjectArea[]>();
 
     if (error) {
       throw new Error(`Failed to fetch project areas: ${error.message}`);
@@ -48,33 +48,33 @@ export async function getSites(): Promise<Site[]> {
   });
 }
 
-export async function getSiteWithLots(siteId: string): Promise<SiteWithLots> {
+export async function getProjectAreaWithLots(projectAreaId: string): Promise<ProjectAreaWithLots> {
   return property.query({
     schema: uuidSchema,
-    input: siteId,
-    handler: async (validSiteId, { supabase }) => {
-      const { data: site, error: siteError } = await supabase
-        .from("site")
+    input: projectAreaId,
+    handler: async (validProjectAreaId, { supabase }) => {
+      const { data: projectArea, error: projectAreaError } = await supabase
+        .from("project_area")
         .select("*")
-        .eq("site_id", validSiteId)
-        .single<Site>();
+        .eq("project_area_id", validProjectAreaId)
+        .single<ProjectArea>();
 
-      if (siteError || !site) {
-        throw new Error(`Project area not found: ${siteError?.message ?? "Unknown error"}`);
+      if (projectAreaError || !projectArea) {
+        throw new Error(`Project area not found: ${projectAreaError?.message ?? "Unknown error"}`);
       }
 
       const [subdivisionsResult, lotsResult] = await Promise.all([
         supabase
-          .from("site_subdivision")
+          .from("project_area_subdivision")
           .select("*")
-          .eq("site_id", validSiteId)
+          .eq("project_area_id", validProjectAreaId)
           .order("block_number", { ascending: true })
           .order("lot_number", { ascending: true })
-          .returns<SiteSubdivision[]>(),
+          .returns<ProjectAreaSubdivision[]>(),
         supabase
           .from("property_lot")
           .select(LOT_WITH_CLIENT_SELECT)
-          .eq("site_id", validSiteId)
+          .eq("project_area_id", validProjectAreaId)
           .order("block_number", { ascending: true })
           .order("lot_number", { ascending: true })
           .returns<RawLotRow[]>(),
@@ -88,7 +88,7 @@ export async function getSiteWithLots(siteId: string): Promise<SiteWithLots> {
       }
 
       return {
-        ...site,
+        ...projectArea,
         subdivisions: subdivisionsResult.data ?? [],
         lots: (lotsResult.data ?? []).map(mapLotWithAccount),
       };
@@ -96,23 +96,23 @@ export async function getSiteWithLots(siteId: string): Promise<SiteWithLots> {
   });
 }
 
-export async function getUnclaimedSubdivisions(siteId: string): Promise<SiteSubdivision[]> {
+export async function getUnclaimedSubdivisions(projectAreaId: string): Promise<ProjectAreaSubdivision[]> {
   return property.query({
     schema: uuidSchema,
-    input: siteId,
-    handler: async (validSiteId, { supabase }) => {
+    input: projectAreaId,
+    handler: async (validProjectAreaId, { supabase }) => {
       const [subdivisionsResult, lotsResult] = await Promise.all([
         supabase
-          .from("site_subdivision")
-          .select("subdivision_id, site_id, block_number, lot_number, boundary")
-          .eq("site_id", validSiteId)
+          .from("project_area_subdivision")
+          .select("subdivision_id, project_area_id, block_number, lot_number, boundary")
+          .eq("project_area_id", validProjectAreaId)
           .order("block_number", { ascending: true })
           .order("lot_number", { ascending: true })
-          .returns<SiteSubdivision[]>(),
+          .returns<ProjectAreaSubdivision[]>(),
         supabase
           .from("property_lot")
           .select("block_number, lot_number")
-          .eq("site_id", validSiteId)
+          .eq("project_area_id", validProjectAreaId)
           .returns<{ block_number: number; lot_number: number }[]>(),
       ]);
 
@@ -131,20 +131,20 @@ export async function getUnclaimedSubdivisions(siteId: string): Promise<SiteSubd
   });
 }
 
-export async function getAllSitesWithLots(): Promise<SiteWithLots[]> {
+export async function getAllProjectAreasWithLots(): Promise<ProjectAreaWithLots[]> {
   return property.query(async ({ supabase }) => {
-    const [sitesResult, subdivisionsResult, lotsResult] = await Promise.all([
+    const [projectAreasResult, subdivisionsResult, lotsResult] = await Promise.all([
       supabase
-        .from("site")
+        .from("project_area")
         .select("*")
         .order("name", { ascending: true })
-        .returns<Site[]>(),
+        .returns<ProjectArea[]>(),
       supabase
-        .from("site_subdivision")
+        .from("project_area_subdivision")
         .select("*")
         .order("block_number", { ascending: true })
         .order("lot_number", { ascending: true })
-        .returns<SiteSubdivision[]>(),
+        .returns<ProjectAreaSubdivision[]>(),
       supabase
         .from("property_lot")
         .select(LOT_WITH_CLIENT_SELECT)
@@ -153,8 +153,8 @@ export async function getAllSitesWithLots(): Promise<SiteWithLots[]> {
         .returns<RawLotRow[]>(),
     ]);
 
-    if (sitesResult.error) {
-      throw new Error(`Failed to fetch project areas: ${sitesResult.error.message}`);
+    if (projectAreasResult.error) {
+      throw new Error(`Failed to fetch project areas: ${projectAreasResult.error.message}`);
     }
     if (subdivisionsResult.error) {
       throw new Error(`Failed to fetch subdivisions: ${subdivisionsResult.error.message}`);
@@ -163,44 +163,44 @@ export async function getAllSitesWithLots(): Promise<SiteWithLots[]> {
       throw new Error(`Failed to fetch lots: ${lotsResult.error.message}`);
     }
 
-    const subdivisionsBySite = new Map<string, SiteSubdivision[]>();
+    const subdivisionsByProjectArea = new Map<string, ProjectAreaSubdivision[]>();
     for (const sub of subdivisionsResult.data ?? []) {
-      const list = subdivisionsBySite.get(sub.site_id) ?? [];
+      const list = subdivisionsByProjectArea.get(sub.project_area_id) ?? [];
       list.push(sub);
-      subdivisionsBySite.set(sub.site_id, list);
+      subdivisionsByProjectArea.set(sub.project_area_id, list);
     }
 
     const lots = (lotsResult.data ?? []).map(mapLotWithAccount);
-    const lotsBySite = new Map<string, typeof lots>();
+    const lotsByProjectArea = new Map<string, typeof lots>();
     for (const lot of lots) {
-      if (!lot.site_id) continue;
-      const list = lotsBySite.get(lot.site_id) ?? [];
+      if (!lot.project_area_id) continue;
+      const list = lotsByProjectArea.get(lot.project_area_id) ?? [];
       list.push(lot);
-      lotsBySite.set(lot.site_id, list);
+      lotsByProjectArea.set(lot.project_area_id, list);
     }
 
-    return (sitesResult.data ?? []).map((site) => ({
-      ...site,
-      subdivisions: subdivisionsBySite.get(site.site_id) ?? [],
-      lots: lotsBySite.get(site.site_id) ?? [],
+    return (projectAreasResult.data ?? []).map((projectArea) => ({
+      ...projectArea,
+      subdivisions: subdivisionsByProjectArea.get(projectArea.project_area_id) ?? [],
+      lots: lotsByProjectArea.get(projectArea.project_area_id) ?? [],
     }));
   });
 }
 
-export async function createSite(input: CreateSiteInput): Promise<ActionResult<Site>> {
+export async function createProjectArea(input: CreateProjectAreaInput): Promise<ActionResult<ProjectArea>> {
   return propertyCreate.run({
-    schema: createSiteSchema,
+    schema: createProjectAreaSchema,
     input,
     handler: async (validatedInput, { supabase }) => {
       const { data, error } = await supabase
-        .from("site")
+        .from("project_area")
         .insert({
           name: validatedInput.name,
           description: validatedInput.description || null,
           boundary: validatedInput.boundary,
         })
         .select()
-        .single<Site>();
+        .single<ProjectArea>();
 
       if (error || !data) {
         throw new Error(`Failed to create project area: ${error?.message ?? "Unknown error"}`);
@@ -211,25 +211,25 @@ export async function createSite(input: CreateSiteInput): Promise<ActionResult<S
   });
 }
 
-export async function deleteSite(siteId: string): Promise<ActionResult<void>> {
+export async function deleteProjectArea(projectAreaId: string): Promise<ActionResult<void>> {
   return propertyDelete.run({
     schema: uuidSchema,
-    input: siteId,
-    handler: async (validSiteId, { supabase }) => {
-      // Ensure no sold or reserved lots prevent site deletion
+    input: projectAreaId,
+    handler: async (validProjectAreaId, { supabase }) => {
+      // Ensure no sold or reserved lots prevent projectArea deletion
       const { data: activeLots } = await supabase
         .from("property_lot")
         .select("property_id, status")
-        .eq("site_id", validSiteId)
+        .eq("project_area_id", validProjectAreaId)
         .in("status", ["Reserved", "Sold"]);
 
       if (activeLots && activeLots.length > 0) {
         throw new Error("Cannot delete a project area with active reserved or sold lots.");
       }
 
-      await supabase.from("property_lot").delete().eq("site_id", validSiteId);
-      await supabase.from("site_subdivision").delete().eq("site_id", validSiteId);
-      const { error } = await supabase.from("site").delete().eq("site_id", validSiteId);
+      await supabase.from("property_lot").delete().eq("project_area_id", validProjectAreaId);
+      await supabase.from("project_area_subdivision").delete().eq("project_area_id", validProjectAreaId);
+      const { error } = await supabase.from("project_area").delete().eq("project_area_id", validProjectAreaId);
 
       if (error) {
         throw new Error(`Failed to delete project area: ${error.message}`);
@@ -240,7 +240,7 @@ export async function deleteSite(siteId: string): Promise<ActionResult<void>> {
 
 export async function createSubdivisionLot(
   input: CreateSubdivisionLotInput
-): Promise<ActionResult<{ subdivision: SiteSubdivision; lot: PropertyLot | null }>> {
+): Promise<ActionResult<{ subdivision: ProjectAreaSubdivision; lot: PropertyLot | null }>> {
   return propertyCreate.run({
     permissions: ["properties.update"],
     schema: createSubdivisionLotSchema,
@@ -258,7 +258,7 @@ export async function createSubdivisionLot(
       const pricePerSqm = shouldCreateLot ? validatedInput.price_per_sqm! : null;
 
       const { data, error } = await supabase.rpc("create_subdivision_lot", {
-        p_site_id: validatedInput.site_id,
+        p_project_area_id: validatedInput.project_area_id,
         p_block_number: validatedInput.block_number,
         p_lot_number: validatedInput.lot_number,
         p_boundary: validatedInput.boundary,
@@ -271,7 +271,7 @@ export async function createSubdivisionLot(
         throw new Error(`Failed to create subdivision: ${error?.message ?? "Unknown error"}`);
       }
 
-      const result = data as { subdivision: SiteSubdivision; lot: PropertyLot | null };
+      const result = data as { subdivision: ProjectAreaSubdivision; lot: PropertyLot | null };
       return {
         subdivision: result.subdivision,
         lot: result.lot ?? null,
@@ -283,24 +283,24 @@ export async function createSubdivisionLot(
 /** Batch create multiple subdivision lots in a single request. */
 export async function batchCreateSubdivisionLots(
   lots: CreateSubdivisionLotInput[]
-): Promise<ActionResult<SiteSubdivision[]>> {
+): Promise<ActionResult<ProjectAreaSubdivision[]>> {
   return propertyCreate.run({
     permissions: ["properties.update"],
     schema: z.array(createSubdivisionLotSchema).min(1),
     input: lots,
     handler: async (validatedLots, { supabase }) => {
       const rows = validatedLots.map((l) => ({
-        site_id: l.site_id,
+        project_area_id: l.project_area_id,
         block_number: l.block_number,
         lot_number: l.lot_number,
         boundary: l.boundary,
       }));
 
       const { data, error } = await supabase
-        .from("site_subdivision")
+        .from("project_area_subdivision")
         .insert(rows)
         .select()
-        .returns<SiteSubdivision[]>();
+        .returns<ProjectAreaSubdivision[]>();
 
       if (error) {
         throw new Error(`Batch lot creation failed: ${error.message}`);
@@ -314,7 +314,7 @@ export async function batchCreateSubdivisionLots(
 /** Update an existing subdivision lot boundary and sync its companion property area. */
 export async function updateSubdivisionLotBoundary(
   input: UpdateSubdivisionBoundaryInput
-): Promise<ActionResult<SiteSubdivision>> {
+): Promise<ActionResult<ProjectAreaSubdivision>> {
   return propertyWrite.run({
     schema: updateSubdivisionBoundarySchema,
     input,
@@ -322,11 +322,11 @@ export async function updateSubdivisionLotBoundary(
       const area = Math.max(10, Math.round(calculatePolygonAreaSqm(validated.boundary) * 100) / 100);
 
       const { data, error } = await supabase
-        .from("site_subdivision")
+        .from("project_area_subdivision")
         .update({ boundary: validated.boundary })
         .eq("subdivision_id", validated.subdivision_id)
         .select()
-        .single<SiteSubdivision>();
+        .single<ProjectAreaSubdivision>();
 
       if (error || !data) {
         throw new Error(`Failed to update subdivision boundary: ${error?.message ?? "Unknown error"}`);
@@ -339,7 +339,7 @@ export async function updateSubdivisionLotBoundary(
           boundary: validated.boundary,
           area_size: area,
         })
-        .eq("site_id", validated.site_id)
+        .eq("project_area_id", validated.project_area_id)
         .eq("block_number", validated.block_number)
         .eq("lot_number", validated.lot_number);
 
@@ -358,7 +358,7 @@ export async function deleteSubdivisionLot(input: DeleteSubdivisionLotInput): Pr
       const { data: existingLot } = await supabase
         .from("property_lot")
         .select("property_id, status")
-        .eq("site_id", validatedData.site_id)
+        .eq("project_area_id", validatedData.project_area_id)
         .eq("block_number", validatedData.block_number)
         .eq("lot_number", validatedData.lot_number)
         .maybeSingle<{ property_id: string; status: string }>();
@@ -385,12 +385,12 @@ export async function deleteSubdivisionLot(input: DeleteSubdivisionLotInput): Pr
           .eq("property_id", existingLot.property_id);
       }
 
-      let query = supabase.from("site_subdivision").delete();
+      let query = supabase.from("project_area_subdivision").delete();
       if (validatedData.subdivision_id) {
         query = query.eq("subdivision_id", validatedData.subdivision_id);
       } else {
         query = query
-          .eq("site_id", validatedData.site_id)
+          .eq("project_area_id", validatedData.project_area_id)
           .eq("block_number", validatedData.block_number)
           .eq("lot_number", validatedData.lot_number);
       }
@@ -403,17 +403,17 @@ export async function deleteSubdivisionLot(input: DeleteSubdivisionLotInput): Pr
   });
 }
 
-export async function archiveSite(siteId: string): Promise<ActionResult<Site>> {
+export async function archiveProjectArea(projectAreaId: string): Promise<ActionResult<ProjectArea>> {
   return propertyWrite.run({
     schema: uuidSchema,
-    input: siteId,
-    handler: async (validSiteId, { supabase }) => {
+    input: projectAreaId,
+    handler: async (validProjectAreaId, { supabase }) => {
       const { data, error } = await supabase
-        .from("site")
+        .from("project_area")
         .update({ is_archived: true, archived_at: new Date().toISOString() })
-        .eq("site_id", validSiteId)
+        .eq("project_area_id", validProjectAreaId)
         .select()
-        .single<Site>();
+        .single<ProjectArea>();
 
       if (error || !data) {
         throw new Error(`Failed to archive project area: ${error?.message ?? "Unknown error"}`);
@@ -424,17 +424,17 @@ export async function archiveSite(siteId: string): Promise<ActionResult<Site>> {
   });
 }
 
-export async function unarchiveSite(siteId: string): Promise<ActionResult<Site>> {
+export async function unarchiveProjectArea(projectAreaId: string): Promise<ActionResult<ProjectArea>> {
   return propertyWrite.run({
     schema: uuidSchema,
-    input: siteId,
-    handler: async (validSiteId, { supabase }) => {
+    input: projectAreaId,
+    handler: async (validProjectAreaId, { supabase }) => {
       const { data, error } = await supabase
-        .from("site")
+        .from("project_area")
         .update({ is_archived: false, archived_at: null })
-        .eq("site_id", validSiteId)
+        .eq("project_area_id", validProjectAreaId)
         .select()
-        .single<Site>();
+        .single<ProjectArea>();
 
       if (error || !data) {
         throw new Error(`Failed to unarchive project area: ${error?.message ?? "Unknown error"}`);

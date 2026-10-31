@@ -2,19 +2,19 @@ import { PenTool, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useSession } from '@/lib/hooks/use-session';
-import type { LotPlotProperties } from '@/components/dashboard-properties/map-site-popup';
+import type { LotPlotProperties } from '@/components/dashboard-properties/map-project-area-popup';
 
-export interface MapSiteEditorPopupProps {
+export interface MapProjectAreaEditorPopupProps {
   plot: LotPlotProperties;
   onEditBoundary: () => void;
   onDeletePlot: () => void;
 }
 
-export function MapSiteEditorPopup({ plot, onEditBoundary, onDeletePlot }: MapSiteEditorPopupProps) {
+export function MapProjectAreaEditorPopup({ plot, onEditBoundary, onDeletePlot }: MapProjectAreaEditorPopupProps) {
   const { isSystemAdmin } = useSession();
 
   const isDraft = plot.status === 'Draft';
-  const canEditBoundary = !plot.isSiteArchived && !isDraft;
+  const canEditBoundary = !plot.isProjectAreaArchived && !isDraft;
   const canDeletePlot = !isDraft && isSystemAdmin;
 
   return (
@@ -24,10 +24,10 @@ export function MapSiteEditorPopup({ plot, onEditBoundary, onDeletePlot }: MapSi
           <p className="text-sm font-bold text-foreground">
             Block {plot.block} Lot {plot.lot}
           </p>
-          <p className="text-xs text-muted-foreground">{plot.siteName}</p>
+          <p className="text-xs text-muted-foreground">{plot.projectAreaName}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {plot.isSiteArchived && <Badge variant="muted">Archived</Badge>}
+          {plot.isProjectAreaArchived && <Badge variant="muted">Archived</Badge>}
           {plot.hasUnsavedChange && <Badge variant="info">Unsaved</Badge>}
         </div>
       </div>
@@ -44,9 +44,9 @@ export function MapSiteEditorPopup({ plot, onEditBoundary, onDeletePlot }: MapSi
           <Button
             variant="danger"
             size="sm"
-            disabled={plot.isSiteArchived}
-            title={plot.isSiteArchived ? 'Restore project area before deleting plots' : undefined}
-            onClick={plot.isSiteArchived ? undefined : onDeletePlot}
+            disabled={plot.isProjectAreaArchived}
+            title={plot.isProjectAreaArchived ? 'Restore project area before deleting plots' : undefined}
+            onClick={plot.isProjectAreaArchived ? undefined : onDeletePlot}
             className="w-full cursor-pointer gap-1.5"
           >
             <Trash2 className="h-3 w-3" />

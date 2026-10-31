@@ -27,7 +27,7 @@ import type {
   PropertyStatus,
   CreatePropertyLotInput,
   UpdatePropertyLotInput,
-  Site,
+  ProjectArea,
 } from '@/lib/types/property';
 import { STATUSES } from '@/lib/status-colors';
 
@@ -44,13 +44,13 @@ export const PROPERTY_STATUS_FILTERS: readonly StatusFilter[] = [
 
 export type PropertyFilters = {
   status: StatusFilter;
-  siteId: string | null;
+  projectAreaId: string | null;
   showArchived: boolean;
 };
 
 /** Prefill carried by a `create` dialog opened from the map, so the values survive until the modal reads them. */
 export type CreateLotPrefill = {
-  site_id?: string;
+  project_area_id?: string;
   block_number?: number;
   lot_number?: number;
   area_size?: number;
@@ -85,7 +85,7 @@ interface PropertyLotsContextValue {
   deleteLot: (propertyId: string) => Promise<ActionResult<void>>;
   forfeitLot: (propertyId: string, reason?: string) => Promise<ActionResult<PropertyLotWithClient>>;
   reopenLot: (propertyId: string, allowEarlyReopen?: boolean) => Promise<ActionResult<PropertyLotWithClient>>;
-  sites: Site[];
+  projectAreas: ProjectArea[];
   isSystemAdmin: boolean;
 }
 
@@ -106,23 +106,23 @@ export function totalPrice(lot: PropertyLotWithClient): number {
   return lot.area_size * lot.price_per_sqm;
 }
 
-function matchesSite(lot: PropertyLotWithClient, siteId: string | null, sites: Site[]): boolean {
-  if (!siteId) return true;
-  if (lot.site_id === siteId) return true;
-  const targetSite = sites.find((s) => s.site_id === siteId);
-  return Boolean(targetSite && lot.location === targetSite.name);
+function matchesProjectArea(lot: PropertyLotWithClient, projectAreaId: string | null, projectAreas: ProjectArea[]): boolean {
+  if (!projectAreaId) return true;
+  if (lot.project_area_id === projectAreaId) return true;
+  const targetProjectArea = projectAreas.find((s) => s.project_area_id === projectAreaId);
+  return Boolean(targetProjectArea && lot.location === targetProjectArea.name);
 }
 
 export function PropertyLotsProvider({
   children,
-  sites,
+  projectAreas,
   truncationMode = 'paged',
-  onSiteFilterChange,
+  onProjectAreaFilterChange,
 }: {
   children: ReactNode;
-  sites: Site[];
+  projectAreas: ProjectArea[];
   truncationMode?: 'paged' | 'cap';
-  onSiteFilterChange?: (siteId: string | null) => void;
+  onProjectAreaFilterChange?: (projectAreaId: string | null) => void;
 }) {
   const { isSystemAdmin } = useSession();
   const router = useRouter();
@@ -162,22 +162,22 @@ export function PropertyLotsProvider({
           ],
         },
       },
-      siteId: {
+      projectAreaId: {
         defaultValue: null,
-        urlParam: 'site',
+        urlParam: 'projectArea',
         parseUrlParam: (raw) => raw || null,
-        onChange: onSiteFilterChange,
-        predicate: (lot, siteId) => matchesSite(lot, siteId, sites),
+        onChange: onProjectAreaFilterChange,
+        predicate: (lot, projectAreaId) => matchesProjectArea(lot, projectAreaId, projectAreas),
         ui: {
           variant: 'single-select',
-          id: 'site',
+          id: 'projectArea',
           label: 'Project Area',
           allLabel: 'All project areas',
-          hidden: sites.length === 0,
-          options: sites
+          hidden: projectAreas.length === 0,
+          options: projectAreas
             .filter((s) => !s.is_archived)
             .map((s) => ({
-              value: s.site_id,
+              value: s.project_area_id,
               label: s.name,
             })),
         },
@@ -387,7 +387,7 @@ export function PropertyLotsProvider({
     deleteLot,
     forfeitLot,
     reopenLot,
-    sites,
+    projectAreas,
     isSystemAdmin,
   };
 

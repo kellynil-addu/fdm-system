@@ -3,7 +3,7 @@
  *
  * Full development seed script:
  * 1. Seeds the baseline superadmin user and system_admin role.
- * 2. Seeds sample development sites and property subdivisions.
+ * 2. Seeds sample development projectAreas and property subdivisions.
  *
  * Usage:
  *   npm run seed:dev
@@ -11,7 +11,7 @@
  */
 
 import { seedBaseline, seedTester } from "./seed-baseline";
-import { seedAllSampleSites } from "./seed-sample-site";
+import { seedAllSampleProjectAreas } from "./seed-sample-project-area";
 
 async function main() {
   console.log("🚀 Starting full development database seed...\n");
@@ -20,10 +20,10 @@ async function main() {
   await seedBaseline();
   await seedTester();
 
-  console.log("--- Step 2: Sample Sites & Properties Seed ---");
-  await seedAllSampleSites();
+  console.log("--- Step 2: Sample ProjectAreas & Properties Seed ---");
+  await seedAllSampleProjectAreas();
 
-  console.log("\n✨  Development seeding complete! You can log in with the admin credentials and view sites at /dashboard/properties/map.\n");
+  console.log("\n✨  Development seeding complete! You can log in with the admin credentials and view projectAreas at /dashboard/properties/map.\n");
 }
 
 if (process.argv[1]?.includes("seed-dev")) {

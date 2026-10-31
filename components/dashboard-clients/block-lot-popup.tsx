@@ -4,11 +4,11 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import type { SiteWithLots, PropertyLotWithClient, SiteSubdivision } from '@/lib/types/property';
+import type { ProjectAreaWithLots, PropertyLotWithClient, ProjectAreaSubdivision } from '@/lib/types/property';
 
 export interface SelectedLotDetails {
-  siteId: string;
-  siteName: string;
+  projectAreaId: string;
+  projectAreaName: string;
   blockNumber: number;
   lotNumber: number;
   areaSize: number;
@@ -23,23 +23,23 @@ export interface SelectedLotDetails {
 export type EvaluatedLotStatus =
   | { type: 'already_assigned'; lot: PropertyLotWithClient }
   | { type: 'open'; lot: PropertyLotWithClient; isRecordOnly: boolean }
-  | { type: 'unopened_plot'; subdivision: SiteSubdivision }
+  | { type: 'unopened_plot'; subdivision: ProjectAreaSubdivision }
   | { type: 'new_record_only' }
   | null;
 
 export function evaluateLotStatus(
-  siteData: SiteWithLots | null,
+  projectAreaData: ProjectAreaWithLots | null,
   blockNumber: number,
   lotNumber: number
 ): EvaluatedLotStatus {
-  if (!siteData || isNaN(blockNumber) || blockNumber <= 0 || isNaN(lotNumber) || lotNumber <= 0) {
+  if (!projectAreaData || isNaN(blockNumber) || blockNumber <= 0 || isNaN(lotNumber) || lotNumber <= 0) {
     return null;
   }
 
-  const existingLot = siteData.lots.find(
+  const existingLot = projectAreaData.lots.find(
     (l) => l.block_number === blockNumber && l.lot_number === lotNumber
   );
-  const subdivision = siteData.subdivisions.find(
+  const subdivision = projectAreaData.subdivisions.find(
     (s) => s.block_number === blockNumber && s.lot_number === lotNumber
   );
 
@@ -71,7 +71,7 @@ interface GridLotCell {
 interface BlockLotPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  siteData: SiteWithLots | null;
+  projectAreaData: ProjectAreaWithLots | null;
   activeBlock: number | null;
   activeLot: number | null;
   onSelectLot: (blockNumber: number, lotNumber: number) => void;
@@ -81,7 +81,7 @@ interface BlockLotPopupProps {
 export function BlockLotPopup({
   open,
   onOpenChange,
-  siteData,
+  projectAreaData,
   activeBlock,
   activeLot,
   onSelectLot,
@@ -93,11 +93,11 @@ export function BlockLotPopup({
 
   // Group all known project area lots and subdivision plots by block number
   const groupedBlocks = useMemo(() => {
-    if (!siteData) return [];
+    if (!projectAreaData) return [];
 
     const cellMap = new Map<string, GridLotCell>();
 
-    for (const sub of siteData.subdivisions) {
+    for (const sub of projectAreaData.subdivisions) {
       const key = `${sub.block_number}-${sub.lot_number}`;
       cellMap.set(key, {
         blockNumber: sub.block_number,
@@ -107,7 +107,7 @@ export function BlockLotPopup({
       });
     }
 
-    for (const lot of siteData.lots) {
+    for (const lot of projectAreaData.lots) {
       const key = `${lot.block_number}-${lot.lot_number}`;
       const isAssigned = lot.status === 'Reserved' || lot.status === 'Sold';
       cellMap.set(key, {
@@ -132,7 +132,7 @@ export function BlockLotPopup({
         blockNumber,
         lots: lots.sort((a, b) => a.lotNumber - b.lotNumber),
       }));
-  }, [siteData, onlyOpenForSale]);
+  }, [projectAreaData, onlyOpenForSale]);
 
   // Scroll the active block into view when typing a block number
   useEffect(() => {
@@ -162,7 +162,7 @@ export function BlockLotPopup({
       >
         <div className="flex items-center justify-between gap-2 border-b border-border bg-row-hover px-3 py-2">
           <span className="text-xs font-semibold text-foreground">
-            {siteData ? `${siteData.name} Lots` : 'Project Area Lots'}
+            {projectAreaData ? `${projectAreaData.name} Lots` : 'Project Area Lots'}
           </span>
 
           <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">

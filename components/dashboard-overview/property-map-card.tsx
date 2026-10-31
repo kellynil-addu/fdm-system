@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { ArrowUpRight, MapPinned } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { SiteMap } from '@/components/dashboard-properties/map-site';
+import { ProjectAreaMap } from '@/components/dashboard-properties/map-project-area';
 import type { DashboardMapPreview } from '@/lib/types/dashboard';
 
 class MapPreviewErrorBoundary extends React.Component<
@@ -33,7 +33,7 @@ class MapPreviewErrorBoundary extends React.Component<
 }
 
 export function PropertyMapCard({ preview }: { preview: DashboardMapPreview | null }) {
-  const site = preview?.site;
+  const projectArea = preview?.projectArea;
 
   const fallback = (
     <div className="flex h-full items-center justify-center px-5 text-center text-muted-foreground">
@@ -52,21 +52,21 @@ export function PropertyMapCard({ preview }: { preview: DashboardMapPreview | nu
         <CardHeader className="flex-row items-start justify-between gap-3">
           <div>
             <CardTitle>Project area map</CardTitle>
-            <CardDescription className="mt-2">{site ? `${site.name} · project area preview` : 'Explore your recorded properties'}</CardDescription>
+            <CardDescription className="mt-2">{projectArea ? `${projectArea.name} · project area preview` : 'Explore your recorded properties'}</CardDescription>
           </div>
           <MapPinned aria-hidden="true" className="h-5 w-5 shrink-0 text-muted-foreground" />
         </CardHeader>
         <div className="relative mx-6 h-48 overflow-hidden rounded-lg border bg-sidebar-accent">
-          {site ? (
+          {projectArea ? (
             <MapPreviewErrorBoundary fallback={fallback}>
               <div inert aria-hidden="true" className="pointer-events-none absolute left-0 top-0 h-[200%] w-[200%] origin-top-left scale-50">
-                <SiteMap site={site} focusedSiteId={site.site_id} isSidebarOpen={false} preview />
+                <ProjectAreaMap projectArea={projectArea} focusedProjectAreaId={projectArea.project_area_id} isSidebarOpen={false} preview />
               </div>
             </MapPreviewErrorBoundary>
           ) : fallback}
         </div>
         <CardContent className="pt-4">
-          <p className="text-xs text-muted-foreground">{site ? 'Project area imagery and plotted lots. Open the map to explore.' : 'Open the project area map to explore your properties.'}</p>
+          <p className="text-xs text-muted-foreground">{projectArea ? 'Project area imagery and plotted lots. Open the map to explore.' : 'Open the project area map to explore your properties.'}</p>
           <div className="mt-4 flex items-center justify-between text-sm font-semibold">Open Project Area Map<ArrowUpRight aria-hidden="true" className="h-4 w-4 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" /></div>
         </CardContent>
       </Card>

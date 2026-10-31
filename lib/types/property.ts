@@ -40,8 +40,8 @@ export interface LedgerAccountWithParties extends LedgerAccount {
  * proves it is an array of length >= 3, not that its elements are vertex
  * pairs. Run it through `parseRing()` in lib/geometry.ts before use.
  */
-export interface Site {
-  site_id: string;
+export interface ProjectArea {
+  project_area_id: string;
   name: string;
   description: string | null;
   boundary: unknown;
@@ -53,7 +53,7 @@ export interface Site {
 
 export interface PropertyLot {
   property_id: string;
-  site_id: string | null;
+  project_area_id: string | null;
   /** Local-space ring, or null for lots that have not been drawn yet. */
   boundary: unknown;
   location: string;
@@ -90,24 +90,24 @@ export interface ReopenPropertyLotForSaleInput {
 }
 
 /** A pre-planned lot division on a project area, drawn from the plat before any property is created. */
-export interface SiteSubdivision {
+export interface ProjectAreaSubdivision {
   subdivision_id: string;
-  site_id: string;
+  project_area_id: string;
   block_number: number;
   lot_number: number;
   boundary: unknown;
 }
 
 /** A project area with its pre-planned subdivisions and any registered property lots. */
-export interface SiteWithLots extends Site {
-  subdivisions: SiteSubdivision[];
+export interface ProjectAreaWithLots extends ProjectArea {
+  subdivisions: ProjectAreaSubdivision[];
   lots: PropertyLotWithClient[];
 }
 
 export interface CreatePropertyLotInput {
   location: string;
   /** Required via the UI: every lot must link to a pre-existing project area. Optional here for direct action callers (e.g. tests). */
-  site_id?: string | null;
+  project_area_id?: string | null;
   block_number: number;
   lot_number: number;
   area_size: number;
@@ -150,14 +150,14 @@ export interface GetPropertyLotsParams {
   sortOrder?: 'asc' | 'desc';
 }
 
-export interface CreateSiteInput {
+export interface CreateProjectAreaInput {
   name: string;
   description?: string | null;
   boundary: [number, number][];
 }
 
 export interface CreateSubdivisionLotInput {
-  site_id: string;
+  project_area_id: string;
   block_number: number;
   lot_number: number;
   boundary: [number, number][];
@@ -169,13 +169,13 @@ export interface CreateSubdivisionLotInput {
 
 export interface DeleteSubdivisionLotInput {
   subdivision_id?: string;
-  site_id: string;
+  project_area_id: string;
   block_number: number;
   lot_number: number;
 }
 
 export interface OpenSubdivisionForSaleInput {
-  site_id: string;
+  project_area_id: string;
   block_number: number;
   lot_number: number;
   area_size: number;
@@ -183,7 +183,7 @@ export interface OpenSubdivisionForSaleInput {
 }
 
 export interface CreateAndAssignPropertyFromSubdivisionInput {
-  site_id: string;
+  project_area_id: string;
   block_number: number;
   lot_number: number;
   area_size: number;
@@ -197,7 +197,7 @@ export interface CreateAndAssignPropertyFromSubdivisionInput {
 
 export interface UpdateSubdivisionBoundaryInput {
   subdivision_id: string;
-  site_id: string;
+  project_area_id: string;
   block_number: number;
   lot_number: number;
   boundary: [number, number][];
@@ -205,7 +205,7 @@ export interface UpdateSubdivisionBoundaryInput {
 
 export interface DraftLot {
   draftId: string;
-  siteId: string;
+  projectAreaId: string;
   boundary: [number, number][];
   block?: number;
   lot?: number;
@@ -215,7 +215,7 @@ export interface DraftLot {
 
 export interface PendingBoundaryUpdate {
   subdivisionId: string;
-  siteId: string;
+  projectAreaId: string;
   block: number;
   lot: number;
   boundary: [number, number][];
@@ -223,8 +223,8 @@ export interface PendingBoundaryUpdate {
   updatedAt: number;
 }
 
-export interface SiteDraftStoragePayload {
-  siteId: string;
+export interface ProjectAreaDraftStoragePayload {
+  projectAreaId: string;
   draftLots: DraftLot[];
   pendingBoundaryUpdates: PendingBoundaryUpdate[];
   lastModified: number;

@@ -37,14 +37,14 @@ const TEST_LOCATION_PATTERNS = [
   /\btest\b/i,
 ];
 
-const TEST_SITE_PATTERNS = [
-  /^test site/i,
+const TEST_PROJECT_AREA_PATTERNS = [
+  /^test projectArea/i,
   /^plat estate/i,
-  /^site-/i,
-  /^direct assign site/i,
-  /^subdivision selector site/i,
+  /^projectArea-/i,
+  /^direct assign projectArea/i,
+  /^subdivision selector projectArea/i,
   /fgdfgdfg/i,
-  /^site name$/i,
+  /^projectArea name$/i,
 ];
 
 const TEST_CLIENT_PATTERNS = [
@@ -85,16 +85,16 @@ async function deleteClientRecord(clientId: string) {
   await supabase.from("client").delete().eq("client_id", clientId);
 }
 
-// Clean subdivisions and detached lots before deleting a site
-async function deleteSiteRecord(siteId: string) {
-  await supabase.from("site_subdivision").delete().eq("site_id", siteId);
-  const { data: lots } = await supabase.from("property_lot").select("property_id").eq("site_id", siteId);
+// Clean subdivisions and detached lots before deleting a projectArea
+async function deleteProjectAreaRecord(projectAreaId: string) {
+  await supabase.from("project_area_subdivision").delete().eq("project_area_id", projectAreaId);
+  const { data: lots } = await supabase.from("property_lot").select("property_id").eq("project_area_id", projectAreaId);
   if (lots && lots.length > 0) {
     for (const lot of lots) {
       await deletePropertyLotRecord(lot.property_id);
     }
   }
-  await supabase.from("site").delete().eq("site_id", siteId);
+  await supabase.from("project_area").delete().eq("project_area_id", projectAreaId);
 }
 
 async function cleanupTestData() {
@@ -142,18 +142,18 @@ async function cleanupTestData() {
     }
   }
 
-  // 2. Clean up test sites and test property lots
-  const { data: allSites } = await supabase.from("site").select("site_id, name");
-  const testSites = (allSites ?? []).filter((s) => TEST_SITE_PATTERNS.some((p) => p.test(s.name)));
-  const testSiteIds = new Set(testSites.map((s) => s.site_id));
+  // 2. Clean up test projectAreas and test property lots
+  const { data: allProjectAreas } = await supabase.from("project_area").select("project_area_id, name");
+  const testProjectAreas = (allProjectAreas ?? []).filter((s) => TEST_PROJECT_AREA_PATTERNS.some((p) => p.test(s.name)));
+  const testProjectAreaIds = new Set(testProjectAreas.map((s) => s.project_area_id));
 
   const { data: allLots } = await supabase
     .from("property_lot")
-    .select("property_id, location, site_id, block_number, lot_number");
+    .select("property_id, location, project_area_id, block_number, lot_number");
 
   const testLots = (allLots ?? []).filter(
     (l) =>
-      (l.site_id && testSiteIds.has(l.site_id)) ||
+      (l.project_area_id && testProjectAreaIds.has(l.project_area_id)) ||
       (l.location && TEST_LOCATION_PATTERNS.some((p) => p.test(l.location)))
   );
 
@@ -167,13 +167,13 @@ async function cleanupTestData() {
     }
   }
 
-  if (testSites.length > 0) {
-    console.log(`Found ${testSites.length} test site(s) to purge.`);
-    for (const ts of testSites) {
+  if (testProjectAreas.length > 0) {
+    console.log(`Found ${testProjectAreas.length} test projectArea(s) to purge.`);
+    for (const ts of testProjectAreas) {
       if (!isDryRun) {
-        await deleteSiteRecord(ts.site_id);
+        await deleteProjectAreaRecord(ts.project_area_id);
       }
-      console.log(`  - ${isDryRun ? "[DRY-RUN] Would delete" : "Deleted"} test site: ${ts.name} (${ts.site_id})`);
+      console.log(`  - ${isDryRun ? "[DRY-RUN] Would delete" : "Deleted"} test projectArea: ${ts.name} (${ts.project_area_id})`);
     }
   }
 

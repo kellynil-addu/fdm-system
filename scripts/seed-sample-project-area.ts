@@ -1,18 +1,18 @@
 /**
- * scripts/seed-sample-site.ts
+ * scripts/seed-sample-project-area.ts
  *
- * Seeds four sample sites across Samal Island:
+ * Seeds four sample projectAreas across Samal Island:
  * - Barangay Limao (7.1036952, 125.7186842)
  * - San Augustin (7.121930, 125.704354)
  * - Kaputian (6.9684741, 125.7273606)
  * - Caliclic (7.1156161, 125.6753916)
  *
- * Each site features 12 subdivisions, with 3 to 5 registered property lots
+ * Each projectArea features 12 subdivisions, with 3 to 5 registered property lots
  * (and remaining subdivisions as unregistered/available slots in gray).
  *
  * Usage:
- *   npm run seed:sample-site          seed (or re-seed) all four sites
- *   npm run seed:sample-site:clear    remove sample sites and their lots
+ *   npm run seed:sample-project-area          seed (or re-seed) all four projectAreas
+ *   npm run seed:sample-project-area:clear    remove sample projectAreas and their lots
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -45,7 +45,7 @@ const LOTS_PER_ROW = 6;
 type SubdivisionSeed = { block: number; lot: number; boundary: Pt[] };
 type LotSeed = { block: number; lot: number; status: "Open" | "Reserved" | "Sold" | "Forfeited" };
 
-interface SiteSeed {
+interface ProjectAreaSeed {
   name: string;
   namePrefix: string;
   description: string;
@@ -56,14 +56,14 @@ interface SiteSeed {
   lots: LotSeed[];
 }
 
-function generateSiteGeometry(
+function generateProjectAreaGeometry(
   centerLat: number,
   centerLng: number,
   pricePerSqm: number,
   name: string,
   desc: string,
   lots: LotSeed[]
-): SiteSeed {
+): ProjectAreaSeed {
   const lotWidth = LOT_WIDTH_M * D_LNG_1M;
   const lotDepth = LOT_DEPTH_M * D_LAT_1M;
   const lotGap = LOT_GAP_M * D_LNG_1M;
@@ -138,26 +138,26 @@ function generateSiteGeometry(
   };
 }
 
-const SITES: SiteSeed[] = [
-  generateSiteGeometry(7.1036952, 125.7186842, 6500, "Barangay Limao", "Coastal subdivision development in Barangay Limao, Samal Island.", [
+const PROJECT_AREAS: ProjectAreaSeed[] = [
+  generateProjectAreaGeometry(7.1036952, 125.7186842, 6500, "Barangay Limao", "Coastal subdivision development in Barangay Limao, Samal Island.", [
     { block: 1, lot: 1, status: "Sold" },
     { block: 1, lot: 2, status: "Reserved" },
     { block: 1, lot: 3, status: "Open" },
     { block: 1, lot: 4, status: "Forfeited" },
   ]),
-  generateSiteGeometry(7.121930, 125.704354, 7200, "San Augustin", "Overlook residential subdivision in San Augustin, Samal Island.", [
+  generateProjectAreaGeometry(7.121930, 125.704354, 7200, "San Augustin", "Overlook residential subdivision in San Augustin, Samal Island.", [
     { block: 1, lot: 1, status: "Open" },
     { block: 1, lot: 2, status: "Reserved" },
     { block: 2, lot: 1, status: "Sold" },
     { block: 2, lot: 2, status: "Open" },
   ]),
-  generateSiteGeometry(6.9684741, 125.7273606, 5800, "Kaputian", "Scenic southern subdivision estates located in Kaputian, Samal Island.", [
+  generateProjectAreaGeometry(6.9684741, 125.7273606, 5800, "Kaputian", "Scenic southern subdivision estates located in Kaputian, Samal Island.", [
     { block: 1, lot: 1, status: "Open" },
     { block: 1, lot: 3, status: "Reserved" },
     { block: 2, lot: 1, status: "Forfeited" },
     { block: 2, lot: 4, status: "Sold" },
   ]),
-  generateSiteGeometry(7.1156161, 125.6753916, 8000, "Caliclic", "Prime western gateway subdivision in Caliclic, Samal Island.", [
+  generateProjectAreaGeometry(7.1156161, 125.6753916, 8000, "Caliclic", "Prime western gateway subdivision in Caliclic, Samal Island.", [
     { block: 1, lot: 2, status: "Open" },
     { block: 1, lot: 4, status: "Sold" },
     { block: 2, lot: 2, status: "Reserved" },
@@ -167,61 +167,61 @@ const SITES: SiteSeed[] = [
 
 const LEGACY_PREFIXES = ["Lui Pro", "San Vicente", "Murillo Old"];
 
-async function clearLegacySites(): Promise<void> {
+async function clearLegacyProjectAreas(): Promise<void> {
   for (const prefix of LEGACY_PREFIXES) {
-    const { data: sites } = await supabase.from("site").select("site_id, name").like("name", `${prefix}%`);
-    if (sites && sites.length > 0) {
-      for (const s of sites) {
-        await supabase.from("property_lot").delete().eq("site_id", s.site_id);
-        await supabase.from("site_subdivision").delete().eq("site_id", s.site_id);
-        await supabase.from("site").delete().eq("site_id", s.site_id);
-        console.log(`✅ Removed legacy site "${s.name}".`);
+    const { data: projectAreas } = await supabase.from("project_area").select("project_area_id, name").like("name", `${prefix}%`);
+    if (projectAreas && projectAreas.length > 0) {
+      for (const s of projectAreas) {
+        await supabase.from("property_lot").delete().eq("project_area_id", s.project_area_id);
+        await supabase.from("project_area_subdivision").delete().eq("project_area_id", s.project_area_id);
+        await supabase.from("project_area").delete().eq("project_area_id", s.project_area_id);
+        console.log(`✅ Removed legacy projectArea "${s.name}".`);
       }
     }
   }
 }
 
-async function clearSite(siteSeed: SiteSeed): Promise<void> {
-  const { data: sites } = await supabase.from("site").select("site_id, name").like("name", `${siteSeed.namePrefix}%`);
-  if (!sites || sites.length === 0) return;
+async function clearProjectArea(projectAreaSeed: ProjectAreaSeed): Promise<void> {
+  const { data: projectAreas } = await supabase.from("project_area").select("project_area_id, name").like("name", `${projectAreaSeed.namePrefix}%`);
+  if (!projectAreas || projectAreas.length === 0) return;
 
-  for (const s of sites) {
-    await supabase.from("property_lot").delete().eq("site_id", s.site_id);
-    await supabase.from("site_subdivision").delete().eq("site_id", s.site_id);
-    await supabase.from("site").delete().eq("site_id", s.site_id);
-    console.log(`✅ Removed site "${s.name}".`);
+  for (const s of projectAreas) {
+    await supabase.from("property_lot").delete().eq("project_area_id", s.project_area_id);
+    await supabase.from("project_area_subdivision").delete().eq("project_area_id", s.project_area_id);
+    await supabase.from("project_area").delete().eq("project_area_id", s.project_area_id);
+    console.log(`✅ Removed projectArea "${s.name}".`);
   }
 }
 
-async function seedSite(seed: SiteSeed): Promise<void> {
-  const { data: site, error: siteError } = await supabase
-    .from("site")
+async function seedProjectArea(seed: ProjectAreaSeed): Promise<void> {
+  const { data: projectArea, error: projectAreaError } = await supabase
+    .from("project_area")
     .upsert({ name: seed.name, description: seed.description, boundary: seed.boundary }, { onConflict: "name" })
-    .select("site_id, name")
-    .single<{ site_id: string; name: string }>();
+    .select("project_area_id, name")
+    .single<{ project_area_id: string; name: string }>();
 
-  if (siteError || !site) {
-    throw new Error(`Failed to upsert "${seed.name}": ${siteError?.message ?? "unknown"}`);
+  if (projectAreaError || !projectArea) {
+    throw new Error(`Failed to upsert "${seed.name}": ${projectAreaError?.message ?? "unknown"}`);
   }
-  console.log(`✅ Site: ${site.name}`);
+  console.log(`✅ ProjectArea: ${projectArea.name}`);
 
-  await supabase.from("site_subdivision").delete().eq("site_id", site.site_id);
-  await supabase.from("property_lot").update({ site_id: site.site_id }).eq("location", seed.name).is("site_id", null);
+  await supabase.from("project_area_subdivision").delete().eq("project_area_id", projectArea.project_area_id);
+  await supabase.from("property_lot").update({ project_area_id: projectArea.project_area_id }).eq("location", seed.name).is("project_area_id", null);
 
   const subdivisionRows = seed.subdivisions.map((s) => ({
-    site_id: site.site_id,
+    project_area_id: projectArea.project_area_id,
     block_number: s.block,
     lot_number: s.lot,
     boundary: s.boundary,
   }));
 
-  const { error: subError } = await supabase.from("site_subdivision").insert(subdivisionRows);
+  const { error: subError } = await supabase.from("project_area_subdivision").insert(subdivisionRows);
   if (subError) {
     throw new Error(`Failed to insert subdivisions for "${seed.name}": ${subError.message}`);
   }
 
   const lotRows = seed.lots.map((l) => ({
-    site_id: site.site_id,
+    project_area_id: projectArea.project_area_id,
     location: seed.name,
     block_number: l.block,
     lot_number: l.lot,
@@ -241,7 +241,7 @@ async function seedSite(seed: SiteSeed): Promise<void> {
   const { data: existingLots } = await supabase
     .from("property_lot")
     .select("property_id, block_number, lot_number")
-    .eq("site_id", site.site_id);
+    .eq("project_area_id", projectArea.project_area_id);
 
   if (existingLots && existingLots.length > 0) {
     const seedKeys = new Set(seed.lots.map((l) => `${l.block}-${l.lot}`));
@@ -260,25 +260,25 @@ async function seedSite(seed: SiteSeed): Promise<void> {
   console.log(`   ↳ ${subdivisionRows.length} subdivisions, ${lotRows.length} property lots`);
 }
 
-export async function seedAllSampleSites(): Promise<void> {
-  await clearLegacySites();
-  for (const site of SITES) await seedSite(site);
+export async function seedAllSampleProjectAreas(): Promise<void> {
+  await clearLegacyProjectAreas();
+  for (const projectArea of PROJECT_AREAS) await seedProjectArea(projectArea);
 }
 
 async function main() {
-  await clearLegacySites();
+  await clearLegacyProjectAreas();
 
   if (process.argv.includes("--clear")) {
-    for (const site of SITES) await clearSite(site);
-    console.log("All sample sites cleared.");
+    for (const projectArea of PROJECT_AREAS) await clearProjectArea(projectArea);
+    console.log("All sample projectAreas cleared.");
     return;
   }
 
-  await seedAllSampleSites();
-  console.log("\nSample sites seeded successfully. Open /dashboard/properties/map to view.");
+  await seedAllSampleProjectAreas();
+  console.log("\nSample projectAreas seeded successfully. Open /dashboard/properties/map to view.");
 }
 
-if (process.argv[1]?.includes("seed-sample-site")) {
+if (process.argv[1]?.includes("seed-sample-project-area")) {
   main().catch((error) => {
     console.error("❌ Unexpected error:", error);
     process.exit(1);

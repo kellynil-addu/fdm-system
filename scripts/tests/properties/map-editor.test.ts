@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { faker } from "@faker-js/faker";
 import {
-  createSite,
-  deleteSite,
+  createProjectArea,
+  deleteProjectArea,
   createSubdivisionLot,
   deleteSubdivisionLot,
-  getSiteWithLots,
-} from "@/lib/actions/sites";
+  getProjectAreaWithLots,
+} from "@/lib/actions/project-areas";
 import { updatePropertyLot } from "@/lib/actions/properties";
 import { calculatePolygonAreaSqm } from "@/lib/geometry";
 import {
@@ -16,8 +16,8 @@ import {
 } from "../framework/session";
 import { unwrap } from "../framework/action-helper";
 
-describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", () => {
-  const testSiteIds: string[] = [];
+describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating ProjectAreas", () => {
+  const testProjectAreaIds: string[] = [];
 
   beforeAll(async () => {
     await loginAsAdmin();
@@ -25,11 +25,11 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
 
   afterAll(async () => {
     const admin = getTestAdminClient();
-    for (const siteId of testSiteIds) {
+    for (const projectAreaId of testProjectAreaIds) {
       try {
-        await admin.from("property_lot").delete().eq("site_id", siteId);
-        await admin.from("site_subdivision").delete().eq("site_id", siteId);
-        await admin.from("site").delete().eq("site_id", siteId);
+        await admin.from("property_lot").delete().eq("project_area_id", projectAreaId);
+        await admin.from("project_area_subdivision").delete().eq("project_area_id", projectAreaId);
+        await admin.from("project_area").delete().eq("project_area_id", projectAreaId);
       } catch {
         // Ignore cleanup errors
       }
@@ -56,8 +56,8 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
     expect(area).toBeLessThan(255);
   });
 
-  it("creates a new site by plotting its boundary and giving it a name", async () => {
-    const siteName = `Test Site ${faker.string.alphanumeric(8)}`;
+  it("creates a new projectArea by plotting its boundary and giving it a name", async () => {
+    const projectAreaName = `Test ProjectArea ${faker.string.alphanumeric(8)}`;
     const boundary: [number, number][] = [
       [125.71, 7.10],
       [125.72, 7.10],
@@ -65,24 +65,24 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
       [125.71, 7.11],
     ];
 
-    const site = unwrap(await createSite({
-      name: siteName,
-      description: "A newly plotted test subdivision site",
+    const projectArea = unwrap(await createProjectArea({
+      name: projectAreaName,
+      description: "A newly plotted test subdivision projectArea",
       boundary,
     }));
 
-    testSiteIds.push(site.site_id);
+    testProjectAreaIds.push(projectArea.project_area_id);
 
-    expect(site).toBeDefined();
-    expect(site.site_id).toBeDefined();
-    expect(site.name).toBe(siteName);
-    expect(Array.isArray(site.boundary)).toBe(true);
-    expect((site.boundary as [number, number][]).length).toBe(4);
+    expect(projectArea).toBeDefined();
+    expect(projectArea.project_area_id).toBeDefined();
+    expect(projectArea.name).toBe(projectAreaName);
+    expect(Array.isArray(projectArea.boundary)).toBe(true);
+    expect((projectArea.boundary as [number, number][]).length).toBe(4);
   });
 
-  it("creates an available lot plot on the site with block and lot number", async () => {
-    const siteId = testSiteIds[0];
-    expect(siteId).toBeDefined();
+  it("creates an available lot plot on the projectArea with block and lot number", async () => {
+    const projectAreaId = testProjectAreaIds[0];
+    expect(projectAreaId).toBeDefined();
 
     const lotBoundary: [number, number][] = [
       [125.712, 7.102],
@@ -92,7 +92,7 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
     ];
 
     const { subdivision, lot } = unwrap(await createSubdivisionLot({
-      site_id: siteId,
+      project_area_id: projectAreaId,
       block_number: 1,
       lot_number: 1,
       boundary: lotBoundary,
@@ -101,19 +101,19 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
     expect(subdivision).toBeDefined();
     expect(subdivision.block_number).toBe(1);
     expect(subdivision.lot_number).toBe(1);
-    expect(subdivision.site_id).toBe(siteId);
+    expect(subdivision.project_area_id).toBe(projectAreaId);
 
     // Lot is available by default (subdivision slot exists, property_lot row is null until claimed)
     expect(lot).toBeNull();
 
-    // Verify it appears in getSiteWithLots as an available subdivision
-    const siteWithLots = await getSiteWithLots(siteId);
-    expect(siteWithLots.subdivisions.some((s) => s.block_number === 1 && s.lot_number === 1)).toBe(true);
-    expect(siteWithLots.lots.some((l) => l.block_number === 1 && l.lot_number === 1)).toBe(false);
+    // Verify it appears in getProjectAreaWithLots as an available subdivision
+    const projectAreaWithLots = await getProjectAreaWithLots(projectAreaId);
+    expect(projectAreaWithLots.subdivisions.some((s) => s.block_number === 1 && s.lot_number === 1)).toBe(true);
+    expect(projectAreaWithLots.lots.some((l) => l.block_number === 1 && l.lot_number === 1)).toBe(false);
   });
 
-  it("rejects duplicate block and lot number on the same site", async () => {
-    const siteId = testSiteIds[0];
+  it("rejects duplicate block and lot number on the same projectArea", async () => {
+    const projectAreaId = testProjectAreaIds[0];
     const lotBoundary: [number, number][] = [
       [125.712, 7.102],
       [125.713, 7.102],
@@ -122,7 +122,7 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
     ];
 
     const dupRes = await createSubdivisionLot({
-      site_id: siteId,
+      project_area_id: projectAreaId,
       block_number: 1,
       lot_number: 1,
       boundary: lotBoundary,
@@ -131,7 +131,7 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
   });
 
   it("deletes the plot if it is wrong", async () => {
-    const siteId = testSiteIds[0];
+    const projectAreaId = testProjectAreaIds[0];
 
     // Plot a temporary lot to delete
     const lotBoundary: [number, number][] = [
@@ -142,35 +142,35 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
     ];
 
     const { subdivision } = unwrap(await createSubdivisionLot({
-      site_id: siteId,
+      project_area_id: projectAreaId,
       block_number: 2,
       lot_number: 5,
       boundary: lotBoundary,
     }));
 
     // Verify it was created
-    let siteWithLots = await getSiteWithLots(siteId);
-    expect(siteWithLots.subdivisions.some((s) => s.block_number === 2 && s.lot_number === 5)).toBe(true);
+    let projectAreaWithLots = await getProjectAreaWithLots(projectAreaId);
+    expect(projectAreaWithLots.subdivisions.some((s) => s.block_number === 2 && s.lot_number === 5)).toBe(true);
 
     // Now delete the plot
     unwrap(await deleteSubdivisionLot({
       subdivision_id: subdivision.subdivision_id,
-      site_id: siteId,
+      project_area_id: projectAreaId,
       block_number: 2,
       lot_number: 5,
     }));
 
     // Verify it is completely removed
-    siteWithLots = await getSiteWithLots(siteId);
-    expect(siteWithLots.subdivisions.some((s) => s.block_number === 2 && s.lot_number === 5)).toBe(false);
-    expect(siteWithLots.lots.some((l) => l.block_number === 2 && l.lot_number === 5)).toBe(false);
+    projectAreaWithLots = await getProjectAreaWithLots(projectAreaId);
+    expect(projectAreaWithLots.subdivisions.some((s) => s.block_number === 2 && s.lot_number === 5)).toBe(false);
+    expect(projectAreaWithLots.lots.some((l) => l.block_number === 2 && l.lot_number === 5)).toBe(false);
   });
 
   it("refuses to register a lot without a real price rather than inventing one", async () => {
-    const siteId = testSiteIds[0];
+    const projectAreaId = testProjectAreaIds[0];
 
     const result = await createSubdivisionLot({
-      site_id: siteId,
+      project_area_id: projectAreaId,
       block_number: 9,
       lot_number: 9,
       boundary: [
@@ -189,12 +189,12 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
     }
 
     // Nothing should have been written
-    const siteWithLots = await getSiteWithLots(siteId);
-    expect(siteWithLots.lots.some((l) => l.block_number === 9 && l.lot_number === 9)).toBe(false);
+    const projectAreaWithLots = await getProjectAreaWithLots(projectAreaId);
+    expect(projectAreaWithLots.lots.some((l) => l.block_number === 9 && l.lot_number === 9)).toBe(false);
   });
 
   it("prevents deleting a plot if the lot is reserved or sold", async () => {
-    const siteId = testSiteIds[0];
+    const projectAreaId = testProjectAreaIds[0];
 
     // Create a lot
     const lotBoundary: [number, number][] = [
@@ -205,7 +205,7 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
     ];
 
     const { subdivision, lot } = unwrap(await createSubdivisionLot({
-      site_id: siteId,
+      project_area_id: projectAreaId,
       block_number: 3,
       lot_number: 1,
       boundary: lotBoundary,
@@ -220,7 +220,7 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
     // Attempt to delete the plot should fail
     const delRes = await deleteSubdivisionLot({
       subdivision_id: subdivision.subdivision_id,
-      site_id: siteId,
+      project_area_id: projectAreaId,
       block_number: 3,
       lot_number: 1,
     });
@@ -233,18 +233,18 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
     unwrap(await updatePropertyLot(lot!.property_id, { status: "Open" }));
     unwrap(await deleteSubdivisionLot({
       subdivision_id: subdivision.subdivision_id,
-      site_id: siteId,
+      project_area_id: projectAreaId,
       block_number: 3,
       lot_number: 1,
     }));
   });
 
-  it("deletes the created site during cleanup", async () => {
-    const siteId = testSiteIds[0];
-    unwrap(await deleteSite(siteId));
+  it("deletes the created projectArea during cleanup", async () => {
+    const projectAreaId = testProjectAreaIds[0];
+    unwrap(await deleteProjectArea(projectAreaId));
 
     const admin = getTestAdminClient();
-    const { data: found } = await admin.from("site").select("site_id").eq("site_id", siteId).maybeSingle();
+    const { data: found } = await admin.from("project_area").select("project_area_id").eq("project_area_id", projectAreaId).maybeSingle();
     expect(found).toBeNull();
   });
 });

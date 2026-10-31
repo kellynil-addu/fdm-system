@@ -19,7 +19,7 @@ import {
 import { usePropertyLots } from '@/lib/hooks/use-property-lots';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
-import type { Site } from '@/lib/types/property';
+import type { ProjectArea } from '@/lib/types/property';
 import {
   createPropertyLotSchema,
   LOT_LIMITS,
@@ -35,9 +35,9 @@ const PESO = new Intl.NumberFormat('en-PH', {
 export interface CreatePropertyLotModalProps {
   open: boolean;
   onOpenChange?: (open: boolean) => void;
-  sites: Site[];
+  projectAreas: ProjectArea[];
   initialValues?: {
-    site_id?: string;
+    project_area_id?: string;
     block_number?: number;
     lot_number?: number;
     area_size?: number;
@@ -49,7 +49,7 @@ export interface CreatePropertyLotModalProps {
 export function CreatePropertyLotModal({
   open,
   onOpenChange,
-  sites,
+  projectAreas,
   initialValues,
 }: CreatePropertyLotModalProps) {
   const { createLot, closeDialog } = usePropertyLots();
@@ -59,20 +59,20 @@ export function CreatePropertyLotModal({
     closeDialog();
   }
 
-  const siteOptions = useMemo(
+  const projectAreaOptions = useMemo(
     () =>
-      sites.map((s) => ({
-        value: s.site_id,
+      projectAreas.map((s) => ({
+        value: s.project_area_id,
         label: s.name,
         description: s.description ?? undefined,
       })),
-    [sites]
+    [projectAreas]
   );
 
   const form = useForm<CreatePropertyLotFormData>({
     resolver: zodResolver(createPropertyLotSchema),
     defaultValues: {
-      site_id: initialValues?.site_id ?? '',
+      project_area_id: initialValues?.project_area_id ?? '',
       block_number: initialValues?.block_number ?? undefined,
       lot_number: initialValues?.lot_number ?? undefined,
       area_size: initialValues?.area_size ?? undefined,
@@ -95,7 +95,7 @@ export function CreatePropertyLotModal({
   useEffect(() => {
     if (open) {
       form.reset({
-        site_id: initialValues?.site_id ?? '',
+        project_area_id: initialValues?.project_area_id ?? '',
         block_number: initialValues?.block_number ?? undefined,
         lot_number: initialValues?.lot_number ?? undefined,
         area_size: initialValues?.area_size ?? undefined,
@@ -108,11 +108,11 @@ export function CreatePropertyLotModal({
   const { register, watch, formState: { errors } } = form;
 
   const onSubmit = form.handleSubmit((data) => {
-    const site = sites.find((s) => s.site_id === data.site_id);
-    if (!site) return;
+    const projectArea = projectAreas.find((s) => s.project_area_id === data.project_area_id);
+    if (!projectArea) return;
     return execute({
-      site_id: data.site_id,
-      location: site.name,
+      project_area_id: data.project_area_id,
+      location: projectArea.name,
       block_number: data.block_number,
       lot_number: data.lot_number,
       area_size: data.area_size,
@@ -147,26 +147,26 @@ export function CreatePropertyLotModal({
 
           {/* Project area picker */}
           <div className="space-y-1.5">
-            <Label htmlFor="site_id" className="text-sm font-medium text-foreground">
+            <Label htmlFor="project_area_id" className="text-sm font-medium text-foreground">
               Project Area
             </Label>
             <Controller
-              name="site_id"
+              name="project_area_id"
               control={form.control}
               render={({ field }) => (
                 <SearchableSelect
-                  id="site_id"
-                  options={siteOptions}
+                  id="project_area_id"
+                  options={projectAreaOptions}
                   value={field.value}
                   onValueChange={field.onChange}
-                  disabled={isPending || sites.length === 0}
-                  placeholder={sites.length === 0 ? 'No project areas available' : 'Select a project area'}
+                  disabled={isPending || projectAreas.length === 0}
+                  placeholder={projectAreas.length === 0 ? 'No project areas available' : 'Select a project area'}
                   searchPlaceholder="Search project area name or address..."
                 />
               )}
             />
-            {errors.site_id && (
-              <p className="text-xs text-destructive">{errors.site_id.message}</p>
+            {errors.project_area_id && (
+              <p className="text-xs text-destructive">{errors.project_area_id.message}</p>
             )}
           </div>
 

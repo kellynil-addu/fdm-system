@@ -1,6 +1,6 @@
 ---
 name: maplibre-gl
-description: Implementation guidelines, SSR handling, WebGL worker assets, and layer management for MapLibre GL in Next.js. Use this skill when implementing, updating, or debugging maps, subdivision plat plans, site polygons, popups, or geospatial components.
+description: Implementation guidelines, SSR handling, WebGL worker assets, and layer management for MapLibre GL in Next.js. Use this skill when implementing, updating, or debugging maps, subdivision plat plans, project area polygons, popups, or geospatial components.
 ---
 
 # MapLibre GL & Geospatial Mapping
@@ -11,9 +11,9 @@ This skill provides architectural invariants, lifecycle recipes, and technical g
 
 Geospatial mapping in the dashboard is structured across domain components, hooks, server actions, and geometry utilities:
 
-- **Primary Map Component**: `components/dashboard-properties/map-site.tsx`: Handles basemap switching, layer management, vector plat plans, selection states, and fallbacks.
-- **Interactive Popup Component**: `components/dashboard-properties/map-site-popup.tsx`: Rich React-rendered parcel details and action controls rendered via `createPortal`.
-- **Subdivision Plat Editor**: `components/dashboard-properties/map-site-editor.tsx`: Polygon plotting, vertex snapping, and draft lot boundary editing.
+- **Primary Map Component**: `components/dashboard-properties/map-project-area.tsx`: Handles basemap switching, layer management, vector plat plans, selection states, and fallbacks.
+- **Interactive Popup Component**: `components/dashboard-properties/map-project-area-popup.tsx`: Rich React-rendered parcel details and action controls rendered via `createPortal`.
+- **Subdivision Plat Editor**: `components/dashboard-properties/map-project-area-editor.tsx`: Polygon plotting, vertex snapping, and draft lot boundary editing.
 - **Map Instance Hook**: `lib/hooks/use-maplibre-map.ts`: Encapsulates MapLibre GL instantiation, canvas resizing, WebGL cleanup, and navigation controls.
 - **Server Action Bridge**: `lib/actions/arcgis.ts`: Authenticates and proxies ArcGIS Basemap Styles v2 JSON with trusted HTTP headers.
 - **Geometry & Geodesics**: `lib/geometry.ts`: WGS84 geodesic polygon projection, shoelace metric area calculation, bounding boxes, and ring parsing.
@@ -54,7 +54,7 @@ MapLibre relies on a dedicated web worker to parse vector tiles, geometry, and g
 
 ## MapLibre Style Swapping Lifecycle & The `styleRevision` Pattern
 
-Calling `map.setStyle()` drops **all** user-added sources (`sites-data`, `lots-data`, `draft-plot-data`) and custom layers (`lots-fill`, `lots-stroke`, `lots-labels`, etc.).
+Calling `map.setStyle()` drops **all** user-added sources (`project-areas-data`, `lots-data`, `draft-plot-data`) and custom layers (`lots-fill`, `lots-stroke`, `lots-labels`, etc.).
 
 ### Invariant: Never Mount Layers Immediately After `setStyle`
 `map.setStyle()` is asynchronous. Calling `map.addSource()` or `map.addLayer()` synchronously after `map.setStyle()` will fail or have the layers wiped as soon as the style finishes loading.
@@ -243,7 +243,7 @@ Avoid passing raw HTML template strings to `popup.setHTML()`. Raw HTML bypasses 
 3. Render the interactive React popup component into the container with `createPortal`:
    ```tsx
    {popupContainerRef.current && selectedPlot && createPortal(
-     <MapSitePopup
+     <MapProjectAreaPopup
        plot={selectedPlot}
        onViewDetails={() => handleViewDetails(selectedPlot)}
        onRegisterLot={() => handleRegisterLot(selectedPlot)}
@@ -256,7 +256,7 @@ Avoid passing raw HTML template strings to `popup.setHTML()`. Raw HTML bypasses 
 ### DOM Marker & Popup Cleanup Invariants
 - Unlike WebGL layers, `Popup` and `Marker` instances attach directly to the DOM tree outside of MapLibre style layers.
 - They **persist** across `map.setStyle()` calls.
-- Always clean up markers and active popups on unmount or site change:
+- Always clean up markers and active popups on unmount or project area change:
   ```ts
   return () => {
     markers.forEach((m) => m.remove());
@@ -269,7 +269,7 @@ Avoid passing raw HTML template strings to `popup.setHTML()`. Raw HTML bypasses 
 ## Plat Plan GeoJSON Conventions & Geodesic Geometry
 
 - **Coordinate System**: All coordinates are stored in standard `[longitude, latitude]` WGS84 order.
-- **Unique Parcel Key**: A lot is uniquely identified by the tuple `(site_id, block_number, lot_number)`.
+- **Unique Parcel Key**: A lot is uniquely identified by the tuple `(project_area_id, block_number, lot_number)`.
 - **Geodesic Metric Area**:
   - Never compute parcel area using planar Pythagorean math on raw degrees.
   - Use `calculatePolygonAreaSqm` from `lib/geometry.ts` to project coordinates to a local tangent metric plane around the primary vertex:
@@ -280,12 +280,12 @@ Avoid passing raw HTML template strings to `popup.setHTML()`. Raw HTML bypasses 
     ```
 - **Layer Stacking Order**:
   1. Base Map Layer (ArcGIS Hybrid vector/imagery or VersaTiles OSM vector)
-  2. `sites-boundary-fill` & `sites-boundary-stroke` (Site perimeter)
+  2. `project-areas-boundary-fill` & `project-areas-boundary-stroke` (project area perimeter)
   3. `lots-fill` (Parcel polygon fills with status color mapping)
   4. `lots-stroke` (Parcel boundaries; white for default, red for selected)
   5. `lots-hover-stroke` (Fast highlight outline controlled via `map.setFilter`)
   6. `lots-labels` (Cadastral Block-Lot labels with fixed font stack)
-  7. HTML `Marker` site pins (Visible only below `DETAILS_ZOOM = 14`).
+  7. HTML `Marker` project area pins (Visible only below `DETAILS_ZOOM = 14`).
 
 ---
 
@@ -306,6 +306,6 @@ const dialog = await openLotForSale(page, closed);  // clicks the lot, presses i
 await expect(dialog.locator('#block_number')).toHaveValue(String(closed.block));
 ```
 
-`e2e/helpers/map.ts` exports `waitForMap`, `readLots`, `focusLot`, `clickLot`, and `openLotForSale`. Use `map.querySourceFeatures('lots-data')` / `'sites-data'` to inspect features, and `map.project([lng, lat])` to convert coordinates to screen pixels when a test must click a specific point.
+`e2e/helpers/map.ts` exports `waitForMap`, `readLots`, `focusLot`, `clickLot`, and `openLotForSale`. Use `map.querySourceFeatures('lots-data')` / `'project-areas-data'` to inspect features, and `map.project([lng, lat])` to convert coordinates to screen pixels when a test must click a specific point.
 
 **Trap**: `clickLot` pads the view by 260px on the left so the target is not hidden behind the floating property-lots sidebar. A lot positioned under that overlay cannot be clicked even though it is technically on screen.

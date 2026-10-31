@@ -249,13 +249,13 @@ export async function createPropertyLot(
     input,
     handler: async (validatedInput, { supabase }) => {
       let location = validatedInput.location;
-      if (!location && validatedInput.site_id) {
-        const { data: site } = await supabase
-          .from("site")
+      if (!location && validatedInput.project_area_id) {
+        const { data: projectArea } = await supabase
+          .from("project_area")
           .select("name")
-          .eq("site_id", validatedInput.site_id)
+          .eq("project_area_id", validatedInput.project_area_id)
           .single<{ name: string }>();
-        location = site?.name ?? "Unassigned Project Area";
+        location = projectArea?.name ?? "Unassigned Project Area";
       }
 
       if (!location) {
@@ -271,7 +271,7 @@ export async function createPropertyLot(
           area_size: validatedInput.area_size,
           price_per_sqm: validatedInput.price_per_sqm,
           status: validatedInput.status ?? "Open",
-          site_id: validatedInput.site_id ?? null,
+          project_area_id: validatedInput.project_area_id ?? null,
           title_number: validatedInput.title_number ?? null,
         })
         .select()
@@ -671,18 +671,18 @@ export async function openSubdivisionForSale(
     schema: openSubdivisionForSaleSchema,
     input,
     handler: async (validatedInput, { supabase }) => {
-      const { data: site } = await supabase
-        .from("site")
+      const { data: projectArea } = await supabase
+        .from("project_area")
         .select("name")
-        .eq("site_id", validatedInput.site_id)
+        .eq("project_area_id", validatedInput.project_area_id)
         .single<{ name: string }>();
 
-      const location = site?.name ?? "Unassigned Project Area";
+      const location = projectArea?.name ?? "Unassigned Project Area";
 
       const { data, error } = await supabase
         .from("property_lot")
         .insert({
-          site_id: validatedInput.site_id,
+          project_area_id: validatedInput.project_area_id,
           location,
           block_number: validatedInput.block_number,
           lot_number: validatedInput.lot_number,
@@ -837,7 +837,7 @@ export async function createAndAssignPropertyFromSubdivision(
       const { data: createdPropertyId, error } = await supabase.rpc(
         "create_and_assign_property_from_subdivision",
         {
-          p_site_id: validatedInput.site_id,
+          p_project_area_id: validatedInput.project_area_id,
           p_block_number: validatedInput.block_number,
           p_lot_number: validatedInput.lot_number,
           p_area_size: validatedInput.area_size,

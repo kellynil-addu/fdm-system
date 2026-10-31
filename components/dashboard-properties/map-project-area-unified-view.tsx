@@ -16,36 +16,36 @@ import {
 } from '@/components/ui/alert-dialog';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { PanelLeftOpen, PenTool, AlertTriangle } from 'lucide-react';
-import { SiteMap } from './map-site';
+import { ProjectAreaMap } from './map-project-area';
 import { PropertyLotsSidebar } from './property-lots-sidebar';
-import { MapSiteEditor, type SelectedPlotInfo, type ActiveDraftState } from './map-site-editor';
+import { MapProjectAreaEditor, type SelectedPlotInfo, type ActiveDraftState } from './map-project-area-editor';
 import {
-  createSite,
+  createProjectArea,
   batchCreateSubdivisionLots,
   updateSubdivisionLotBoundary,
   deleteSubdivisionLot,
-  archiveSite,
-  unarchiveSite,
-  deleteSite,
-} from '@/lib/actions/sites';
+  archiveProjectArea,
+  unarchiveProjectArea,
+  deleteProjectArea,
+} from '@/lib/actions/project-areas';
 import { parseRing, calculatePolygonAreaSqm, isPolygonContained } from '@/lib/geometry';
-import { getSiteDraft, saveSiteDraft, clearSiteDraft } from '@/lib/storage/map-draft-storage';
+import { getProjectAreaDraft, saveProjectAreaDraft, clearProjectAreaDraft } from '@/lib/storage/map-draft-storage';
 import type {
   PropertyLotWithClient,
-  SiteWithLots,
+  ProjectAreaWithLots,
   DraftLot,
   PendingBoundaryUpdate,
 } from '@/lib/types/property';
-import type { LotPlotProperties } from './map-site-popup';
+import type { LotPlotProperties } from './map-project-area-popup';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
-export interface SiteMapUnifiedViewProps {
-  sites: SiteWithLots[];
+export interface ProjectAreaMapUnifiedViewProps {
+  projectAreas: ProjectAreaWithLots[];
 }
 
-/** Interactive site map, floating property lots sidebar, and integrated draft-driven CAD map editor. */
-export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
+/** Interactive projectArea map, floating property lots sidebar, and integrated draft-driven CAD map editor. */
+export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifiedViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const targetLotId = searchParams.get('lot');
@@ -54,14 +54,14 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
   const [hoveredLotKey, setHoveredLotKey] = useState<string | null>(null);
   const [selectedPropertyLot, setSelectedPropertyLot] = useState<PropertyLotWithClient | null>(() => {
     if (!targetLotId) return null;
-    for (const site of sites) {
-      const match = site.lots.find((l) => l.property_id === targetLotId);
+    for (const projectArea of projectAreas) {
+      const match = projectArea.lots.find((l) => l.property_id === targetLotId);
       if (match) return match;
     }
     return null;
   });
   const [createInitialValues, setCreateInitialValues] = useState<{
-    site_id?: string;
+    project_area_id?: string;
     block_number?: number;
     lot_number?: number;
     area_size?: number;
@@ -70,11 +70,11 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
 
   // Editor states
   const [isEditorActive, setIsEditorActive] = useState(false);
-  const [activeSiteId, setActiveSiteId] = useState<string | null>(() => {
+  const [activeProjectAreaId, setActiveProjectAreaId] = useState<string | null>(() => {
     if (targetLotId) {
-      for (const site of sites) {
-        if (site.lots.some((l) => l.property_id === targetLotId)) {
-          return site.site_id;
+      for (const projectArea of projectAreas) {
+        if (projectArea.lots.some((l) => l.property_id === targetLotId)) {
+          return projectArea.project_area_id;
         }
       }
     }
@@ -89,64 +89,64 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
   // Exit guard dialog when unsaved drafts exist
   const [isExitGuardOpen, setIsExitGuardOpen] = useState(false);
   const [pendingExitTarget, setPendingExitTarget] = useState<
-    'leaveSite' | 'exitEditor' | null
+    'leaveProjectArea' | 'exitEditor' | null
   >(null);
 
   // Drawing & Plotting states
-  const [plotType, setPlotType] = useState<'lot' | 'site' | null>(null);
+  const [plotType, setPlotType] = useState<'lot' | 'project-area' | null>(null);
   const [draftPoints, setDraftPoints] = useState<[number, number][]>([]);
   const [selectedPlotToDelete, setSelectedPlotToDelete] = useState<SelectedPlotInfo | null>(null);
-  const [pendingSiteBoundary, setPendingSiteBoundary] = useState<[number, number][] | null>(null);
+  const [pendingProjectAreaBoundary, setPendingProjectAreaBoundary] = useState<[number, number][] | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Draft session queue for active site
+  // Draft session queue for active projectArea
   const [draftLots, setDraftLots] = useState<DraftLot[]>([]);
   const [pendingBoundaryUpdates, setPendingBoundaryUpdates] = useState<PendingBoundaryUpdate[]>([]);
   const [activeDraft, setActiveDraft] = useState<ActiveDraftState | null>(null);
   const [editingSubdivisionId, setEditingSubdivisionId] = useState<string | null>(null);
   const [hasStoredDraft, setHasStoredDraft] = useState(false);
 
-  // Active site boundary ring for ray-casting containment
-  const activeSite = useMemo(() => sites.find((s) => s.site_id === activeSiteId), [sites, activeSiteId]);
-  const activeSiteRing = useMemo(() => {
-    if (!activeSite?.boundary) return null;
-    return parseRing(activeSite.boundary);
-  }, [activeSite]);
+  // Active projectArea boundary ring for ray-casting containment
+  const activeProjectArea = useMemo(() => projectAreas.find((s) => s.project_area_id === activeProjectAreaId), [projectAreas, activeProjectAreaId]);
+  const activeProjectAreaRing = useMemo(() => {
+    if (!activeProjectArea?.boundary) return null;
+    return parseRing(activeProjectArea.boundary);
+  }, [activeProjectArea]);
 
-  // Out-of-bounds vertex status. Only meaningful for lots: a new site boundary is plotted
-  // outside every existing site ring by definition, so containment must not gate it.
+  // Out-of-bounds vertex status. Only meaningful for lots: a new projectArea boundary is plotted
+  // outside every existing projectArea ring by definition, so containment must not gate it.
   const hasOutOfBoundsVertex = useMemo(() => {
-    if (plotType !== 'lot' || !activeSiteRing || draftPoints.length === 0) return false;
-    return !isPolygonContained(draftPoints, activeSiteRing);
-  }, [plotType, draftPoints, activeSiteRing]);
+    if (plotType !== 'lot' || !activeProjectAreaRing || draftPoints.length === 0) return false;
+    return !isPolygonContained(draftPoints, activeProjectAreaRing);
+  }, [plotType, draftPoints, activeProjectAreaRing]);
 
   // Sync selected lot from targetLotId URL param
   useEffect(() => {
     if (!targetLotId) return;
-    for (const site of sites) {
-      const match = site.lots.find((l) => l.property_id === targetLotId);
+    for (const projectArea of projectAreas) {
+      const match = projectArea.lots.find((l) => l.property_id === targetLotId);
       if (match) {
         setSelectedPropertyLot(match);
         setIsSidebarOpen(true);
-        setActiveSiteId(site.site_id);
+        setActiveProjectAreaId(projectArea.project_area_id);
         break;
       }
     }
-  }, [targetLotId, sites]);
+  }, [targetLotId, projectAreas]);
 
-  // Check localStorage for saved draft when active site changes in editor mode
+  // Check localStorage for saved draft when active projectArea changes in editor mode
   useEffect(() => {
-    if (!isEditorActive || !activeSiteId) {
+    if (!isEditorActive || !activeProjectAreaId) {
       setHasStoredDraft(false);
       return;
     }
-    const saved = getSiteDraft(activeSiteId);
+    const saved = getProjectAreaDraft(activeProjectAreaId);
     if (saved && (saved.draftLots?.length > 0 || saved.pendingBoundaryUpdates?.length > 0)) {
       setHasStoredDraft(true);
     } else {
       setHasStoredDraft(false);
     }
-  }, [isEditorActive, activeSiteId]);
+  }, [isEditorActive, activeProjectAreaId]);
 
   // Debounced auto-save of drafts to localStorage
   const draftLotsRef = useRef(draftLots);
@@ -155,24 +155,24 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
   pendingBoundaryUpdatesRef.current = pendingBoundaryUpdates;
 
   useEffect(() => {
-    if (!isEditorActive || !activeSiteId) return;
+    if (!isEditorActive || !activeProjectAreaId) return;
 
     const timer = setTimeout(() => {
       const currentLots = draftLotsRef.current;
       const currentUpdates = pendingBoundaryUpdatesRef.current;
       if (currentLots.length > 0 || currentUpdates.length > 0) {
-        saveSiteDraft(activeSiteId, {
-          siteId: activeSiteId,
+        saveProjectAreaDraft(activeProjectAreaId, {
+          projectAreaId: activeProjectAreaId,
           draftLots: currentLots,
           pendingBoundaryUpdates: currentUpdates,
         });
       } else {
-        clearSiteDraft(activeSiteId);
+        clearProjectAreaDraft(activeProjectAreaId);
       }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [isEditorActive, activeSiteId, draftLots, pendingBoundaryUpdates]);
+  }, [isEditorActive, activeProjectAreaId, draftLots, pendingBoundaryUpdates]);
 
   // beforeunload protection when unsaved drafts exist
   useEffect(() => {
@@ -188,7 +188,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [draftLots, pendingBoundaryUpdates]);
 
-  const totalLots = sites.reduce((sum, s) => sum + s.lots.length, 0);
+  const totalLots = projectAreas.reduce((sum, s) => sum + s.lots.length, 0);
 
   const handleOpenSidebar = useCallback(() => {
     setIsEditorActive(false);
@@ -211,8 +211,8 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
   /** Single project area selection entry point: drives the sidebar filter, the map focus, and the
    * editor's edit target. In the editor this is reached only from the project area chooser, where
    * no drafts can exist yet, so switching needs no guard. */
-  const handleSelectSite = useCallback((siteId: string | null) => {
-    setActiveSiteId(siteId);
+  const handleSelectProjectArea = useCallback((projectAreaId: string | null) => {
+    setActiveProjectAreaId(projectAreaId);
   }, []);
 
   const handleSelectLot = useCallback((lot: PropertyLotWithClient | null) => {
@@ -222,7 +222,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
 
   const handleSelectUnregistered = useCallback(
     (data: {
-      siteId: string;
+      projectAreaId: string;
       block: number;
       lot: number;
       areaSize?: number;
@@ -233,7 +233,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       }
       setSelectedPropertyLot(null);
       setCreateInitialValues({
-        site_id: data.siteId,
+        project_area_id: data.projectAreaId,
         block_number: data.block,
         lot_number: data.lot,
         area_size: data.areaSize,
@@ -253,20 +253,20 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     setIsEntryConfirmOpen(false);
     setIsSidebarOpen(false);
     setIsEditorActive(true);
-    // Start at the top of the decision tree: a site may have been selected in view mode,
-    // but editing begins with an explicit choice from the site list.
-    setActiveSiteId(null);
+    // Start at the top of the decision tree: a projectArea may have been selected in view mode,
+    // but editing begins with an explicit choice from the projectArea list.
+    setActiveProjectAreaId(null);
   }, []);
 
-  // Request leaving the chosen site or exiting editor mode
-  const handleLeaveSite = useCallback(() => {
+  // Request leaving the chosen projectArea or exiting editor mode
+  const handleLeaveProjectArea = useCallback(() => {
     const hasUnsaved = draftLots.length > 0 || pendingBoundaryUpdates.length > 0;
     if (hasUnsaved) {
-      setPendingExitTarget('leaveSite');
+      setPendingExitTarget('leaveProjectArea');
       setIsExitGuardOpen(true);
       return;
     }
-    setActiveSiteId(null);
+    setActiveProjectAreaId(null);
     setActiveDraft(null);
     setDraftPoints([]);
     setPlotType(null);
@@ -286,7 +286,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         setDraftPoints([]);
         setActiveDraft(null);
         setSelectedPlotToDelete(null);
-        setPendingSiteBoundary(null);
+        setPendingProjectAreaBoundary(null);
         setIsSidebarOpen(true);
       } else {
         handleRequestEditorEntry();
@@ -297,25 +297,25 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
 
   // LocalStorage draft recovery actions
   const handleResumeStoredDraft = useCallback(() => {
-    if (!activeSiteId) return;
-    const saved = getSiteDraft(activeSiteId);
+    if (!activeProjectAreaId) return;
+    const saved = getProjectAreaDraft(activeProjectAreaId);
     if (saved) {
       setDraftLots(saved.draftLots ?? []);
       setPendingBoundaryUpdates(saved.pendingBoundaryUpdates ?? []);
       toast.success('Restored previous draft lots.');
     }
     setHasStoredDraft(false);
-  }, [activeSiteId]);
+  }, [activeProjectAreaId]);
 
   const handleDiscardStoredDraft = useCallback(() => {
-    if (!activeSiteId) return;
-    clearSiteDraft(activeSiteId);
+    if (!activeProjectAreaId) return;
+    clearProjectAreaDraft(activeProjectAreaId);
     setHasStoredDraft(false);
     toast.info('Discarded stored drafts.');
-  }, [activeSiteId]);
+  }, [activeProjectAreaId]);
 
   // Start plotting shape
-  const handleStartPlotting = useCallback((type: 'lot' | 'site') => {
+  const handleStartPlotting = useCallback((type: 'lot' | 'project-area') => {
     setPlotType(type);
     setDraftPoints([]);
     setActiveDraft(null);
@@ -361,8 +361,8 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         isEditingExisting: Boolean(editingSubdivisionId),
       });
       setPlotType(null);
-    } else if (plotType === 'site') {
-      setPendingSiteBoundary(draftPoints);
+    } else if (plotType === 'project-area') {
+      setPendingProjectAreaBoundary(draftPoints);
       setPlotType(null);
       setDraftPoints([]);
     }
@@ -372,9 +372,9 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
   const handleEditBoundary = useCallback((plot: LotPlotProperties) => {
     // Find subdivision boundary for this plot
     let foundBoundary: [number, number][] | null = null;
-    for (const site of sites) {
-      if (site.site_id === plot.siteId) {
-        const sub = site.subdivisions?.find((s) => s.subdivision_id === plot.id);
+    for (const projectArea of projectAreas) {
+      if (projectArea.project_area_id === plot.projectAreaId) {
+        const sub = projectArea.subdivisions?.find((s) => s.subdivision_id === plot.id);
         if (sub?.boundary) {
           const ring = parseRing(sub.boundary);
           if (ring) {
@@ -390,7 +390,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       return;
     }
 
-    setActiveSiteId(plot.siteId);
+    setActiveProjectAreaId(plot.projectAreaId);
     setEditingSubdivisionId(plot.id);
     setDraftPoints(foundBoundary);
     setActiveDraft({
@@ -404,12 +404,12 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       isEditingExisting: true,
     });
     setPlotType(null);
-  }, [sites]);
+  }, [projectAreas]);
 
   // Confirm lot in inline slide-in panel -> queue in draft state
   const handleConfirmDraftLot = useCallback(
     (data: { block_number: number; lot_number: number }) => {
-      if (!activeSiteId || !activeDraft) return;
+      if (!activeProjectAreaId || !activeDraft) return;
 
       if (activeDraft.isEditingExisting && editingSubdivisionId) {
         setPendingBoundaryUpdates((prev) => {
@@ -418,7 +418,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
             ...filtered,
             {
               subdivisionId: editingSubdivisionId,
-              siteId: activeSiteId,
+              projectAreaId: activeProjectAreaId,
               block: data.block_number,
               lot: data.lot_number,
               boundary: activeDraft.boundary,
@@ -431,7 +431,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       } else {
         const newDraft: DraftLot = {
           draftId: crypto.randomUUID(),
-          siteId: activeSiteId,
+          projectAreaId: activeProjectAreaId,
           boundary: activeDraft.boundary,
           block: data.block_number,
           lot: data.lot_number,
@@ -446,7 +446,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       setEditingSubdivisionId(null);
       setDraftPoints([]);
     },
-    [activeSiteId, activeDraft, editingSubdivisionId]
+    [activeProjectAreaId, activeDraft, editingSubdivisionId]
   );
 
   const handleDiscardDraftLot = useCallback(() => {
@@ -462,8 +462,8 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
   }, []);
 
   const handleDiscardAllDrafts = useCallback(() => {
-    if (activeSiteId) {
-      clearSiteDraft(activeSiteId);
+    if (activeProjectAreaId) {
+      clearProjectAreaDraft(activeProjectAreaId);
     }
     setDraftLots([]);
     setPendingBoundaryUpdates([]);
@@ -471,7 +471,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     setEditingSubdivisionId(null);
     setDraftPoints([]);
     toast.info('All draft lots discarded.');
-  }, [activeSiteId]);
+  }, [activeProjectAreaId]);
 
   // Save All drafts & exit editor mode
   const handleSaveAll = useCallback(async () => {
@@ -486,7 +486,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       // 1. Batch create new draft lots
       if (draftLots.length > 0) {
         const payload = draftLots.map((d) => ({
-          site_id: d.siteId,
+          project_area_id: d.projectAreaId,
           block_number: d.block!,
           lot_number: d.lot!,
           boundary: d.boundary,
@@ -503,7 +503,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       for (const update of pendingBoundaryUpdates) {
         const res = await updateSubdivisionLotBoundary({
           subdivision_id: update.subdivisionId,
-          site_id: update.siteId,
+          project_area_id: update.projectAreaId,
           block_number: update.block,
           lot_number: update.lot,
           boundary: update.boundary,
@@ -518,8 +518,8 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         `Saved ${draftLots.length + pendingBoundaryUpdates.length} change(s) successfully.`
       );
 
-      if (activeSiteId) {
-        clearSiteDraft(activeSiteId);
+      if (activeProjectAreaId) {
+        clearProjectAreaDraft(activeProjectAreaId);
       }
       setDraftLots([]);
       setPendingBoundaryUpdates([]);
@@ -534,14 +534,14 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     } finally {
       setIsSaving(false);
     }
-  }, [draftLots, pendingBoundaryUpdates, activeSiteId, router]);
+  }, [draftLots, pendingBoundaryUpdates, activeProjectAreaId, router]);
 
   // Confirm discarding drafts when exit guard triggers
   const handleConfirmDiscardAndExit = useCallback(() => {
     handleDiscardAllDrafts();
     setIsExitGuardOpen(false);
-    if (pendingExitTarget === 'leaveSite') {
-      setActiveSiteId(null);
+    if (pendingExitTarget === 'leaveProjectArea') {
+      setActiveProjectAreaId(null);
     } else {
       setIsEditorActive(false);
       setIsSidebarOpen(true);
@@ -553,24 +553,24 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
   const handleConfirmSaveAndExit = useCallback(async () => {
     setIsExitGuardOpen(false);
     await handleSaveAll();
-    if (pendingExitTarget === 'leaveSite') {
-      setActiveSiteId(null);
+    if (pendingExitTarget === 'leaveProjectArea') {
+      setActiveProjectAreaId(null);
       setIsEditorActive(true);
       setIsSidebarOpen(false);
     }
     setPendingExitTarget(null);
   }, [handleSaveAll, pendingExitTarget]);
 
-  // Save brand-new site
-  const handleSaveSite = useCallback(
+  // Save brand-new projectArea
+  const handleSaveProjectArea = useCallback(
     async (data: { name: string; description?: string }) => {
-      if (!pendingSiteBoundary) return;
+      if (!pendingProjectAreaBoundary) return;
       setIsSaving(true);
       try {
-        const result = await createSite({
+        const result = await createProjectArea({
           name: data.name,
           description: data.description,
-          boundary: pendingSiteBoundary,
+          boundary: pendingProjectAreaBoundary,
         });
         if (!result.success) {
           toast.error(result.error);
@@ -578,8 +578,8 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         }
         const created = result.data;
         toast.success(`Project area "${created.name}" created successfully.`);
-        setPendingSiteBoundary(null);
-        setActiveSiteId(created.site_id);
+        setPendingProjectAreaBoundary(null);
+        setActiveProjectAreaId(created.project_area_id);
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to create project area');
@@ -587,7 +587,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         setIsSaving(false);
       }
     },
-    [pendingSiteBoundary, router]
+    [pendingProjectAreaBoundary, router]
   );
 
   const handleDeletePlotTrigger = useCallback((plot: SelectedPlotInfo) => {
@@ -600,7 +600,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     try {
       const result = await deleteSubdivisionLot({
         subdivision_id: selectedPlotToDelete.subdivisionId,
-        site_id: selectedPlotToDelete.siteId,
+        project_area_id: selectedPlotToDelete.projectAreaId,
         block_number: selectedPlotToDelete.block,
         lot_number: selectedPlotToDelete.lot,
       });
@@ -621,11 +621,11 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     }
   }, [selectedPlotToDelete, router]);
 
-  const handleArchiveSite = useCallback(
-    async (siteId: string) => {
+  const handleArchiveProjectArea = useCallback(
+    async (projectAreaId: string) => {
       setIsSaving(true);
       try {
-        const result = await archiveSite(siteId);
+        const result = await archiveProjectArea(projectAreaId);
         if (!result.success) {
           toast.error(result.error);
           return;
@@ -641,11 +641,11 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     [router]
   );
 
-  const handleUnarchiveSite = useCallback(
-    async (siteId: string) => {
+  const handleUnarchiveProjectArea = useCallback(
+    async (projectAreaId: string) => {
       setIsSaving(true);
       try {
-        const result = await unarchiveSite(siteId);
+        const result = await unarchiveProjectArea(projectAreaId);
         if (!result.success) {
           toast.error(result.error);
           return;
@@ -661,17 +661,17 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     [router]
   );
 
-  const handleDeleteSite = useCallback(
-    async (siteId: string) => {
+  const handleDeleteProjectArea = useCallback(
+    async (projectAreaId: string) => {
       setIsSaving(true);
       try {
-        const result = await deleteSite(siteId);
+        const result = await deleteProjectArea(projectAreaId);
         if (!result.success) {
           toast.error(result.error);
           return;
         }
         toast.success('Project area deleted successfully');
-        setActiveSiteId(null);
+        setActiveProjectAreaId(null);
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Failed to delete project area');
@@ -687,8 +687,8 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
       <div className="relative flex flex-1 h-full min-h-0 w-full flex-col overflow-hidden">
         {/* Background: Edge-to-edge interactive MapLibre canvas */}
         <div className="absolute inset-0 h-full w-full flex flex-col">
-          <SiteMap
-            sites={sites}
+          <ProjectAreaMap
+            projectAreas={projectAreas}
             isSidebarOpen={isSidebarOpen}
             hoveredLotKey={hoveredLotKey}
             selectedLotId={selectedPropertyLot?.property_id}
@@ -701,9 +701,9 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
             onAddDraftPoint={handleAddDraftPoint}
             onDeletePlot={handleDeletePlotTrigger}
             onEditBoundary={handleEditBoundary}
-            focusedSiteId={activeSiteId}
-            onSelectSite={handleSelectSite}
-            activeSiteRing={activeSiteRing}
+            focusedProjectAreaId={activeProjectAreaId}
+            onSelectProjectArea={handleSelectProjectArea}
+            activeProjectAreaRing={activeProjectAreaRing}
             draftLots={draftLots}
             pendingBoundaryUpdates={pendingBoundaryUpdates}
             onUpdateDraftPoints={handleUpdateDraftPoints}
@@ -728,11 +728,11 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         )}
 
         {/* Floating Map Editor Shell */}
-        <MapSiteEditor
-          sites={sites}
-          activeSiteId={activeSiteId}
-          onSelectSite={handleSelectSite}
-          onLeaveSite={handleLeaveSite}
+        <MapProjectAreaEditor
+          projectAreas={projectAreas}
+          activeProjectAreaId={activeProjectAreaId}
+          onSelectProjectArea={handleSelectProjectArea}
+          onLeaveProjectArea={handleLeaveProjectArea}
           isEditorActive={isEditorActive}
           onToggleEditor={handleToggleEditor}
           plotType={plotType}
@@ -749,9 +749,9 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
           selectedPlotToDelete={selectedPlotToDelete}
           onConfirmDeletePlot={handleConfirmDeletePlot}
           onCancelDeletePlot={() => setSelectedPlotToDelete(null)}
-          pendingSiteBoundary={pendingSiteBoundary}
-          onSaveSite={handleSaveSite}
-          onDiscardSite={() => setPendingSiteBoundary(null)}
+          pendingProjectAreaBoundary={pendingProjectAreaBoundary}
+          onSaveProjectArea={handleSaveProjectArea}
+          onDiscardProjectArea={() => setPendingProjectAreaBoundary(null)}
           draftLotsCount={draftLots.length}
           pendingUpdatesCount={pendingBoundaryUpdates.length}
           onSaveAll={handleSaveAll}
@@ -760,9 +760,9 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
           hasStoredDraft={hasStoredDraft}
           onResumeStoredDraft={handleResumeStoredDraft}
           onDiscardStoredDraft={handleDiscardStoredDraft}
-          onArchiveSite={handleArchiveSite}
-          onUnarchiveSite={handleUnarchiveSite}
-          onDeleteSite={handleDeleteSite}
+          onArchiveProjectArea={handleArchiveProjectArea}
+          onUnarchiveProjectArea={handleUnarchiveProjectArea}
+          onDeleteProjectArea={handleDeleteProjectArea}
         />
 
         {/* Floating Collapsible Card on Left (View Mode only) */}
@@ -775,13 +775,13 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
           )}
         >
           <PropertyLotsSidebar
-            sites={sites}
+            projectAreas={projectAreas}
             onClose={() => setIsSidebarOpen(false)}
             selectedLot={selectedPropertyLot}
             onSelectLot={handleSelectLot}
             onHoverLot={setHoveredLotKey}
-            onSiteFilterChange={handleSelectSite}
-            siteFilter={activeSiteId}
+            onProjectAreaFilterChange={handleSelectProjectArea}
+            projectAreaFilter={activeProjectAreaId}
             createInitialValues={createInitialValues}
             onClearCreateInitialValues={() => setCreateInitialValues(null)}
           />
@@ -866,7 +866,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
               <AlertDialogDescription className="text-xs text-foreground leading-relaxed space-y-2">
                 <p>
                   You have <strong>{draftLots.length + pendingBoundaryUpdates.length}</strong> unsaved draft change(s) on{' '}
-                  <strong>{sites.find((s) => s.site_id === activeSiteId)?.name ?? 'this project area'}</strong>.
+                  <strong>{projectAreas.find((s) => s.project_area_id === activeProjectAreaId)?.name ?? 'this project area'}</strong>.
                 </p>
                 <p className="text-muted-foreground">
                   You cannot leave this project area or exit the editor until you either commit all changes to the database or discard them.
