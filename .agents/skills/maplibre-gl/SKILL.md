@@ -286,3 +286,26 @@ Avoid passing raw HTML template strings to `popup.setHTML()`. Raw HTML bypasses 
   5. `lots-hover-stroke` (Fast highlight outline controlled via `map.setFilter`)
   6. `lots-labels` (Cadastral Block-Lot labels with fixed font stack)
   7. HTML `Marker` site pins (Visible only below `DETAILS_ZOOM = 14`).
+
+---
+
+## Driving the Map From End-to-End Tests
+
+Lots are WebGL polygons on a `<canvas>` — they have no DOM nodes, so Playwright locators cannot reach them. Do **not** try to click lots by pixel-scanning the canvas; it is slow and unreliable, and a missed scan looks like a broken feature.
+
+`useMapLibreMap` publishes the live instance at `window.__fdmMap` when `NODE_ENV !== 'production'` (the assignment is stripped from production bundles by the minifier). Tests address lots by block/lot instead of pixels:
+
+```ts
+import { waitForMap, readLots, openLotForSale } from './helpers/map';
+
+await page.goto('/dashboard/properties/map');
+await waitForMap(page);
+const lots = await readLots(page);              // every lot + its screen position
+const closed = lots.find((l) => !l.isRegistered)!;
+const dialog = await openLotForSale(page, closed);  // clicks the lot, presses its action button
+await expect(dialog.locator('#block_number')).toHaveValue(String(closed.block));
+```
+
+`e2e/helpers/map.ts` exports `waitForMap`, `readLots`, `focusLot`, `clickLot`, and `openLotForSale`. Use `map.querySourceFeatures('lots-data')` / `'sites-data'` to inspect features, and `map.project([lng, lat])` to convert coordinates to screen pixels when a test must click a specific point.
+
+**Trap**: `clickLot` pads the view by 260px on the left so the target is not hidden behind the floating property-lots sidebar. A lot positioned under that overlay cannot be clicked even though it is technically on screen.

@@ -139,15 +139,22 @@ export const createSiteSchema = z.object({
   boundary: polygonBoundarySchema,
 });
 
-export const createSubdivisionLotSchema = z.object({
-  site_id: uuidSchema,
-  block_number: blockOrLotNumberSchema("Block number"),
-  lot_number: blockOrLotNumberSchema("Lot number"),
-  boundary: polygonBoundarySchema,
-  create_property_lot: z.boolean().optional(),
-  area_size: areaSchema.optional(),
-  price_per_sqm: pricePerSqmSchema.optional(),
-});
+export const createSubdivisionLotSchema = z
+  .object({
+    site_id: uuidSchema,
+    block_number: blockOrLotNumberSchema("Block number"),
+    lot_number: blockOrLotNumberSchema("Lot number"),
+    boundary: polygonBoundarySchema,
+    create_property_lot: z.boolean().optional(),
+    area_size: areaSchema.optional(),
+    price_per_sqm: pricePerSqmSchema.optional(),
+  })
+  // property_lot requires a price, so registering one needs a real figure. Area can be derived
+  // from the boundary; price cannot, and defaulting it would invent a contract term.
+  .refine((data) => !data.create_property_lot || (data.price_per_sqm ?? 0) > 0, {
+    message: "Price per sqm is required to register a lot",
+    path: ["price_per_sqm"],
+  });
 
 export const deleteSubdivisionLotSchema = z.object({
   site_id: uuidSchema,

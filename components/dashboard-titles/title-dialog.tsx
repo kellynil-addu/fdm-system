@@ -1,35 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Check, ClipboardCheck, FileText, PenLine, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
-import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TITLE_STATUS_VARIANT, titleStatusTone } from '@/lib/status-colors';
-import { getClearanceProgress } from './title-record-card';
-import {
-  getMissingReleaseDocuments,
-  getRequiredReleaseDocuments,
-} from '@/lib/utils/release-requirements';
-import type { CallingCardStatus } from '@/lib/types/calling-card';
-import {
-  useLandTitles,
-  lotRefLabel,
-  type TitleDialogItem,
-} from '@/lib/hooks/use-land-titles';
+import { StatusBar } from '@/components/ui/status-bar';
+import { getCallingCardStatus, isStageReachable } from '@/lib/title-progress';
+import { useLandTitles, type TitleDialogItem } from '@/lib/hooks/use-land-titles';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import type { ClientDocument } from '@/lib/types/client';
 import type { LandTitle, LandTitleNotice, TitleStatus } from '@/lib/types/title';
-import { ClientCallingCard } from '@/components/dashboard-clients/client-calling-card';
-import { PropertyCallingCard } from '@/components/dashboard-properties/property-calling-card';
+import { TitleDialogHeader } from './title-dialog-header';
 import {
   TitleTimelineView,
   normalizeLifecycleStage,
@@ -39,121 +20,6 @@ import { TitlePacketTab } from './title-packet-tab';
 import { TitleClearanceTab } from './title-clearance-tab';
 import { TitleNoticesTab } from './title-notices-tab';
 import { TitleReleasedTab } from './title-released-tab';
-
-const COMPANY_WORKFLOW_STEPS = [
-  { label: 'Account settlement', shortLabel: 'Payment', icon: Wallet },
-  { label: 'Document preparation', shortLabel: 'Preparation', icon: FileText },
-  { label: 'Legal verification', shortLabel: 'Verification', icon: ClipboardCheck },
-  { label: 'Executive signature', shortLabel: 'Signature', icon: PenLine },
-  { label: 'Title release', shortLabel: 'Release', icon: Check },
-] as const;
-
-function getCompanyWorkflowStep(status: TitleStatus, isExecutiveSigned: boolean) {
-  switch (status) {
-    case 'Cleared by Billing':
-      return 0;
-    case 'Document Preparation':
-      return 1;
-    case 'For Review':
-      return 2;
-    case 'For Signature':
-      return isExecutiveSigned ? 4 : 3;
-    case 'Clearance Period':
-    case 'Ready for Claim':
-      return 4;
-    case 'Released':
-      return COMPANY_WORKFLOW_STEPS.length;
-  }
-}
-
-function getWorkflowDetail(status: TitleStatus, isExecutiveSigned: boolean): string {
-  switch (status) {
-    case 'Clearance Period':
-      return 'Executive signature confirmed · 30-day internal clearance underway';
-    case 'Ready for Claim':
-      return 'Cleared for claim · title and DOAS awaiting physical handover';
-    case 'Released':
-      return 'Physical title packet handed over to client';
-    case 'For Review':
-      return 'Legal supervisor checking the document packet';
-    case 'For Signature':
-      return isExecutiveSigned
-        ? 'Executive signature confirmed · start internal clearance'
-        : 'Awaiting executive signature and notarization';
-    case 'Document Preparation':
-      return 'Legal compiling buyer file and turnover documents';
-    case 'Cleared by Billing':
-    default:
-      return 'Billing verified and cleared the account';
-  }
-}
-
-function CompanyWorkflowProgress({
-  status,
-  isExecutiveSigned,
-}: {
-  status: TitleStatus;
-  isExecutiveSigned: boolean;
-}) {
-  const currentStep = getCompanyWorkflowStep(status, isExecutiveSigned);
-  const detail = getWorkflowDetail(status, isExecutiveSigned);
-
-  return (
-    <section aria-label="Title claim workflow" className="flex flex-col items-start lg:items-end gap-1">
-      <ol className="flex items-center gap-1 sm:gap-1.5">
-        {COMPANY_WORKFLOW_STEPS.map((step, index) => {
-          const isComplete = index < currentStep;
-          const isCurrent = index === currentStep && currentStep < COMPANY_WORKFLOW_STEPS.length;
-          const isFinalDone = currentStep === COMPANY_WORKFLOW_STEPS.length;
-
-          return (
-            <li
-              key={step.label}
-              aria-current={isCurrent ? 'step' : undefined}
-              className="flex items-center gap-1"
-            >
-              <div
-                title={`${step.label}: ${isComplete || isFinalDone ? 'Complete' : isCurrent ? 'Current step' : 'Pending'}`}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs transition-colors',
-                  isComplete || isFinalDone
-                    ? 'bg-row-hover text-success font-medium'
-                    : isCurrent
-                      ? 'bg-sidebar-accent text-primary font-semibold ring-1 ring-primary'
-                      : 'text-muted-foreground opacity-60'
-                )}
-              >
-                <span
-                  className={cn(
-                    'flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px]',
-                    isComplete || isFinalDone
-                      ? 'bg-success text-success-foreground'
-                      : isCurrent
-                        ? 'bg-primary text-primary-foreground font-bold'
-                        : 'border border-border text-muted-foreground'
-                  )}
-                >
-                  {isComplete || isFinalDone ? (
-                    <Check className="h-2.5 w-2.5 stroke-[3]" aria-hidden="true" />
-                  ) : (
-                    <span>{index + 1}</span>
-                  )}
-                </span>
-                <span className="hidden xl:inline">{step.shortLabel}</span>
-              </div>
-              {index < COMPANY_WORKFLOW_STEPS.length - 1 && (
-                <span className="text-border text-xs select-none">›</span>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-      <p className="text-[11px] text-muted-foreground text-left lg:text-right" aria-live="polite">
-        {detail}
-      </p>
-    </section>
-  );
-}
 
 interface TitleDialogProps {
   open: boolean;
@@ -317,63 +183,24 @@ export function TitleDialog({
     setSelectedStage('Released');
   }
 
-  const clientName = activeTitle?.client?.full_name ?? activeAwaiting?.client?.full_name ?? 'Client Account';
-  const clientId = activeTitle?.client_id ?? activeAwaiting?.client?.client_id ?? null;
-  const propertyRef = lotRefLabel(activeTitle?.property ?? activeAwaiting?.property);
-  const activeProperty = activeTitle?.property ?? activeAwaiting?.property;
-  const activeClient = activeTitle?.client ?? activeAwaiting?.client;
+  const currentStatus = getCallingCardStatus(activeItem);
 
-  /**
-   * The title's lifecycle status, resolved once.
-   *
-   * Shared with the cards so a badge and a status bar can never disagree about
-   * the same title. The detail line is the one fact that makes the stage
-   * actionable, and it is the reason the bar is worth having here at all:
-   * during clearance, how long is left; during preparation, what is still
-   * missing from the packet.
-   */
-  const currentStatus: CallingCardStatus = {
-    label: currentStageStatus,
-    // Goes through the same resolver as the grid cards so a badge and a status
-    // bar can never disagree — including about the exceptions, which take the
-    // colour from the stage whenever the open title has a returned notice or an
-    // overdue storage fee.
-    tone: activeTitle
-      ? titleStatusTone(activeTitle, currentStageStatus)
-      : TITLE_STATUS_VARIANT[currentStageStatus] ?? 'muted',
-    detail: (() => {
-      if (currentStageStatus === 'Clearance Period') {
-        const { targetDate, daysRemaining } = getClearanceProgress(
-          activeTitle?.clearance_started_at
-        );
-        if (!targetDate) return undefined;
-        return daysRemaining > 0
-          ? `${daysRemaining} ${daysRemaining === 1 ? 'day' : 'days'} remaining`
-          : 'Clearance window elapsed';
-      }
-      if (currentStageStatus === 'Document Preparation') {
-        const required = getRequiredReleaseDocuments(
-          activeTitle?.is_legacy_transferred
-        );
-        const uploaded = new Set(
-          (activeTitle?.client?.documents ?? [])
-            .filter((d) => d.property_id === activeProperty?.property_id)
-            .map((d) => d.document_type)
-        );
-        const missing = getMissingReleaseDocuments(
-          activeTitle?.is_legacy_transferred,
-          uploaded
-        );
-        return missing.length === 0
-          ? `Release packet complete (${required.length}/${required.length})`
-          : `${required.length - missing.length} of ${required.length} documents`;
-      }
-      return undefined;
-    })(),
-  };
+  /*
+    Which stage's page the right column shows.
+
+    `selectedStage` can only ever name a stage the record has reached — the rail
+    disables the rest — but it is also reset by the effects above, and those run
+    against `activeTitle` a render behind in the cases where a status change
+    arrives from a stage page. Clamping here means a stale selection can never
+    paint a page for a stage the record is not in, whatever order the updates
+    land in.
+  */
+  const shownStage: TitleStatus = isStageReachable(activeItem, selectedStage)
+    ? selectedStage
+    : currentStageStatus;
 
   const activeContent = (() => {
-    if (selectedStage === 'Cleared by Billing') {
+    if (shownStage === 'Cleared by Billing') {
       return (
         <TitleIntakeTab
           item={activeItem}
@@ -381,7 +208,7 @@ export function TitleDialog({
         />
       );
     }
-    if (selectedStage === 'Clearance Period' && activeTitle) {
+    if (shownStage === 'Clearance Period' && activeTitle) {
       return (
         <TitleClearanceTab
           title={activeTitle}
@@ -390,7 +217,7 @@ export function TitleDialog({
         />
       );
     }
-    if (selectedStage === 'Ready for Claim' && activeTitle) {
+    if (shownStage === 'Ready for Claim' && activeTitle) {
       return (
         <TitleNoticesTab
           title={activeTitle}
@@ -403,7 +230,7 @@ export function TitleDialog({
         />
       );
     }
-    if (selectedStage === 'Released' && activeTitle) {
+    if (shownStage === 'Released' && activeTitle) {
       return <TitleReleasedTab title={activeTitle} />;
     }
     if (activeTitle) {
@@ -426,86 +253,32 @@ export function TitleDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="bg-card border-border sm:max-w-3xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl w-[95vw] h-[90vh] max-h-[90vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="shrink-0 border-b border-border bg-card px-5 py-3 pr-12 sm:px-6 sm:pr-14 text-left sm:text-left gap-0">
-          <div className="flex flex-col gap-2.5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="min-w-0">
-              <DialogTitle className="sr-only">
-                {propertyRef} - {clientName}
-              </DialogTitle>
-              <DialogDescription className="sr-only">
-                Title record details for {propertyRef} owned by {clientName}
-              </DialogDescription>
-              {/*
-                Both cards are links to their own records, derived from the id
-                they are handed, so clicking one leaves the dialog for that
-                client or lot. Nothing here has to say so: the derivation is in
-                `ClientCallingCard`/`PropertyCallingCard`.
-              */}
-              <div className="flex flex-wrap items-center gap-2">
-                {activeProperty ? (
-                  <PropertyCallingCard
-                    property={activeProperty}
-                    tier="compact"
-                  />
-                ) : (
-                  <span className="text-sm font-semibold">{propertyRef}</span>
-                )}
-                {activeClient ? (
-                  <ClientCallingCard
-                    client={activeClient}
-                    tier="compact"
-                  />
-                ) : (
-                  <ClientCallingCard
-                    client={{ full_name: clientName, client_id: clientId }}
-                    tier="compact"
-                  />
-                )}
-                {/*
-                  The badge stays in this wrap row on purpose. An inline badge
-                  needs 537px: two cards at their 11rem floor (176px each), two
-                  8px gaps, and the 169px "Document Preparation" badge. At xl the
-                  workflow strip starts showing its step labels and this column
-                  is 522px — 15px short — so that one badge drops below by the
-                  wrap rather than by any code here. Below xl the labels hide,
-                  the column grows to exactly 537px, and it sits inline with
-                  nothing to spare. Measured on the real records it bites 3 of
-                  10, all of them "Document Preparation"; the narrower badges fit
-                  at every width. Moving the badge into its own element would be
-                  redundant, and would leave it stranded on the left if a future
-                  change let the cards fit one row.
-
-                  It stays a `Badge` on the title rather than becoming a status
-                  bar on the lot card, because the status belongs to the title,
-                  not the parcel: the same lot can carry a Sold lot status and a
-                  Clearance Period title at once, and one bar cannot say both.
-                  The colour still comes from `currentStatus` so the badge and
-                  any bar elsewhere cannot disagree.
-                */}
-                <Badge
-                  variant={currentStatus.tone}
-                  shape="pill"
-                  dot
-                  className="shrink-0 text-xs"
-                >
-                  {currentStatus.label}
-                </Badge>
-                {activeTitle?.is_legacy_transferred && (
-                  <Badge variant="outline" className="text-[11px] shrink-0">
-                    Legacy Pre-Transferred
-                  </Badge>
-                )}
-              </div>
-            </div>
-
-            <div className="shrink-0">
-              <CompanyWorkflowProgress
-                status={activeTitle?.status ?? 'Cleared by Billing'}
-                isExecutiveSigned={isExecutiveSigned}
-              />
-            </div>
-          </div>
+        {/*
+          The header carries identity and nothing else; the five-step strip and
+          the status badge that used to share this row are both below it now —
+          the strip in the rail, the status in the band. See
+          `title-dialog-header.tsx` for what each cost the layout and why
+          removing them was the fix rather than shrinking anything.
+        */}
+        <DialogHeader className="shrink-0 border-b border-border bg-card text-left sm:text-left gap-0 pr-12 sm:pr-14">
+          <TitleDialogHeader item={activeItem} />
         </DialogHeader>
+
+        {/*
+          The status band is `md:hidden` here, and `hidden md:block` below.
+          Two instances rather than one because the band has to sit inside the
+          scrolling column on desktop and outside it on a phone; before this it
+          existed only on desktop, so removing the header badge would have left
+          the mobile layout with no status at all.
+        */}
+        <div className="shrink-0 border-b border-border px-5 pt-3 pb-1 md:hidden">
+          <StatusBar
+            tone={currentStatus.tone}
+            status={currentStatus.label}
+            detail={currentStatus.detail}
+            progress={currentStatus.progress}
+          />
+        </div>
 
         {/* Mobile Tab Switcher */}
         <div className="md:hidden flex-1 min-h-0 overflow-y-auto px-5 pt-2 pb-5">
@@ -516,11 +289,11 @@ export function TitleDialog({
             <TabsList className="w-full grid grid-cols-2">
               <TabsTrigger value="timeline" className="text-sm">Timeline</TabsTrigger>
               <TabsTrigger value="content" className="text-sm">
-                {selectedStage === 'Ready for Claim'
+                {shownStage === 'Ready for Claim'
                   ? 'Notices & Actions'
-                  : selectedStage === 'Cleared by Billing'
+                  : shownStage === 'Cleared by Billing'
                   ? 'Intake Details'
-                  : selectedStage === 'Clearance Period'
+                  : shownStage === 'Clearance Period'
                   ? 'Clearance Details'
                   : 'Document Preparation'}
               </TabsTrigger>
@@ -544,9 +317,27 @@ export function TitleDialog({
           </Tabs>
         </div>
 
+        {/*
+          The page gutter. `px-6 py-6` and an 8-unit column gap, from `px-6 py-5`
+          and 6: the rail's rows and the stage page's cards had 20px of air
+          against the dialog edge and 24px between the two columns, which read
+          as the two sides crowding each other. The right column's `pr-1` is
+          what the scroll container needs so a raised shadow is not clipped —
+          the extra gutter is on the left of it, so the visible space between
+          the rail's border and the first card is the grid gap plus this.
+        */}
         {/* Desktop Two-Column Layout */}
-        <div className="hidden md:grid md:grid-cols-12 gap-6 flex-1 min-h-0 px-6 py-5 overflow-hidden">
-          <div className="md:col-span-5 lg:col-span-4 border-r border-border pr-6 overflow-y-auto h-full min-h-0">
+        <div className="hidden md:grid md:grid-cols-12 gap-8 flex-1 min-h-0 px-6 py-6 overflow-hidden">
+          {/*
+            No `border-r` down this column. The rail's rows are already a
+            bordered, divided list, so a rule beside them is a third vertical
+            edge in a 350px column — and it ran the full height of the grid cell
+            while the list beside it ended after five rows, which made the
+            divider look like it belonged to the page rather than to either
+            column. The 8-unit grid gap and the rail's own border separate the
+            two sides without a line drawn between them.
+          */}
+          <div className="md:col-span-5 lg:col-span-4 pr-7 overflow-y-auto h-full min-h-0">
             <TitleTimelineView
               item={activeItem}
               selectedStage={selectedStage}
@@ -556,8 +347,25 @@ export function TitleDialog({
               isExecutiveSigned={isExecutiveSigned}
             />
           </div>
-          <div className="md:col-span-7 lg:col-span-8 overflow-y-auto h-full min-h-0 pr-1">
-            {activeContent}
+          {/*
+            The status band is pinned above the scrolling page rather than
+            scrolled with it. A stage page is long — the preparation page alone
+            runs to a checklist, a title-number editor and a six-row document
+            list — and the record's status and its one actionable number are the
+            two facts a reader wants while working down it. The band is the same
+            `StatusBar` the grid cards use, so the dialog and the card behind it
+            cannot describe the title differently.
+          */}
+          <div className="flex h-full min-h-0 flex-col md:col-span-7 lg:col-span-8">
+            <div className="hidden shrink-0 pb-5 md:block">
+              <StatusBar
+                tone={currentStatus.tone}
+                status={currentStatus.label}
+                detail={currentStatus.detail}
+                progress={currentStatus.progress}
+              />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto pr-1">{activeContent}</div>
           </div>
         </div>
       </DialogContent>

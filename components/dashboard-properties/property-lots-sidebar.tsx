@@ -238,6 +238,8 @@ export interface PropertyLotsSidebarProps {
   onSelectLot?: (lot: PropertyLotWithClient | null) => void;
   onHoverLot?: (lotKey: string | null) => void;
   onSiteFilterChange?: (siteId: string | null) => void;
+  /** Site selected outside the toolbar (e.g. by clicking a site marker on the map). */
+  siteFilter?: string | null;
   createInitialValues?: {
     site_id?: string;
     block_number?: number;
@@ -257,6 +259,7 @@ function PropertyLotsSidebarContent({
   onHoverLot,
   createInitialValues,
   onClearCreateInitialValues,
+  siteFilter,
 }: PropertyLotsSidebarProps) {
   const {
     lots,
@@ -271,6 +274,18 @@ function PropertyLotsSidebarContent({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const { rendered: renderedDialog, isOpen: isDialogOpen } = useDialogPresence(activeDialog);
   const wasDialogOpenedRef = useRef(false);
+  const { setFilter } = controller;
+
+  // Push an externally selected site (e.g. a map marker click) into the Site filter, so
+  // the map and the list always agree on which site is selected. The first run is skipped
+  // so a ?site= deep link keeps ownership of the initial filter value.
+  const pushedSiteFilterRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const isFirstRun = pushedSiteFilterRef.current === undefined;
+    pushedSiteFilterRef.current = siteFilter;
+    if (isFirstRun) return;
+    setFilter('siteId', siteFilter ?? null);
+  }, [siteFilter, setFilter]);
 
   const activeSelectedLot = useMemo(() => {
     if (!selectedLot) return null;
@@ -293,11 +308,14 @@ function PropertyLotsSidebarContent({
     }
   }, [selectedLot, activeDialog, closeDialog]);
 
-  // Open create dialog when initial values are provided from map
+  // Open create dialog when initial values are provided from map. The values ride along in the
+  // dialog payload because `onClearCreateInitialValues` runs in this same commit, while
+  // `activeDialog` still reads stale (null) in its closure — the prop alone would be wiped
+  // before the modal ever renders.
   useEffect(() => {
     if (createInitialValues && !selectedLot) {
       wasDialogOpenedRef.current = true;
-      openDialog({ type: 'create' });
+      openDialog({ type: 'create', prefill: createInitialValues });
     }
   }, [createInitialValues, selectedLot, openDialog]);
 
@@ -502,7 +520,7 @@ function PropertyLotsSidebarContent({
         <CreatePropertyLotModal
           open={isDialogOpen}
           sites={sites}
-          initialValues={createInitialValues ?? undefined}
+          initialValues={renderedDialog.prefill}
         />
       )}
     </div>

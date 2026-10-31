@@ -657,7 +657,6 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   title="Edit area size"
                   label="Area size (sqm)"
                   initialValue={currentArea}
-                  placeholder="250"
                   onSave={handleUpdateArea}
                 />
               </div>
@@ -692,7 +691,6 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   title="Edit price per sqm"
                   label="Price per sqm (₱)"
                   initialValue={currentPrice}
-                  placeholder="6500"
                   onSave={handleUpdatePrice}
                 />
               </div>

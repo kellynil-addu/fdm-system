@@ -9,7 +9,6 @@ import {
   ExternalLink,
   FileText,
   Loader2,
-  Paperclip,
   User,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -26,14 +25,20 @@ import {
 import { FilePicker } from '@/components/ui/file-picker';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SectionCard, SectionHeader } from '@/components/ui/section-card';
 import { lotRefLabel, useLandTitles } from '@/lib/hooks/use-land-titles';
+import { formatMediumDate, formatMediumDateTime } from '@/lib/format-date';
 import { calculateStorageFee } from '@/lib/storage-fee';
+import { getReleasedDate } from '@/lib/title-progress';
 import type { LandTitle } from '@/lib/types/title';
 
-const DATE_FORMAT = new Intl.DateTimeFormat('en-PH', {
-  dateStyle: 'medium',
-  timeStyle: 'short',
-});
+/** File sizes are recorded in bytes and were never shown; 412 KB is readable. */
+function formatFileSize(bytes: number | null): string | null {
+  if (!bytes || bytes <= 0) return null;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 interface TitleReleasedTabProps {
   title: LandTitle;
@@ -43,14 +48,9 @@ export function TitleReleasedTab({ title }: TitleReleasedTabProps) {
   const { canEdit, updateTitle, uploadReleaseProof, getAttachmentFileUrl } = useLandTitles();
   const storageFee = calculateStorageFee(title);
 
-  const releasedDate = title.released_at
-    ? new Date(title.released_at)
-    : title.history?.slice().reverse().find((h) => h.status === 'Released')?.changed_at
-    ? new Date(title.history.slice().reverse().find((h) => h.status === 'Released')!.changed_at)
-    : title.updated_at
-    ? new Date(title.updated_at)
-    : null;
-  const releasedDateStr = releasedDate ? DATE_FORMAT.format(releasedDate) : 'Recorded';
+  // One derivation, shared with the rail and the packet tab.
+  const releasedDate = getReleasedDate(title);
+  const releasedDateStr = releasedDate ? formatMediumDateTime(releasedDate) : 'Recorded';
 
   const clientName = title.client?.full_name ?? 'Client Account';
   const propertyRef = lotRefLabel(title.property);
@@ -126,14 +126,23 @@ export function TitleReleasedTab({ title }: TitleReleasedTabProps) {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      {/*
+        Stacks on a phone. The heading and the button were sharing one row at
+        390px, and the button is `shrink-0` while the heading is not — so the
+        heading lost, breaking to one word per line ("Finalized / & Turned /
+        Over / to / Buyer") beside a button that had taken a third of the card.
+        Wrapping the row removes the competition; the button needs 160px of the
+        card's 358 and there is no arrangement in which it and a readable
+        heading share a line.
+      */}
       {/* Finalized Banner */}
-      <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-4 bg-card text-success">
+      <div className="flex flex-col gap-3 rounded-lg border border-border bg-[color-mix(in_srgb,var(--success)_8%,var(--card))] p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <CheckCircle2 className="h-6 w-6 shrink-0" />
+          <CheckCircle2 className="h-6 w-6 shrink-0 text-success" />
           <div>
-            <h4 className="text-base font-semibold text-foreground">Finalized &amp; Turned Over to Buyer</h4>
-            <p className="text-sm text-muted-foreground">
+            <h4 className="text-sm font-semibold text-foreground">Finalized &amp; Turned Over to Buyer</h4>
+            <p className="text-xs text-muted-foreground">
               Original title certificate and notarized Deed of Absolute Sale (DOAS) have been formally handed over.
             </p>
           </div>
@@ -153,22 +162,28 @@ export function TitleReleasedTab({ title }: TitleReleasedTabProps) {
       </div>
 
       {/* Claimant & Turnover Dossier */}
-      <div className="rounded-lg border border-border p-4 space-y-4 bg-card">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Recipient &amp; Turnover Dossier
-          </h4>
-          <Badge variant={isPrincipalBuyer ? 'secondary' : 'warning'} shape="pill">
-            {isPrincipalBuyer ? 'Principal Buyer' : 'Representative / Heir'}
-          </Badge>
-        </div>
+      <SectionCard className="space-y-4">
+        <SectionHeader
+          title="Recipient & Turnover Dossier"
+          action={
+            <Badge variant={isPrincipalBuyer ? 'secondary' : 'warning'} shape="pill">
+              {isPrincipalBuyer ? 'Principal Buyer' : 'Representative / Heir'}
+            </Badge>
+          }
+        />
 
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        {/*
+          Two columns from `sm` up. At 390px the dialog is 358px wide, so a
+          two-column grid gives each cell 155px — narrow enough that "Turnover
+          Timestamp" beside "Oct 11, 2026, 6:03 PM" was already tight, and the
+          label is what gives first.
+        */}
+        <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
           <div className="space-y-1">
             <span className="text-xs text-muted-foreground flex items-center gap-1.5">
               <User className="h-3.5 w-3.5" /> Received By:
             </span>
-            <p className="font-semibold text-foreground">{recipientName}</p>
+            <p className="font-medium text-foreground">{recipientName}</p>
           </div>
 
           <div className="space-y-1">
@@ -194,70 +209,90 @@ export function TitleReleasedTab({ title }: TitleReleasedTabProps) {
             </p>
           </div>
 
-          <div className="col-span-2 space-y-1 pt-1 border-t border-border">
+          <div className="space-y-1 border-t border-border pt-2 sm:col-span-2">
             <span className="text-xs text-muted-foreground">Operational Remarks &amp; Receipts:</span>
             <p className="text-foreground text-sm whitespace-pre-wrap">
               {title.release_remarks || <span className="text-muted-foreground italic">None recorded</span>}
             </p>
           </div>
         </div>
-      </div>
+      </SectionCard>
 
+      {/*
+        The labels match the dossier card above them — `text-xs`, on their own
+        line. They were `text-muted-foreground` at the inherited `text-sm` and
+        inline, so each expanded to fill its grid cell and read as a value
+        rather than as the name of one; the two cards on this page labelled the
+        same kind of thing at two different sizes.
+      */}
       {/* Property & Title Summary */}
-      <div className="rounded-lg border border-border p-4 space-y-3 bg-row-hover">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Property Specifications
-        </h4>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <span className="text-muted-foreground">Client Account:</span>
-            <p className="font-medium text-foreground">{clientName}</p>
+      <SectionCard className="space-y-3">
+        <SectionHeader title="Property Specifications" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="space-y-1">
+            <span className="block text-xs text-muted-foreground">Client Account</span>
+            <p className="text-sm font-medium text-foreground">{clientName}</p>
           </div>
-          <div>
-            <span className="text-muted-foreground">Property Lot:</span>
-            <p className="font-medium text-foreground">{propertyRef}</p>
+          <div className="space-y-1">
+            <span className="block text-xs text-muted-foreground">Property Lot</span>
+            <p className="text-sm font-medium text-foreground">{propertyRef}</p>
           </div>
-          <div>
-            <span className="text-muted-foreground">Title Number:</span>
-            <p className="font-mono text-foreground">{title.property?.title_number ?? 'N/A'}</p>
+          <div className="space-y-1">
+            <span className="block text-xs text-muted-foreground">Title Number</span>
+            <p className="text-sm font-mono text-foreground">{title.property?.title_number ?? 'N/A'}</p>
           </div>
-          <div>
-            <span className="text-muted-foreground">Location:</span>
-            <p className="font-medium text-foreground">{propertyLocation}</p>
+          <div className="space-y-1">
+            <span className="block text-xs text-muted-foreground">Location</span>
+            <p className="text-sm font-medium text-foreground">{propertyLocation}</p>
           </div>
+          {title.property?.area_size ? (
+            <div className="space-y-1">
+              <span className="block text-xs text-muted-foreground">Lot Area</span>
+              <p className="text-sm font-medium text-foreground">
+                {title.property.area_size.toLocaleString('en-PH')} sqm
+              </p>
+            </div>
+          ) : null}
         </div>
-      </div>
+      </SectionCard>
 
       {/* Signed Clearance Document Card */}
-      <div className="rounded-lg border border-border p-4 space-y-3 bg-card">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Paperclip className="h-4 w-4 text-primary shrink-0" />
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Signed Clearance Document
-            </h4>
-          </div>
-          {title.release_attachment ? (
-            <Badge variant="success" shape="pill" dot className="text-xs">
-              Attached
-            </Badge>
-          ) : (
-            <Badge variant="muted" shape="pill" className="text-xs">
-              Pending Attachment
-            </Badge>
-          )}
-        </div>
+      <SectionCard className="space-y-3">
+        <SectionHeader
+          title="Signed Clearance Document"
+          action={
+            title.release_attachment ? (
+              <Badge variant="success" shape="pill" dot>
+                Attached
+              </Badge>
+            ) : (
+              <Badge variant="muted" shape="pill">
+                Pending Attachment
+              </Badge>
+            )
+          }
+        />
 
         {title.release_attachment ? (
-          <div className="flex items-center justify-between rounded-lg border border-border p-3 bg-row-hover text-sm">
+          <div className="flex items-center justify-between rounded-lg border border-border bg-row-hover p-3 text-sm">
             <div className="flex items-center gap-2.5 min-w-0">
               <FileText className="h-5 w-5 text-primary shrink-0" />
               <div className="min-w-0">
                 <p className="font-medium text-foreground truncate">
                   {title.release_attachment.file_name ?? 'Signed_Clearance_Sheet.pdf'}
                 </p>
+                {/*
+                  Size and upload time are recorded on the attachment and were
+                  never shown. They are what a staff member checks when they are
+                  confirming the right scan was filed.
+                */}
                 <p className="text-xs text-muted-foreground">
-                  Attached proof of physical handover
+                  {[
+                    formatFileSize(title.release_attachment.file_size),
+                    `Uploaded ${formatMediumDate(title.release_attachment.uploaded_at)}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' • ')}
                 </p>
               </div>
             </div>
@@ -293,7 +328,7 @@ export function TitleReleasedTab({ title }: TitleReleasedTabProps) {
             )}
           </div>
         )}
-      </div>
+      </SectionCard>
 
       {/* Edit Release Details Modal */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>

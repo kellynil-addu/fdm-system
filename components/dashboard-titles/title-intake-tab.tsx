@@ -15,11 +15,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { SectionCard, SectionHeader } from '@/components/ui/section-card';
 import { useLandTitles, lotRefLabel, type TitleDialogItem } from '@/lib/hooks/use-land-titles';
 import { useMutation } from '@/lib/hooks/use-mutation';
+import { formatMediumDate } from '@/lib/format-date';
 import type { LandTitle } from '@/lib/types/title';
-
-const DATE_FORMAT = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' });
 
 interface TitleIntakeTabProps {
   item: TitleDialogItem;
@@ -53,8 +53,12 @@ export function TitleIntakeTab({ item, onStartedProcessing }: TitleIntakeTabProp
   const isStarting = startState.status === 'pending';
   const isReturning = returnState.status === 'pending';
 
+  const property = activeTitle?.property ?? activeAwaiting?.property;
+  const client = activeTitle?.client ?? activeAwaiting?.client;
+  const primaryContact = client?.contact_info?.find((c) => c.is_primary) ?? client?.contact_info?.[0];
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <Alert variant="info">
         <Inbox className="h-4 w-4" />
         <AlertDescription className="text-sm">
@@ -63,7 +67,7 @@ export function TitleIntakeTab({ item, onStartedProcessing }: TitleIntakeTabProp
             <>
               {' '}on{' '}
               <span className="font-semibold text-foreground">
-                {DATE_FORMAT.format(new Date(activeAwaiting.cleared_at))}
+                {formatMediumDate(activeAwaiting.cleared_at)}
               </span>
             </>
           ) : null}
@@ -71,10 +75,8 @@ export function TitleIntakeTab({ item, onStartedProcessing }: TitleIntakeTabProp
         </AlertDescription>
       </Alert>
 
-      <div className="rounded-lg border border-border p-4 space-y-3 bg-card">
-        <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Account Intake Overview
-        </h4>
+      <SectionCard className="space-y-3">
+        <SectionHeader title="Account Intake Overview" />
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="text-muted-foreground">Principal Buyer:</span>
@@ -95,11 +97,48 @@ export function TitleIntakeTab({ item, onStartedProcessing }: TitleIntakeTabProp
           <div>
             <span className="text-muted-foreground">Title Number on Lot:</span>
             <p className="font-mono text-foreground">
-              {activeTitle?.property?.title_number ?? activeAwaiting?.property.title_number ?? 'Not yet recorded'}
+              {property?.title_number ?? 'Not yet recorded'}
             </p>
           </div>
+          {/*
+            Lot size and price are on the property record and were never shown
+            here, though intake staff check them against the account before
+            accepting it. Contact and address were loaded for the calling cards
+            and unused on this page, which is the page whose whole job is
+            chasing the buyer for requirements.
+          */}
+          {property?.area_size ? (
+            <div>
+              <span className="text-muted-foreground">Lot Area:</span>
+              <p className="font-medium text-foreground">
+                {property.area_size.toLocaleString('en-PH')} sqm
+              </p>
+            </div>
+          ) : null}
+          {activeTitle?.property?.price_per_sqm ? (
+            <div>
+              <span className="text-muted-foreground">Price per sqm:</span>
+              <p className="font-medium text-foreground">
+                ₱{activeTitle.property.price_per_sqm.toLocaleString('en-PH')}
+              </p>
+            </div>
+          ) : null}
+          {primaryContact ? (
+            <div>
+              <span className="text-muted-foreground">
+                {primaryContact.type === 'Email' ? 'Email:' : 'Contact:'}
+              </span>
+              <p className="font-medium text-foreground">{primaryContact.value}</p>
+            </div>
+          ) : null}
+          {client?.address ? (
+            <div className="col-span-2">
+              <span className="text-muted-foreground">Buyer Address:</span>
+              <p className="font-medium text-foreground">{client.address}</p>
+            </div>
+          ) : null}
         </div>
-      </div>
+      </SectionCard>
 
       {activeAwaiting && (
         <div className="flex items-center justify-between border-t border-border pt-4">

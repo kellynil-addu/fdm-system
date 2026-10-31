@@ -253,11 +253,9 @@ export async function createSubdivisionLot(
           : Math.max(10, Math.round(calculatePolygonAreaSqm(validatedInput.boundary) * 100) / 100)
         : null;
 
-      const pricePerSqm = shouldCreateLot
-        ? validatedInput.price_per_sqm && validatedInput.price_per_sqm > 0
-          ? validatedInput.price_per_sqm
-          : 6500
-        : null;
+      // Required by the schema whenever a lot is registered; never defaulted, since a fabricated
+      // price would read as a real contract term.
+      const pricePerSqm = shouldCreateLot ? validatedInput.price_per_sqm! : null;
 
       const { data, error } = await supabase.rpc("create_subdivision_lot", {
         p_site_id: validatedInput.site_id,

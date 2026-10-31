@@ -5,7 +5,6 @@ import {
   ArrowRight,
   Calendar,
   CheckCircle2,
-  Circle,
   CircleDashed,
   ExternalLink,
   FileText,
@@ -20,6 +19,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { SectionCard, SectionHeader } from '@/components/ui/section-card';
+import { StepChecklist, type StepItem } from '@/components/ui/step-checklist';
 import { GenerateDeedModal } from './generate-deed-modal';
 import {
   AlertDialog,
@@ -32,13 +33,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { formatDocumentName } from '@/lib/format-document-name';
+import { formatMediumDate } from '@/lib/format-date';
 import { useLandTitles, lotRefLabel } from '@/lib/hooks/use-land-titles';
 import { useMutation } from '@/lib/hooks/use-mutation';
-import {
-  getMissingReleaseDocuments,
-  getRequiredReleaseDocuments,
-  isReleasePacketComplete,
-} from '@/lib/utils/release-requirements';
+import { getDocPrepState, getDocPrepSteps, getReleasedDate } from '@/lib/title-progress';
 import { DOCUMENT_FILE_ACCEPT } from '@/lib/validations/document';
 import { DOC_TYPE_LABEL, type ClientDocument } from '@/lib/types/client';
 import {
@@ -47,8 +45,6 @@ import {
   type ReleaseDocumentType,
   type TitleStatus,
 } from '@/lib/types/title';
-
-const DATE_FORMAT = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' });
 
 interface TitlePacketTabProps {
   title: LandTitle;
@@ -94,53 +90,23 @@ export function TitlePacketTab({
   const [isEditingTct, setIsEditingTct] = useState(false);
 
   const isReleased = title.status === 'Released';
-  const releasedEntry = title.history?.slice().reverse().find((h) => h.status === 'Released');
-  const releasedDate = releasedEntry
-    ? new Date(releasedEntry.changed_at)
-    : title.updated_at
-    ? new Date(title.updated_at)
-    : null;
-  const releasedDateStr = releasedDate ? DATE_FORMAT.format(releasedDate) : '';
+  // The released date comes from the shared derivation, so this tab and the
+  // rail cannot disagree about when the packet was handed over.
+  const releasedAt = getReleasedDate(title);
+  const releasedDateStr = releasedAt ? formatMediumDate(releasedAt) : '';
 
   const latestDocsByType = new Map<string, ClientDocument>();
   for (const doc of documents) {
     if (!latestDocsByType.has(doc.document_type)) latestDocsByType.set(doc.document_type, doc);
   }
 
-  const requiredDocs = getRequiredReleaseDocuments(title.is_legacy_transferred);
-  const missingDocs = getMissingReleaseDocuments(title.is_legacy_transferred, latestDocsByType.keys());
-  const hasRecordedTct = Boolean(title.property?.title_number?.trim());
-  const packetIsComplete = isReleasePacketComplete(
-    title.is_legacy_transferred,
-    latestDocsByType.keys(),
-    hasRecordedTct
-  );
-
-  const reviewSubmittedEntry = title.history?.find((h) => h.status === 'For Review');
-  const reviewApprovedEntry = title.history?.find((h) => h.status === 'For Signature');
-  const clearanceStartedEntry = title.history?.find((h) => h.status === 'Clearance Period');
-
-  const reviewSubmittedDate = reviewSubmittedEntry
-    ? DATE_FORMAT.format(new Date(reviewSubmittedEntry.changed_at))
-    : (title.status === 'For Review' ? DATE_FORMAT.format(new Date(title.updated_at)) : null);
-
-  const reviewApprovedDate = reviewApprovedEntry
-    ? DATE_FORMAT.format(new Date(reviewApprovedEntry.changed_at))
-    : (title.status === 'For Signature' ? DATE_FORMAT.format(new Date(title.updated_at)) : null);
-
-  const signedDate = clearanceStartedEntry
-    ? DATE_FORMAT.format(new Date(clearanceStartedEntry.changed_at))
-    : (isExecutiveSigned ? DATE_FORMAT.format(new Date()) : reviewApprovedDate);
-
-  const isPastDocPrep =
-    title.status === 'Clearance Period' ||
-    title.status === 'Ready for Claim' ||
-    title.status === 'Released';
-
-  const step1Done = Boolean(packetIsComplete);
-  const step2Done = isPastDocPrep || title.status === 'For Review' || title.status === 'For Signature';
-  const step3Done = isPastDocPrep || title.status === 'For Signature';
-  const step4Done = isPastDocPrep || (title.status === 'For Signature' && isExecutiveSigned);
+  const prep = getDocPrepState(title, documents, isExecutiveSigned);
+  const {
+    step1Done,
+    requiredCount: requiredDocsCount,
+    missingCount: missingDocsCount,
+    hasRecordedTct,
+  } = prep;
 
   const { state: tctState, execute: runSaveTct } = useMutation(
     async (newTitleNumber: string) => {
@@ -217,11 +183,27 @@ export function TitlePacketTab({
   const propertyRef = lotRefLabel(title.property);
   const propertyLocation = title.property?.location ?? '';
 
+  const missingDetail = [
+    missingDocsCount > 0
+      ? `${missingDocsCount} file${missingDocsCount > 1 ? 's' : ''} missing`
+      : '',
+    !hasRecordedTct ? 'title number missing' : '',
+  ]
+    .filter(Boolean)
+    .join(' • ');
+
+  const prepSteps: StepItem[] = getDocPrepSteps(
+    title,
+    documents,
+    isExecutiveSigned,
+    missingDetail
+  );
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Release Status Banner */}
       {isReleased && (
-        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-row-hover px-3.5 py-2.5 text-sm text-foreground">
+        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-[color-mix(in_srgb,var(--success)_8%,var(--card))] px-3.5 py-2.5 text-sm text-foreground">
           <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
           <span>Title released{releasedDateStr ? ` on ${releasedDateStr}` : ''}.</span>
         </div>
@@ -229,15 +211,15 @@ export function TitlePacketTab({
 
       {/* Stage Management Section */}
       {!isReleased && canEdit && (
-        <div className="rounded-xl border border-border p-4 bg-card space-y-3 shadow-2xs">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Stage Management
-            </h4>
-            <Badge variant="outline" className="text-xs">
-              Current: {title.status}
-            </Badge>
-          </div>
+        <SectionCard className="space-y-3">
+          <SectionHeader
+            title="Stage Management"
+            action={
+              <Badge variant="outline">
+                Current: {title.status}
+              </Badge>
+            }
+          />
 
           {/* Stage: Cleared by Billing */}
           {title.status === 'Cleared by Billing' && (
@@ -364,215 +346,69 @@ export function TitlePacketTab({
           )}
 
           {/* Past Document Prep stages */}
-          {isPastDocPrep && (
+          {title.status !== 'Document Preparation' && title.status !== 'For Review' && title.status !== 'For Signature' && (
             <p className="text-sm text-muted-foreground pt-1">
               Document preparation and executive sign-off are complete for this title.
             </p>
           )}
-        </div>
+        </SectionCard>
       )}
 
       {/* Document Preparation Workflow Checklist */}
-      <div className="rounded-xl border border-border bg-card p-4 space-y-3.5 shadow-2xs">
-        <div className="flex items-center justify-between pb-1 border-b border-border">
-          <div className="space-y-0.5">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Document Preparation & Verification Workflow
-            </h4>
-            <p className="text-xs text-muted-foreground">
-              Track packet readiness, supervisor review, and executive sign-off.
-            </p>
-          </div>
-          {isUpdatingStatus && (
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-          )}
-        </div>
+      <SectionCard className="space-y-3">
+        <SectionHeader
+          title="Document Preparation & Verification Workflow"
+          description="Track packet readiness, supervisor review, and executive sign-off."
+          action={
+            isUpdatingStatus ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : undefined
+          }
+        />
 
-        <div className="space-y-3 pt-1">
-          {/* Step 1: Release Packet Complete */}
-          <div className="flex items-start justify-between gap-3 p-3 rounded-lg border border-border bg-card">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="mt-0.5 shrink-0">
-                {step1Done ? (
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                ) : (
-                  <Circle className="h-4 w-4 text-muted-foreground" />
-                )}
-              </div>
-              <div className="space-y-0.5 min-w-0">
-                <p className="text-sm font-semibold text-foreground">
-                  Release Packet Documents & Title Number
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {step1Done
-                    ? `Complete (${requiredDocs.length}/${requiredDocs.length} documents uploaded • Title number recorded)`
-                    : `${missingDocs.length > 0 ? `${missingDocs.length} file${missingDocs.length > 1 ? 's' : ''} missing` : ''}${!hasRecordedTct ? (missingDocs.length > 0 ? ' • Title number missing' : 'Title number missing') : ''}`}
-                </p>
-              </div>
-            </div>
-            <Badge
-              variant={step1Done ? 'success' : 'outline'}
-              shape="pill"
-              className="text-xs shrink-0"
-            >
-              {step1Done ? 'Complete' : 'Incomplete'}
-            </Badge>
-          </div>
-
-          {/* Step 2: Submitted for Review */}
-          <div className="flex items-start justify-between gap-3 p-3 rounded-lg border border-border bg-card">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="mt-0.5 shrink-0">
-                {step2Done ? (
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                ) : (
-                  <Circle className="h-4 w-4 text-muted-foreground" />
-                )}
-              </div>
-              <div className="space-y-0.5 min-w-0">
-                <p className="text-sm font-semibold text-foreground">
-                  Submitted for Review
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {step2Done
-                    ? `Submitted for legal review on ${reviewSubmittedDate ?? 'record'}`
-                    : step1Done
-                    ? 'Ready for submission to legal supervisor'
-                    : 'Requires complete release packet and title number'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {step2Done && reviewSubmittedDate && (
-                <span className="text-xs font-medium text-muted-foreground">
-                  {reviewSubmittedDate}
-                </span>
-              )}
-              <Badge
-                variant={step2Done ? 'success' : 'outline'}
-                shape="pill"
-                className="text-xs"
-              >
-                {step2Done ? 'Submitted' : 'Pending'}
-              </Badge>
-            </div>
-          </div>
-
-          {/* Step 3: Legal Supervisor Review Approved */}
-          <div className="flex items-start justify-between gap-3 p-3 rounded-lg border border-border bg-card">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="mt-0.5 shrink-0">
-                {step3Done ? (
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                ) : title.status === 'For Review' ? (
-                  <CircleDashed className="h-4 w-4 text-primary animate-pulse" />
-                ) : (
-                  <Circle className="h-4 w-4 text-muted-foreground" />
-                )}
-              </div>
-              <div className="space-y-0.5 min-w-0">
-                <p className="text-sm font-semibold text-foreground">
-                  Legal Supervisor Review Approved
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {step3Done
-                    ? `Supervisor review verified on ${reviewApprovedDate ?? 'record'}`
-                    : title.status === 'For Review'
-                    ? 'Pending supervisor verification of technical description'
-                    : 'Awaiting submission for review'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {step3Done && reviewApprovedDate && (
-                <span className="text-xs font-medium text-muted-foreground">
-                  {reviewApprovedDate}
-                </span>
-              )}
-              <Badge
-                variant={step3Done ? 'success' : title.status === 'For Review' ? 'default' : 'outline'}
-                shape="pill"
-                className="text-xs"
-              >
-                {step3Done ? 'Approved' : title.status === 'For Review' ? 'In Review' : 'Pending'}
-              </Badge>
-            </div>
-          </div>
-
-          {/* Step 4: Executive Management Signature */}
-          <div className="flex items-start justify-between gap-3 p-3 rounded-lg border border-border bg-card">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="mt-0.5 shrink-0">
-                {step4Done ? (
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                ) : title.status === 'For Signature' ? (
-                  <CircleDashed className="h-4 w-4 text-primary animate-pulse" />
-                ) : (
-                  <Circle className="h-4 w-4 text-muted-foreground" />
-                )}
-              </div>
-              <div className="space-y-0.5 min-w-0">
-                <p className="text-sm font-semibold text-foreground">
-                  Signed by Executive Management
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {step4Done
-                    ? `Signed & notarized on ${signedDate ?? 'record'}`
-                    : title.status === 'For Signature'
-                    ? 'Awaiting executive management sign-off & notarization'
-                    : 'Awaiting legal supervisor approval'}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              {step4Done && signedDate && (
-                <span className="text-xs font-medium text-muted-foreground">
-                  {signedDate}
-                </span>
-              )}
-              <Badge
-                variant={step4Done ? 'success' : title.status === 'For Signature' ? 'default' : 'outline'}
-                shape="pill"
-                className="text-xs"
-              >
-                {step4Done ? 'Signed' : title.status === 'For Signature' ? 'Awaiting Sign-off' : 'Pending'}
-              </Badge>
-            </div>
-          </div>
-        </div>
-      </div>
+        {/*
+          The four rows below were 130 lines of near-identical markup — the same
+          border, the same icon slot, the same title/detail/badge arrangement
+          written out once per step. They are one `StepChecklist` now, which is
+          what makes a completed step look the same here as it does in the rail.
+        */}
+        <StepChecklist
+          ariaLabel="Document preparation and verification steps"
+          items={prepSteps}
+        />
+      </SectionCard>
 
       {/* Title Number Card */}
-      <div className="rounded-lg border border-border p-4 bg-card space-y-2">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Title number on {[propertyRef, propertyLocation].filter(Boolean).join(', ')}
-            </span>
-            {!isEditingTct && title.property?.title_number ? (
-              <p className="font-mono text-sm font-semibold text-foreground mt-0.5">
-                {title.property.title_number}
-              </p>
-            ) : !isEditingTct ? (
-              <p className="text-sm text-warning font-medium mt-0.5">
-                No title number recorded on lot (Required to submit for review)
-              </p>
-            ) : null}
-          </div>
-          {canEdit && !isReleased && !isEditingTct && (
-            <Button
-              type="button"
-              variant="quiet"
-              size="sm"
-              onClick={() => {
-                setTitleNumberInput(currentTct);
-                setIsEditingTct(true);
-              }}
-              className="gap-1.5 text-sm h-9 px-3.5"
-            >
-              <Pencil className="h-3.5 w-3.5" /> Edit
-            </Button>
-          )}
+      <SectionCard className="space-y-2">
+        <SectionHeader
+          title={`Title number on ${[propertyRef, propertyLocation].filter(Boolean).join(', ')}`}
+          action={
+            canEdit && !isReleased && !isEditingTct ? (
+              <Button
+                type="button"
+                variant="quiet"
+                size="sm"
+                onClick={() => {
+                  setTitleNumberInput(currentTct);
+                  setIsEditingTct(true);
+                }}
+                className="gap-1.5 text-sm h-9 px-3.5"
+              >
+                <Pencil className="h-3.5 w-3.5" /> Edit
+              </Button>
+            ) : undefined
+          }
+        />
+        <div>
+          {!isEditingTct && title.property?.title_number ? (
+            <p className="font-mono text-sm font-semibold text-foreground">
+              {title.property.title_number}
+            </p>
+          ) : !isEditingTct ? (
+            <p className="text-sm text-warning font-medium">
+              No title number recorded on lot (Required to submit for review)
+            </p>
+          ) : null}
         </div>
 
         {isEditingTct && (
@@ -606,19 +442,19 @@ export function TitlePacketTab({
             </Button>
           </form>
         )}
-      </div>
+      </SectionCard>
 
       {/* Release Packet Checklist */}
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-            Release Packet Documents
-            {isLoadingDocs && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          </h4>
-          <span className="text-sm text-muted-foreground">
-            {requiredDocs.length - missingDocs.length} of {requiredDocs.length} uploaded
-          </span>
-        </div>
+        <SectionHeader
+          title="Release Packet Documents"
+          action={
+            <span className="flex items-center gap-2 text-sm text-muted-foreground">
+              {isLoadingDocs && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {requiredDocsCount - missingDocsCount} of {requiredDocsCount} uploaded
+            </span>
+          }
+        />
 
         <div className="divide-y divide-border rounded-lg border border-border bg-card">
           {RELEASE_DOCUMENT_TYPES.map((type) => {
@@ -649,7 +485,7 @@ export function TitlePacketTab({
                       </p>
                     ) : doc ? (
                       <p className="text-xs text-muted-foreground truncate">
-                        {formatDocumentName(doc.file_path)} • {DATE_FORMAT.format(new Date(doc.uploaded_at))}
+                        {formatDocumentName(doc.file_path)} • {formatMediumDate(doc.uploaded_at)}
                       </p>
                     ) : (
                       <p className="text-xs text-muted-foreground">Required for turnover</p>

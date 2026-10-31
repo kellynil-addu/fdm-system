@@ -464,7 +464,13 @@ export function ClientCallingCard({
         // two cards in a dialog header come out equal rather than 240px and
         // 176px. `self-stretch` then equalises their heights, since a property
         // card carries one more compact row than a client card.
-        isCompact && 'min-w-[11rem] max-w-full flex-1 self-stretch rounded-lg',
+        //
+        // `h-auto` is what lets `self-stretch` do anything. The base classes
+        // above include `h-full`, and `height: 100%` makes the cross size
+        // definite, which is exactly the case `align-self: stretch` is defined
+        // not to apply to — so the client card sat at its own 64.5px beside an
+        // 88px property card while carrying a `self-stretch` that never landed.
+        isCompact && 'h-auto min-w-[11rem] max-w-full flex-1 self-stretch rounded-lg',
         // Last, so it wins the `twMerge` against the compact tier's rounding and
         // against the variant's border, surface and shadow. The parent supplies
         // all three; a second set here is what made the legal grid read as

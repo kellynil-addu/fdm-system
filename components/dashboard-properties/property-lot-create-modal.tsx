@@ -89,7 +89,9 @@ export function CreatePropertyLotModal({
     },
   });
 
-  // Prefill form when opened with initial values
+  // Prefill form with the values it was opened with. `defaultValues` alone is not enough: the
+  // component stays mounted across dialog transitions, so the form would otherwise keep whatever
+  // the previous open left behind.
   useEffect(() => {
     if (open) {
       form.reset({
@@ -177,7 +179,6 @@ export function CreatePropertyLotModal({
               min={1}
               max={LOT_LIMITS.blockOrLotNumber}
               step={1}
-              placeholder="1"
               disabled={isPending}
               error={errors.block_number?.message}
               {...register('block_number', { valueAsNumber: true })}
@@ -189,7 +190,6 @@ export function CreatePropertyLotModal({
               min={1}
               max={LOT_LIMITS.blockOrLotNumber}
               step={1}
-              placeholder="1"
               disabled={isPending}
               error={errors.lot_number?.message}
               {...register('lot_number', { valueAsNumber: true })}
@@ -204,7 +204,6 @@ export function CreatePropertyLotModal({
               min={0}
               max={LOT_LIMITS.areaSqm}
               step="0.01"
-              placeholder="250.00"
               disabled={isPending}
               error={errors.area_size?.message}
               {...register('area_size', { valueAsNumber: true })}
@@ -216,7 +215,6 @@ export function CreatePropertyLotModal({
               min={0}
               max={LOT_LIMITS.pricePerSqm}
               step="0.01"
-              placeholder="3500.00"
               disabled={isPending}
               error={errors.price_per_sqm?.message}
               {...register('price_per_sqm', { valueAsNumber: true })}

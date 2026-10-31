@@ -19,6 +19,15 @@ export interface UseMapLibreMapOptions {
   minZoom?: number;
 }
 
+/**
+ * Global handle on the live map instance, published for end-to-end tests only.
+ *
+ * Lots are drawn as WebGL polygons on a canvas, so Playwright cannot locate them with a
+ * selector. Tests would otherwise have to walk React's internal fiber tree to reach the
+ * instance; this exposes it directly. Stripped from production builds by the `NODE_ENV` check.
+ */
+export const E2E_MAP_HANDLE = '__fdmMap';
+
 export function useMapLibreMap(
   containerRef: React.RefObject<HTMLDivElement | null>,
   options: UseMapLibreMapOptions = {}
@@ -84,6 +93,9 @@ export function useMapLibreMap(
         mapRef.current = map;
         setMapInstance(map);
         setIsReady(true);
+        if (process.env.NODE_ENV !== 'production') {
+          (window as unknown as Record<string, unknown>)[E2E_MAP_HANDLE] = map;
+        }
       });
     }
 
@@ -91,11 +103,17 @@ export function useMapLibreMap(
 
     return () => {
       isMounted = false;
-      if (mapRef.current) {
-        mapRef.current.remove();
+      const instance = mapRef.current;
+      if (instance) {
+        instance.remove();
         mapRef.current = null;
         setMapInstance(null);
         setIsReady(false);
+        // Only clear the handle if it still points at this instance, so a map torn down after its
+        // replacement mounted does not unpublish the live one.
+        if ((window as unknown as Record<string, unknown>)[E2E_MAP_HANDLE] === instance) {
+          delete (window as unknown as Record<string, unknown>)[E2E_MAP_HANDLE];
+        }
       }
     };
   }, [containerRef]);

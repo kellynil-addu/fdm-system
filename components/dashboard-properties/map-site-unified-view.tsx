@@ -14,14 +14,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { PanelLeftOpen, PenTool, AlertTriangle } from 'lucide-react';
 import { SiteMap } from './map-site';
@@ -86,16 +78,19 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         }
       }
     }
-    return sites.find((s) => !s.is_archived)?.site_id ?? sites[0]?.site_id ?? null;
+    // No auto-selection: an empty selection is the "all sites" view, and clicking a site
+    // marker or picking one in the editor is what makes a site active.
+    return null;
   });
 
   // Entry confirmation dialog
   const [isEntryConfirmOpen, setIsEntryConfirmOpen] = useState(false);
-  const [pendingEntrySiteId, setPendingEntrySiteId] = useState<string | null>(activeSiteId);
 
   // Exit guard dialog when unsaved drafts exist
   const [isExitGuardOpen, setIsExitGuardOpen] = useState(false);
-  const [pendingExitTarget, setPendingExitTarget] = useState<'leaveSite' | 'exitEditor' | null>(null);
+  const [pendingExitTarget, setPendingExitTarget] = useState<
+    'leaveSite' | 'exitEditor' | null
+  >(null);
 
   // Drawing & Plotting states
   const [plotType, setPlotType] = useState<'lot' | 'site' | null>(null);
@@ -118,11 +113,12 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     return parseRing(activeSite.boundary);
   }, [activeSite]);
 
-  // Out-of-bounds vertex status
+  // Out-of-bounds vertex status. Only meaningful for lots: a new site boundary is plotted
+  // outside every existing site ring by definition, so containment must not gate it.
   const hasOutOfBoundsVertex = useMemo(() => {
-    if (!activeSiteRing || draftPoints.length === 0) return false;
+    if (plotType !== 'lot' || !activeSiteRing || draftPoints.length === 0) return false;
     return !isPolygonContained(draftPoints, activeSiteRing);
-  }, [draftPoints, activeSiteRing]);
+  }, [plotType, draftPoints, activeSiteRing]);
 
   // Sync selected lot from targetLotId URL param
   useEffect(() => {
@@ -212,6 +208,13 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     [isEditorActive]
   );
 
+  /** Single site-selection entry point: drives the sidebar filter, the map focus, and the
+   * editor's edit target. In the editor this is reached only from the site chooser, where
+   * no drafts can exist yet, so switching needs no guard. */
+  const handleSelectSite = useCallback((siteId: string | null) => {
+    setActiveSiteId(siteId);
+  }, []);
+
   const handleSelectLot = useCallback((lot: PropertyLotWithClient | null) => {
     setCreateInitialValues(null);
     setSelectedPropertyLot(lot);
@@ -240,21 +243,20 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     [isEditorActive]
   );
 
-  // Request entering editor mode (shows Entry Confirmation Dialog)
+  // Entering editor mode is confirmed first, so the drafting rules are stated before any
+  // editing is possible.
   const handleRequestEditorEntry = useCallback(() => {
-    setPendingEntrySiteId(activeSiteId ?? sites.find((s) => !s.is_archived)?.site_id ?? sites[0]?.site_id ?? null);
     setIsEntryConfirmOpen(true);
-  }, [activeSiteId, sites]);
+  }, []);
 
-  // Confirm entering editor mode
   const handleConfirmEditorEntry = useCallback(() => {
     setIsEntryConfirmOpen(false);
     setIsSidebarOpen(false);
     setIsEditorActive(true);
-    if (pendingEntrySiteId) {
-      setActiveSiteId(pendingEntrySiteId);
-    }
-  }, [pendingEntrySiteId]);
+    // Start at the top of the decision tree: a site may have been selected in view mode,
+    // but editing begins with an explicit choice from the site list.
+    setActiveSiteId(null);
+  }, []);
 
   // Request leaving the chosen site or exiting editor mode
   const handleLeaveSite = useCallback(() => {
@@ -393,7 +395,10 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
     setDraftPoints(foundBoundary);
     setActiveDraft({
       boundary: foundBoundary,
-      areaSize: plot.areaSize,
+      // Editing a closed lot has no stored area, so derive it from the ring being edited.
+      areaSize:
+        plot.areaSize ??
+        Math.max(10, Math.round(calculatePolygonAreaSqm(foundBoundary) * 100) / 100),
       block: plot.block,
       lot: plot.lot,
       isEditingExisting: true,
@@ -691,11 +696,13 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
             onSelectUnregistered={handleSelectUnregistered}
             isEditorMode={isEditorActive}
             isPlotting={plotType !== null}
+            plotType={plotType}
             draftPoints={draftPoints}
             onAddDraftPoint={handleAddDraftPoint}
             onDeletePlot={handleDeletePlotTrigger}
             onEditBoundary={handleEditBoundary}
             focusedSiteId={activeSiteId}
+            onSelectSite={handleSelectSite}
             activeSiteRing={activeSiteRing}
             draftLots={draftLots}
             pendingBoundaryUpdates={pendingBoundaryUpdates}
@@ -724,7 +731,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
         <MapSiteEditor
           sites={sites}
           activeSiteId={activeSiteId}
-          onSelectSite={setActiveSiteId}
+          onSelectSite={handleSelectSite}
           onLeaveSite={handleLeaveSite}
           isEditorActive={isEditorActive}
           onToggleEditor={handleToggleEditor}
@@ -773,7 +780,8 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
             selectedLot={selectedPropertyLot}
             onSelectLot={handleSelectLot}
             onHoverLot={setHoveredLotKey}
-            onSiteFilterChange={setActiveSiteId}
+            onSiteFilterChange={handleSelectSite}
+            siteFilter={activeSiteId}
             createInitialValues={createInitialValues}
             onClearCreateInitialValues={() => setCreateInitialValues(null)}
           />
@@ -805,45 +813,32 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
                 <span>Enter Map Editor?</span>
               </AlertDialogTitle>
               <AlertDialogDescription asChild>
-                <div className="space-y-3 pt-2 text-xs text-foreground leading-relaxed">
+                <div className="space-y-3 pt-2 text-xs leading-relaxed text-foreground">
                   <p>
                     You are entering <strong>interactive editing mode</strong>.
                   </p>
-                  <div className="rounded-lg bg-row-hover p-2.5 space-y-1.5 border border-border text-muted-foreground">
+                  <div className="space-y-1.5 rounded-lg border border-border bg-row-hover p-2.5 text-muted-foreground">
                     <div className="flex items-start gap-1.5">
-                      <span className="text-primary font-bold">•</span>
-                      <span>Edits are <strong>drafted locally</strong> and never applied to the live map until you click <strong>Save All &amp; Exit</strong>.</span>
+                      <span className="font-bold text-primary">•</span>
+                      <span>
+                        Edits are <strong>drafted locally</strong> and never applied to the live map
+                        until you click <strong>Save All &amp; Exit</strong>.
+                      </span>
                     </div>
                     <div className="flex items-start gap-1.5">
-                      <span className="text-primary font-bold">•</span>
-                      <span>Editing is <strong>scoped to your selected site</strong>. You must leave the site to switch projects or add a new site.</span>
+                      <span className="font-bold text-primary">•</span>
+                      <span>
+                        You start by <strong>choosing a site</strong>, then edit only within it. Use{' '}
+                        <strong>Leave Site</strong> to go back and choose another.
+                      </span>
                     </div>
                     <div className="flex items-start gap-1.5">
-                      <span className="text-primary font-bold">•</span>
-                      <span>Clicking lots on the map displays editing controls rather than client details.</span>
+                      <span className="font-bold text-primary">•</span>
+                      <span>
+                        Clicking lots on the map displays editing controls rather than client
+                        details.
+                      </span>
                     </div>
-                  </div>
-
-                  <div className="space-y-1 pt-1">
-                    <Label htmlFor="entry-site-select" className="text-xs font-semibold">
-                      Select Site to Edit:
-                    </Label>
-                    <Select
-                      value={pendingEntrySiteId ?? ''}
-                      onValueChange={setPendingEntrySiteId}
-                    >
-                      <SelectTrigger id="entry-site-select" className="h-8 text-xs bg-card">
-                        <SelectValue placeholder="Choose a site" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {sites.map((s) => (
-                          <SelectItem key={s.site_id} value={s.site_id} className="text-xs">
-                            {s.name}
-                            {s.is_archived ? ' (Archived)' : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                   </div>
                 </div>
               </AlertDialogDescription>
@@ -852,8 +847,7 @@ export function SiteMapUnifiedView({ sites }: SiteMapUnifiedViewProps) {
               <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleConfirmEditorEntry}
-                disabled={!pendingEntrySiteId}
-                className="text-xs font-semibold bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)] disabled:opacity-50"
+                className="bg-primary text-xs font-semibold text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
               >
                 Enter Editor
               </AlertDialogAction>

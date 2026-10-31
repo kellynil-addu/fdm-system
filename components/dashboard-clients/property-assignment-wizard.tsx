@@ -632,7 +632,6 @@ export function PropertyAssignmentWizard({
                       min={0.01}
                       step="0.01"
                       autoFocus
-                      placeholder="250"
                       value={areaInput}
                       onChange={(e) => setAreaInput(e.target.value)}
                       onBlur={() => setEditingMetric(null)}
@@ -680,7 +679,6 @@ export function PropertyAssignmentWizard({
                       min={0.01}
                       step="0.01"
                       autoFocus
-                      placeholder="3500"
                       value={priceInput}
                       onChange={(e) => setPriceInput(e.target.value)}
                       onBlur={() => setEditingMetric(null)}

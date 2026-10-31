@@ -166,6 +166,33 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
     expect(siteWithLots.lots.some((l) => l.block_number === 2 && l.lot_number === 5)).toBe(false);
   });
 
+  it("refuses to register a lot without a real price rather than inventing one", async () => {
+    const siteId = testSiteIds[0];
+
+    const result = await createSubdivisionLot({
+      site_id: siteId,
+      block_number: 9,
+      lot_number: 9,
+      boundary: [
+        [125.718, 7.108],
+        [125.719, 7.108],
+        [125.719, 7.109],
+        [125.718, 7.109],
+      ],
+      create_property_lot: true,
+      // no price_per_sqm
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.fieldErrors?.price_per_sqm?.[0]).toMatch(/price per sqm is required/i);
+    }
+
+    // Nothing should have been written
+    const siteWithLots = await getSiteWithLots(siteId);
+    expect(siteWithLots.lots.some((l) => l.block_number === 9 && l.lot_number === 9)).toBe(false);
+  });
+
   it("prevents deleting a plot if the lot is reserved or sold", async () => {
     const siteId = testSiteIds[0];
 
@@ -183,6 +210,7 @@ describe("Map Editor Actions - Plotting Lots, Deleting Plots, Creating Sites", (
       lot_number: 1,
       boundary: lotBoundary,
       create_property_lot: true,
+      price_per_sqm: 5000,
     }));
 
     expect(lot).toBeDefined();

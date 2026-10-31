@@ -3,7 +3,6 @@
 import { useRef, useState } from 'react';
 import {
   CheckCircle2,
-  Coins,
   Download,
   ExternalLink,
   Loader2,
@@ -43,16 +42,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SectionCard, SectionHeader } from '@/components/ui/section-card';
 import { formatActivityTime } from '@/lib/format-activity-time';
+import { formatMediumDate } from '@/lib/format-date';
 import { useLandTitles, lotRefLabel } from '@/lib/hooks/use-land-titles';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { TitleReleaseDialog } from './title-release-dialog';
 import { generateNoticePdf } from '@/lib/reports/pdf-notice-letter';
 import { calculateStorageFee } from '@/lib/storage-fee';
+import { getReleasedDate, noticeOrdinal } from '@/lib/title-progress';
 import { DOCUMENT_FILE_ACCEPT } from '@/lib/validations/document';
 import type { LandTitle, LandTitleNotice, TitleStatus } from '@/lib/types/title';
-
-const DATE_FORMAT = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' });
 
 interface TitleNoticesTabProps {
   title: LandTitle;
@@ -98,13 +98,8 @@ export function TitleNoticesTab({
 
   const storageFee = calculateStorageFee(title);
   const isReleased = title.status === 'Released';
-  const releasedEntry = title.history?.slice().reverse().find((h) => h.status === 'Released');
-  const releasedDate = releasedEntry
-    ? new Date(releasedEntry.changed_at)
-    : title.updated_at
-    ? new Date(title.updated_at)
-    : null;
-  const releasedDateStr = releasedDate ? DATE_FORMAT.format(releasedDate) : '';
+  const releasedDate = getReleasedDate(title);
+  const releasedDateStr = releasedDate ? formatMediumDate(releasedDate) : '';
 
   const canEditNotices = canEdit && !isReleased;
 
@@ -113,9 +108,7 @@ export function TitleNoticesTab({
   const propertyLocation = title.property?.location ?? '';
 
   function getNoticeTitle(num: number): string {
-    if (num === 1) return '1st Notice';
-    if (num === 2) return '2nd Notice';
-    return 'Final Notice';
+    return `${noticeOrdinal(num)} Notice`;
   }
 
   function formatStageTime(timestamp?: string | null): string | null {
@@ -268,10 +261,10 @@ export function TitleNoticesTab({
   const nextNoticeNumber = (latestNoticeNumber + 1) as 1 | 2 | 3;
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Release Status Banner */}
       {isReleased && (
-        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-row-hover px-3.5 py-2.5 text-sm text-foreground">
+        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-[color-mix(in_srgb,var(--success)_8%,var(--card))] px-3.5 py-2.5 text-sm text-foreground">
           <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
           <span>Title released{releasedDateStr ? ` on ${releasedDateStr}` : ''}.</span>
         </div>
@@ -279,92 +272,94 @@ export function TitleNoticesTab({
 
       <div className="space-y-4">
         {/* Ready for Claim Header & Turnover Release Button */}
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5 bg-card">
-          <div className="flex items-center gap-2">
-            <Mail className="h-4 w-4 text-primary shrink-0" />
-            <span className="text-sm font-semibold text-foreground">Client Outreach &amp; Notice Letters</span>
+        <SectionCard padding="sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Mail className="h-4 w-4 shrink-0 text-primary" />
+              <span className="text-sm font-semibold text-foreground">
+                Client Outreach &amp; Notice Letters
+              </span>
+            </div>
+            {title.status === 'Ready for Claim' && canEditNotices && (
+              <Button
+                size="sm"
+                disabled={isUpdatingStatus}
+                onClick={() => setConfirmReleaseOpen(true)}
+                className="text-sm gap-2 h-9 px-4 shrink-0"
+              >
+                <CheckCircle2 className="h-4 w-4" />
+                Record Release to Buyer
+              </Button>
+            )}
           </div>
-          {title.status === 'Ready for Claim' && canEditNotices && (
-            <Button
-              size="sm"
-              disabled={isUpdatingStatus}
-              onClick={() => setConfirmReleaseOpen(true)}
-              className="text-sm gap-2 h-9 px-4 shrink-0"
-            >
-              <CheckCircle2 className="h-4 w-4" />
-              Record Release to Buyer
-            </Button>
-          )}
-        </div>
+        </SectionCard>
 
         {/* Storage Fee Assessment */}
         {storageFee && storageFee.isApplicable && (
-          <div
-            className={`rounded-lg border p-3.5 space-y-2 ${
+          <SectionCard
+            className={
               storageFee.isOverdue
-                ? 'border-warning bg-[color-mix(in_srgb,var(--warning)_8%,var(--card))]'
-                : 'border-border bg-card'
-            }`}
+                ? 'space-y-2 border-warning bg-[color-mix(in_srgb,var(--warning)_8%,var(--card))]'
+                : 'space-y-2'
+            }
           >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Coins className={`h-4 w-4 ${storageFee.isOverdue ? 'text-warning' : 'text-primary'}`} />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Storage Fee
-                </span>
-              </div>
-              {storageFee.isOverdue ? (
-                <Badge variant="warning" shape="pill" dot className="text-xs">
-                  {storageFee.monthsOverdue} {storageFee.monthsOverdue === 1 ? 'month' : 'months'} overdue
-                </Badge>
-              ) : (
-                <Badge variant="info" shape="pill" dot className="text-xs">
-                  Within 1-year grace period
-                </Badge>
-              )}
-            </div>
+            <SectionHeader
+              title="Storage Fee"
+              action={
+                storageFee.isOverdue ? (
+                  <Badge variant="warning" shape="pill" dot>
+                    {storageFee.monthsOverdue}{' '}
+                    {storageFee.monthsOverdue === 1 ? 'month' : 'months'} overdue
+                  </Badge>
+                ) : (
+                  <Badge variant="info" shape="pill" dot>
+                    Within 1-year grace period
+                  </Badge>
+                )
+              }
+            />
 
-            <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 pt-0.5">
+            <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-baseline">
               <div>
                 <p className="text-base font-semibold text-foreground">
                   {storageFee.isOverdue
                     ? `₱${storageFee.accruedFee.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
                     : '₱0.00'}
                 </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   {storageFee.isOverdue
-                    ? `1-year grace period ended on ${storageFee.gracePeriodEndDate ? DATE_FORMAT.format(storageFee.gracePeriodEndDate) : 'N/A'}. Rate: ₱540.00/month.`
+                    ? `1-year grace period ended on ${storageFee.gracePeriodEndDate ? formatMediumDate(storageFee.gracePeriodEndDate) : 'N/A'}. Rate: ₱${storageFee.monthlyRate.toLocaleString('en-PH', { minimumFractionDigits: 2 })}/month.`
                     : storageFee.gracePeriodEndDate
-                    ? `Grace period ends on ${DATE_FORMAT.format(storageFee.gracePeriodEndDate)} (${storageFee.daysRemainingInGrace} days remaining).`
-                    : '1-year grace period active.'}
+                      ? `Grace period ends on ${formatMediumDate(storageFee.gracePeriodEndDate)} (${storageFee.daysRemainingInGrace} days remaining).`
+                      : '1-year grace period active.'}
                 </p>
               </div>
               {storageFee.readyForClaimDate && (
-                <div className="text-[11px] text-muted-foreground shrink-0 sm:text-right">
-                  Ready since {DATE_FORMAT.format(storageFee.readyForClaimDate)}
+                <div className="shrink-0 text-xs text-muted-foreground sm:text-right">
+                  Ready since {formatMediumDate(storageFee.readyForClaimDate)}
                 </div>
               )}
             </div>
-          </div>
+          </SectionCard>
         )}
 
         {/* Notices Stack */}
         <div className="space-y-2.5">
-          <div className="flex items-center justify-between pb-0.5">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              Notice Escalation
-              {isLoadingNotices && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-            </h4>
-            <span className="text-xs text-muted-foreground font-medium">
-              {sortedNotices.length === 0
-                ? 'Not started'
-                : ongoingNotice
-                ? `Notice ${ongoingNotice.notice_number} ongoing`
-                : latestNoticeNumber === 3
-                ? 'Cycle complete'
-                : `Notice ${latestNoticeNumber} resolved`}
-            </span>
-          </div>
+          <SectionHeader
+            title="Notice Escalation"
+            action={
+              <span className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                {isLoadingNotices && <Loader2 className="h-3 w-3 animate-spin" />}
+                {sortedNotices.length === 0
+                  ? 'Not started'
+                  : ongoingNotice
+                    ? `Notice ${ongoingNotice.notice_number} ongoing`
+                    : latestNoticeNumber === 3
+                      ? 'Cycle complete'
+                      : `Notice ${latestNoticeNumber} resolved`}
+              </span>
+            }
+          />
 
           {/* 1. Resolved notices rendered chronologically */}
           {resolvedNotices.map((n) => {
@@ -378,9 +373,10 @@ export function TitleNoticesTab({
             const noteText = n.tracking_number ?? n.rts_reason;
 
             return (
-              <div
+              <SectionCard
                 key={n.notice_id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border bg-card shadow-2xs"
+                padding="sm"
+                className="justify-between gap-3 sm:flex-row sm:items-center"
               >
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -388,20 +384,20 @@ export function TitleNoticesTab({
                       {getNoticeTitle(n.notice_number)}
                     </span>
                     {isReceived ? (
-                      <Badge variant="success" shape="pill" dot className="text-xs">
+                      <Badge variant="success" shape="pill" dot>
                         Received
                       </Badge>
                     ) : (
-                      <Badge variant="warning" shape="pill" dot className="text-xs">
+                      <Badge variant="warning" shape="pill" dot>
                         Returned to Sender
                       </Badge>
                     )}
                   </div>
                   <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span>Started {startedStr ?? DATE_FORMAT.format(new Date(n.generated_at))}</span>
+                    <span>Started {startedStr ?? formatMediumDate(n.generated_at)}</span>
                     <span>•</span>
                     <span className={isReceived ? 'text-success font-medium' : 'text-warning font-medium'}>
-                      Marked {isReceived ? 'Received' : 'RTS'} {resolvedStr ?? DATE_FORMAT.format(new Date(n.status_updated_at ?? n.updated_at))}
+                      Marked {isReceived ? 'Received' : 'RTS'} {resolvedStr ?? formatMediumDate(n.status_updated_at ?? n.updated_at)}
                     </span>
                     {noteText && (
                       <>
@@ -454,25 +450,25 @@ export function TitleNoticesTab({
                     </DropdownMenu>
                   )}
                 </div>
-              </div>
+              </SectionCard>
             );
           })}
 
           {/* 2. Ongoing notice */}
           {ongoingNotice && (
             <>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border bg-card shadow-2xs">
+              <SectionCard padding="sm" className="justify-between gap-3 sm:flex-row sm:items-center">
                 <div className="space-y-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-semibold text-foreground">
                       {getNoticeTitle(ongoingNotice.notice_number)}
                     </span>
-                    <Badge variant="info" shape="pill" dot className="text-xs">
+                    <Badge variant="info" shape="pill" dot>
                       Ongoing
                     </Badge>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Started {formatStageTime(ongoingNotice.generated_at) ?? DATE_FORMAT.format(new Date(ongoingNotice.generated_at))}
+                    Started {formatStageTime(ongoingNotice.generated_at) ?? formatMediumDate(ongoingNotice.generated_at)}
                   </p>
                 </div>
 
@@ -491,11 +487,14 @@ export function TitleNoticesTab({
                     Generate PDF
                   </Button>
                 </div>
-              </div>
+              </SectionCard>
 
               {/* Status update to ongoing notice */}
               {canEditNotices && (
-                <div className="rounded-lg border border-dashed border-border p-3 bg-card flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shadow-2xs">
+                <SectionCard
+                  padding="sm"
+                  className="items-stretch gap-2.5 border-dashed sm:flex-row sm:items-center"
+                >
                   <div className="w-full sm:w-48 shrink-0">
                     <Select
                       value={noticeStatusChoice}
@@ -578,7 +577,7 @@ export function TitleNoticesTab({
                     )}
                     Save Status
                   </Button>
-                </div>
+                </SectionCard>
               )}
             </>
           )}
@@ -588,14 +587,14 @@ export function TitleNoticesTab({
             <>
               {sortedNotices.length === 0 ? (
                 isReleased ? (
-                  <div className="rounded-lg border border-border p-3.5 bg-row-hover text-xs text-muted-foreground">
+                  <SectionCard padding="sm" className="text-xs text-muted-foreground">
                     No notice letters dispatched. Title was claimed directly.
-                  </div>
+                  </SectionCard>
                 ) : (
-                  <div className="rounded-lg border border-dashed border-border p-3.5 bg-card flex items-center justify-between gap-3">
+                  <SectionCard padding="sm" className="flex-row items-center justify-between gap-3 border-dashed">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-foreground">Start 1st Notice</span>
-                      <Badge variant="muted" shape="pill" className="text-xs">
+                      <Badge variant="muted" shape="pill">
                         Pending
                       </Badge>
                     </div>
@@ -609,16 +608,16 @@ export function TitleNoticesTab({
                         Start 1st Notice
                       </Button>
                     )}
-                  </div>
+                  </SectionCard>
                 )
               ) : latestNoticeNumber < 3 ? (
                 canEditNotices && (
-                  <div className="rounded-lg border border-dashed border-border p-3.5 bg-card flex items-center justify-between gap-3">
+                  <SectionCard padding="sm" className="flex-row items-center justify-between gap-3 border-dashed">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-semibold text-foreground">
                         Start {nextNoticeNumber === 2 ? '2nd' : 'Final'} Notice
                       </span>
-                      <Badge variant="muted" shape="pill" className="text-xs">
+                      <Badge variant="muted" shape="pill">
                         Pending
                       </Badge>
                     </div>
@@ -630,13 +629,13 @@ export function TitleNoticesTab({
                       <Send className="h-3.5 w-3.5" />
                       Start {nextNoticeNumber === 2 ? '2nd' : 'Final'} Notice
                     </Button>
-                  </div>
+                  </SectionCard>
                 )
               ) : (
-                <div className="rounded-lg border border-border p-3.5 bg-[color-mix(in_srgb,var(--card)_70%,var(--background))] flex items-center gap-2.5 text-sm text-muted-foreground">
-                  <ShieldAlert className="h-4 w-4 text-warning shrink-0" />
+                <SectionCard padding="sm" className="flex-row items-center gap-2.5 text-sm text-muted-foreground">
+                  <ShieldAlert className="h-4 w-4 shrink-0 text-warning" />
                   <span>Notice cycle concluded. Title packet queued for legal counsel referral.</span>
-                </div>
+                </SectionCard>
               )}
             </>
           )}

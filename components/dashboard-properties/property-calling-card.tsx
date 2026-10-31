@@ -372,7 +372,13 @@ export function PropertyCallingCard({
         // `self-stretch` matters here specifically: a property card has three
         // compact rows and a client card has two, so without it the two cards
         // in a dialog header come out 89px and 65px and look misaligned.
-        isCompact && 'min-w-[11rem] max-w-full flex-1 self-stretch rounded-lg',
+        //
+        // `h-auto` is load-bearing, for the reason spelled out in
+        // `ClientCallingCard`: the base `h-full` above makes the cross size
+        // definite, and a definite cross size is the one case `self-stretch`
+        // does not apply to. This card is the taller of the two today, so it
+        // looked right while the client card beside it did not.
+        isCompact && 'h-auto min-w-[11rem] max-w-full flex-1 self-stretch rounded-lg',
         /** See the note in `ClientCallingCard` — the parent supplies the chrome. */
         embedded && 'rounded-none border-0 bg-transparent shadow-none',
         className,

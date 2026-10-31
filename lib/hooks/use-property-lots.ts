@@ -48,8 +48,18 @@ export type PropertyFilters = {
   showArchived: boolean;
 };
 
+/** Prefill carried by a `create` dialog opened from the map, so the values survive until the modal reads them. */
+export type CreateLotPrefill = {
+  site_id?: string;
+  block_number?: number;
+  lot_number?: number;
+  area_size?: number;
+  price_per_sqm?: number;
+  title_number?: string;
+};
+
 export type PropertyDialog =
-  | { type: 'create' }
+  | { type: 'create'; prefill?: CreateLotPrefill }
   | { type: 'assign'; lot: PropertyLotWithClient }
   | null;
 

@@ -53,11 +53,13 @@ export interface SiteMapProps {
   initialZoom?: number;
   isEditorMode?: boolean;
   isPlotting?: boolean;
+  plotType?: 'lot' | 'site' | null;
   draftPoints?: [number, number][];
   onAddDraftPoint?: (point: [number, number]) => void;
   onDeletePlot?: (plot: { subdivisionId?: string; siteId: string; siteName: string; block: number; lot: number; status: string }) => void;
   onEditBoundary?: (plot: LotPlotProperties) => void;
   focusedSiteId?: string | null;
+  onSelectSite?: (siteId: string) => void;
   preview?: boolean;
   activeSiteRing?: Ring | null;
   draftLots?: DraftLot[];
@@ -307,11 +309,13 @@ export function SiteMap({
   initialZoom = REGIONAL_ZOOM,
   isEditorMode = false,
   isPlotting = false,
+  plotType = null,
   draftPoints = [],
   onAddDraftPoint,
   onDeletePlot,
   onEditBoundary,
   focusedSiteId,
+  onSelectSite,
   preview = false,
   activeSiteRing,
   draftLots = [],
@@ -328,12 +332,16 @@ export function SiteMap({
   onSelectUnregisteredRef.current = onSelectUnregistered;
   const isPlottingRef = useRef(isPlotting);
   isPlottingRef.current = isPlotting;
+  const plotTypeRef = useRef(plotType);
+  plotTypeRef.current = plotType;
   const onAddDraftPointRef = useRef(onAddDraftPoint);
   onAddDraftPointRef.current = onAddDraftPoint;
   const onDeletePlotRef = useRef(onDeletePlot);
   onDeletePlotRef.current = onDeletePlot;
   const onEditBoundaryRef = useRef(onEditBoundary);
   onEditBoundaryRef.current = onEditBoundary;
+  const onSelectSiteRef = useRef(onSelectSite);
+  onSelectSiteRef.current = onSelectSite;
   const isEditorModeRef = useRef(isEditorMode);
   isEditorModeRef.current = isEditorMode;
   const activeSiteRingRef = useRef(activeSiteRing);
@@ -513,8 +521,11 @@ export function SiteMap({
           block_number: p.block,
           lot_number: p.lot,
           location: p.siteName,
-          area_size: p.areaSize,
-          price_per_sqm: p.pricePerSqm,
+          // Required on the type, but an unregistered lot has no recorded area or price. This
+          // placeholder reaches the detail view only as a pre-registration preview on the
+          // "Open for Sale" path, which supplies the real values before saving.
+          area_size: p.areaSize ?? 0,
+          price_per_sqm: p.pricePerSqm ?? 0,
           status: (p.isRegistered ? p.status : 'Open') as PropertyStatus,
           boundary: null,
           created_at: new Date().toISOString(),
@@ -532,12 +543,14 @@ export function SiteMap({
   const handleRegisterLot = useCallback(
     (p: LotPlotProperties) => {
       handleClosePopup();
+      // Only called for unregistered lots, which carry no area or price — leave both blank in the
+      // create form so staff enter real figures instead of inheriting a placeholder.
       onSelectUnregisteredRef.current?.({
         siteId: p.siteId,
         block: p.block,
         lot: p.lot,
-        areaSize: p.areaSize,
-        pricePerSqm: p.pricePerSqm,
+        areaSize: p.areaSize ?? undefined,
+        pricePerSqm: p.pricePerSqm ?? undefined,
       });
     },
     [handleClosePopup]
@@ -612,11 +625,18 @@ export function SiteMap({
     const pts = draftPoints ?? [];
     const features: GeoJSON.Feature[] = [];
 
-    const isContained = activeSiteRing && pts.length > 0 ? isPolygonContained(pts, activeSiteRing) : true;
+    // Site plotting is unconstrained: a new site boundary never has to sit inside an
+    // existing site ring, so the containment error only applies while plotting lots.
+    const isConstrainedToSite = plotType === 'lot';
+    const isContained =
+      isConstrainedToSite && activeSiteRing && pts.length > 0
+        ? isPolygonContained(pts, activeSiteRing)
+        : true;
     const hasError = !isContained;
 
     pts.forEach((p, idx) => {
-      const isOutOfBounds = activeSiteRing ? !pointInPolygon(p, activeSiteRing) : false;
+      const isOutOfBounds =
+        isConstrainedToSite && activeSiteRing ? !pointInPolygon(p, activeSiteRing) : false;
       features.push({
         type: 'Feature',
         properties: {
@@ -649,7 +669,7 @@ export function SiteMap({
       type: 'FeatureCollection' as const,
       features,
     };
-  }, [draftPoints, activeSiteRing, isAdjustingVertices]);
+  }, [draftPoints, activeSiteRing, isAdjustingVertices, plotType]);
 
   // Set map crosshair cursor when plotting
   useEffect(() => {
@@ -708,8 +728,10 @@ export function SiteMap({
           const lot = lotMap.get(lotKey);
           const isRegistered = Boolean(lot);
           const status = lot?.status ?? 'Closed';
-          const areaSize = pendingUpdate ? pendingUpdate.areaSize : (lot?.area_size ?? 252);
-          const pricePerSqm = lot?.price_per_sqm ?? 6500;
+          // A subdivision with no companion property_lot has never been priced or surveyed for
+          // sale, and site_subdivision stores no area or price. Report nothing rather than a number.
+          const areaSize = pendingUpdate ? pendingUpdate.areaSize : (lot?.area_size ?? null);
+          const pricePerSqm = lot?.price_per_sqm ?? null;
 
           return {
             type: 'Feature' as const,
@@ -729,7 +751,8 @@ export function SiteMap({
               hasUnsavedChange: Boolean(pendingUpdate),
               areaSize,
               pricePerSqm,
-              totalPrice: areaSize * pricePerSqm,
+              totalPrice:
+                areaSize !== null && pricePerSqm !== null ? areaSize * pricePerSqm : null,
               clientName: lot?.client?.full_name ?? '',
               clientId: lot?.client?.client_id ?? '',
               titleNumber: lot?.title_number ?? '',
@@ -784,8 +807,8 @@ export function SiteMap({
               isRegistered: false,
               hasUnsavedChange: true,
               areaSize: d.areaSize,
-              pricePerSqm: 6500,
-              totalPrice: d.areaSize * 6500,
+              pricePerSqm: null,
+              totalPrice: null,
               clientName: '',
               clientId: '',
               titleNumber: '',
@@ -1184,7 +1207,11 @@ export function SiteMap({
       const handleClick = (e: import('maplibre-gl').MapLayerMouseEvent) => {
         if (isPlottingRef.current) {
           const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
-          if (activeSiteRingRef.current && !pointInPolygon(pt, activeSiteRingRef.current)) {
+          if (
+            plotTypeRef.current === 'lot' &&
+            activeSiteRingRef.current &&
+            !pointInPolygon(pt, activeSiteRingRef.current)
+          ) {
             notifyWarning('Plotted point must be inside the site boundary.');
             return;
           }
@@ -1235,7 +1262,11 @@ export function SiteMap({
       const handleMapClick = (e: import('maplibre-gl').MapMouseEvent) => {
         if (isPlottingRef.current) {
           const pt: [number, number] = [e.lngLat.lng, e.lngLat.lat];
-          if (activeSiteRingRef.current && !pointInPolygon(pt, activeSiteRingRef.current)) {
+          if (
+            plotTypeRef.current === 'lot' &&
+            activeSiteRingRef.current &&
+            !pointInPolygon(pt, activeSiteRingRef.current)
+          ) {
             notifyWarning('Plotted point must be inside the site boundary.');
             return;
           }
@@ -1287,34 +1318,50 @@ export function SiteMap({
         if (!ring) return;
         const center = ringCentroid(ring);
         const isArchived = Boolean(targetSite.is_archived);
+        const isSelected = targetSite.site_id === focusedSiteId;
 
         // Marker element with SVG pin icon and title
         const el = document.createElement('div');
-        el.className = 'group flex flex-col items-center cursor-pointer transition-transform hover:scale-110';
+        el.className = 'site-pin group flex flex-col items-center cursor-pointer transition-transform hover:scale-110';
         el.setAttribute('role', 'button');
         el.tabIndex = 0;
-        el.setAttribute('aria-label', `Focus map on ${targetSite.name}`);
+        el.setAttribute(
+          'aria-label',
+          `${isSelected ? 'Selected site' : 'Select'}: ${targetSite.name}`
+        );
+        if (isSelected) el.setAttribute('aria-current', 'true');
         const isVisible = map.getZoom() < DETAILS_ZOOM;
         el.style.display = isVisible ? 'flex' : 'none';
         el.innerHTML = `
-          <div class="flex h-9 w-9 items-center justify-center rounded-full ${isArchived ? 'bg-amber-600' : 'bg-primary'} text-white shadow-xl ring-2 ring-white">
+          <div class="flex h-9 w-9 items-center justify-center rounded-full ${
+            isArchived ? 'bg-amber-600' : 'bg-primary'
+          } text-white shadow-xl ring-2 ${isSelected ? 'ring-4 ring-white' : 'ring-white'}">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
               <polyline points="9 22 9 12 15 12 15 22"/>
             </svg>
           </div>
-          <div class="mt-1 rounded-md bg-card px-2 py-0.5 text-[11px] font-bold text-foreground shadow-md border border-border whitespace-nowrap">
+          <div class="mt-1 rounded-md px-2 py-0.5 text-[11px] font-bold shadow-md border whitespace-nowrap ${
+            isSelected
+              ? 'bg-primary text-primary-foreground border-primary'
+              : 'bg-card text-foreground border-border'
+          }">
             ${targetSite.name}${isArchived ? ' (Archived)' : ''}
           </div>
         `;
 
-        el.addEventListener('click', () => {
+        // Selecting a site is the single gesture: it drives the sidebar filter, the map
+        // focus, and the editor's edit target all at once.
+        const selectSite = () => {
+          onSelectSiteRef.current?.(targetSite.site_id);
           focusSite(targetSite);
-        });
+        };
+
+        el.addEventListener('click', selectSite);
         el.addEventListener('keydown', (event) => {
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
-            focusSite(targetSite);
+            selectSite();
           }
         });
 
@@ -1328,14 +1375,14 @@ export function SiteMap({
     return () => {
       markers.forEach((m) => m.remove());
     };
-  }, [map, isReady, activeVisibleSites, focusSite]);
+  }, [map, isReady, activeVisibleSites, focusSite, focusedSiteId]);
 
   // Toggle marker pin visibility based on zoom threshold
   useEffect(() => {
     if (!map) return;
     const updatePinVisibility = () => {
       const isVisible = map.getZoom() < DETAILS_ZOOM;
-      document.querySelectorAll('.group.flex.flex-col.items-center.cursor-pointer').forEach((el) => {
+      document.querySelectorAll('.site-pin').forEach((el) => {
         (el as HTMLElement).style.display = isVisible ? 'flex' : 'none';
       });
     };

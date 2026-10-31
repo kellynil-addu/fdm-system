@@ -29,9 +29,10 @@ export interface LotPlotProperties {
   name: string;
   status: string;
   isRegistered: boolean;
-  areaSize: number;
-  pricePerSqm: number;
-  totalPrice: number;
+  /** Null for an unregistered lot: it has never been surveyed for sale or priced. */
+  areaSize: number | null;
+  pricePerSqm: number | null;
+  totalPrice: number | null;
   clientName: string;
   clientId?: string;
   titleNumber?: string;
@@ -104,6 +105,10 @@ export function MapSitePopup({
 
   const pillClass = STATUS_PILL_MAP[plot.status] ?? STATUS_PILL_MAP.Closed ?? STATUS_PILL_MAP.Unregistered;
 
+  // MapLibre drops null GeoJSON properties, so an absent area arrives as undefined rather than
+  // null — check the type rather than testing against null.
+  const areaLabel = typeof plot.areaSize === 'number' ? `${plot.areaSize} sqm` : 'Not surveyed';
+
   return (
     <div className="min-w-[220px] p-3 font-sans" style={{ fontFamily: 'var(--font-geist-sans), sans-serif' }}>
       <div className="flex items-start justify-between gap-2 border-b border-border pb-2">
@@ -125,19 +130,27 @@ export function MapSitePopup({
       </div>
 
       <dl className="mt-2.5 space-y-1 border-t border-border pt-2 text-xs">
-        <div className="flex justify-between">
-          <dt className="text-muted-foreground">Area:</dt>
-          <dd className="font-medium text-foreground">{plot.areaSize} sqm</dd>
-        </div>
-        <div className="flex justify-between">
-          <dt className="text-muted-foreground">{plot.isRegistered ? 'Price/sqm:' : 'Est. Price/sqm:'}</dt>
-          <dd className="font-medium text-foreground">₱{Number(plot.pricePerSqm).toLocaleString()}</dd>
-        </div>
         {plot.isRegistered ? (
           <>
             <div className="flex justify-between">
+              <dt className="text-muted-foreground">Area:</dt>
+              <dd className="font-medium text-foreground">{areaLabel}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Price/sqm:</dt>
+              <dd className="font-medium text-foreground">
+                {typeof plot.pricePerSqm === 'number' && plot.pricePerSqm > 0
+                  ? `₱${plot.pricePerSqm.toLocaleString()}`
+                  : 'Not set'}
+              </dd>
+            </div>
+            <div className="flex justify-between">
               <dt className="text-muted-foreground">Total Price:</dt>
-              <dd className="font-semibold text-primary">₱{Number(plot.totalPrice).toLocaleString()}</dd>
+              <dd className="font-semibold text-primary">
+                {typeof plot.totalPrice === 'number' && plot.totalPrice > 0
+                  ? `₱${plot.totalPrice.toLocaleString()}`
+                  : 'Not set'}
+              </dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Title No:</dt>
@@ -174,10 +187,20 @@ export function MapSitePopup({
             )}
           </>
         ) : (
-          <div className="flex justify-between">
-            <dt className="text-muted-foreground">Status:</dt>
-            <dd className="font-medium text-foreground">Closed</dd>
-          </div>
+          <>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Area:</dt>
+              <dd className="font-medium text-foreground">{areaLabel}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Price:</dt>
+              <dd className="font-medium text-foreground">Not for sale</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-muted-foreground">Status:</dt>
+              <dd className="font-medium text-foreground">Closed</dd>
+            </div>
+          </>
         )}
       </dl>
 
