@@ -345,11 +345,14 @@ export interface PropertyLotDetailViewProps {
 }
 
 export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetailViewProps) {
-  const { createLot, updateLot, archiveLot, unarchiveLot, reopenLot, sites } = usePropertyLots();
-  const { isSystemAdmin } = useSession();
+  const { createLot, updateLot, archiveLot, unarchiveLot, reopenLot, deleteLot, sites } = usePropertyLots();
+  const { isSystemAdmin, hasPermission } = useSession();
+  const canDeleteLot = hasPermission('properties.delete');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [isReopenDialogOpen, setIsReopenDialogOpen] = useState(false);
   const [isReopening, setIsReopening] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -506,6 +509,25 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
     }
   }
 
+  async function handleConfirmClose() {
+    if (!lot.property_id || isClosing) return;
+    setIsClosing(true);
+    try {
+      const result = await deleteLot(lot.property_id);
+      if (result.success) {
+        toast.success(`${lotLabel(lot)} closed successfully`);
+        setIsCloseDialogOpen(false);
+        onBack();
+      } else {
+        toast.error(result.error || 'Failed to close lot');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to close lot');
+    } finally {
+      setIsClosing(false);
+    }
+  }
+
   const effectiveLotForModal: PropertyLotWithClient = {
     ...lot,
     area_size: currentArea,
@@ -599,13 +621,29 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                     )}
                   </>
                 ) : (
-                  <DropdownMenuItem
-                    disabled={archiveState.status === 'pending'}
-                    icon={<Archive className="h-4 w-4" />}
-                    onSelect={() => runArchive(lot.property_id)}
-                  >
-                    Archive lot
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem
+                      disabled={archiveState.status === 'pending'}
+                      icon={<Archive className="h-4 w-4" />}
+                      onSelect={() => runArchive(lot.property_id)}
+                    >
+                      Archive lot
+                    </DropdownMenuItem>
+                    {displayStatus === 'Open' && (
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={!canDeleteLot}
+                        icon={<Trash2 className="h-4 w-4" />}
+                        onSelect={() => {
+                          if (canDeleteLot) {
+                            setIsCloseDialogOpen(true);
+                          }
+                        }}
+                      >
+                        Close lot
+                      </DropdownMenuItem>
+                    )}
+                  </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -792,6 +830,21 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   >
                     <Plus className="h-3.5 w-3.5" />
                     <span>Open for Sale</span>
+                  </Button>
+                )}
+
+                {displayStatus === 'Open' && !isArchived && (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    disabled={!canDeleteLot}
+                    title={!canDeleteLot ? 'Requires properties.delete permission' : undefined}
+                    onClick={() => setIsCloseDialogOpen(true)}
+                    className="w-full gap-1.5 text-xs"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Close Lot</span>
                   </Button>
                 )}
               </div>
@@ -1043,6 +1096,35 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
           onSuccess={() => onBack()}
         />
       )}
+
+      <AlertDialog
+        open={isCloseDialogOpen}
+        onOpenChange={(open) => !isClosing && setIsCloseDialogOpen(open)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close Lot for Sale?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to close <strong>{lotLabel(lot)}</strong>? This will remove the lot record from the database and return it to closed status. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isClosing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmClose();
+              }}
+              disabled={isClosing}
+              className="bg-destructive text-destructive-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_90%,black)]"
+            >
+              {isClosing && <Loader2 className="h-4 w-4 animate-spin" />}
+              Close Lot
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={isReopenDialogOpen}

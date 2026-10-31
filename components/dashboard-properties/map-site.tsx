@@ -549,8 +549,8 @@ export function SiteMap({
         siteId: p.siteId,
         block: p.block,
         lot: p.lot,
-        areaSize: p.areaSize ?? undefined,
-        pricePerSqm: p.pricePerSqm ?? undefined,
+        areaSize: p.areaSize > 0 ? p.areaSize : undefined,
+        pricePerSqm: p.pricePerSqm > 0 ? p.pricePerSqm : undefined,
       });
     },
     [handleClosePopup]
@@ -728,10 +728,8 @@ export function SiteMap({
           const lot = lotMap.get(lotKey);
           const isRegistered = Boolean(lot);
           const status = lot?.status ?? 'Closed';
-          // A subdivision with no companion property_lot has never been priced or surveyed for
-          // sale, and site_subdivision stores no area or price. Report nothing rather than a number.
-          const areaSize = pendingUpdate ? pendingUpdate.areaSize : (lot?.area_size ?? null);
-          const pricePerSqm = lot?.price_per_sqm ?? null;
+          const areaSize = pendingUpdate ? pendingUpdate.areaSize : (lot?.area_size ?? 0);
+          const pricePerSqm = lot?.price_per_sqm ?? 0;
 
           return {
             type: 'Feature' as const,

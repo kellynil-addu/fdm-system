@@ -92,6 +92,8 @@ export interface ClientWithDetails extends Client {
 export interface ClientProperty extends PropertyLot {
   /** The client's active account for this lot, if any. */
   account_id?: string | null;
+  /** Status of the ledger account */
+  account_status?: string | null;
   /** When Billing cleared that account as fully paid. */
   cleared_at?: string | null;
   /** Whether Legal has created the land title for this lot. */
@@ -100,6 +102,24 @@ export interface ClientProperty extends PropertyLot {
   title_id?: string | null;
   /** Associated land title status if created by Legal. */
   title_status?: string | null;
+  /** Total contract price from ledger account */
+  total_contract_price?: number | null;
+  /** Remaining balance from ledger account */
+  remaining_balance?: number | null;
+  /** Contract end date from ledger account */
+  contract_end_date?: string | null;
+  /** Baseline penalties accrued from ledger account */
+  baseline_penalties_accrued?: number | null;
+  /** Whether the title is legacy transferred */
+  is_legacy_transferred?: boolean | null;
+  /** Date when clearance period started */
+  clearance_started_at?: string | null;
+  /** Name of the recipient when released */
+  released_to_name?: string | null;
+  /** Title record creation date */
+  title_created_at?: string | null;
+  /** Title record last update date */
+  title_updated_at?: string | null;
 }
 
 export interface ClientActivitySummary {

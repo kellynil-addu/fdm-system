@@ -103,6 +103,7 @@ export function MapSitePopup({
     }
   }
 
+  const isClosed = !plot.isRegistered || plot.status === 'Closed';
   const pillClass = STATUS_PILL_MAP[plot.status] ?? STATUS_PILL_MAP.Closed ?? STATUS_PILL_MAP.Unregistered;
 
   // MapLibre drops null GeoJSON properties, so an absent area arrives as undefined rather than
@@ -125,24 +126,20 @@ export function MapSitePopup({
 
       <div className="mt-2 flex items-center gap-2">
         <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold', pillClass)}>
-          {plot.isRegistered ? plot.status : 'Closed'}
+          {isClosed ? 'Closed' : plot.status}
         </span>
       </div>
 
       <dl className="mt-2.5 space-y-1 border-t border-border pt-2 text-xs">
-        {plot.isRegistered ? (
+        {!isClosed ? (
           <>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Area:</dt>
-              <dd className="font-medium text-foreground">{areaLabel}</dd>
+              <dd className="font-medium text-foreground">{plot.areaSize} sqm</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Price/sqm:</dt>
-              <dd className="font-medium text-foreground">
-                {typeof plot.pricePerSqm === 'number' && plot.pricePerSqm > 0
-                  ? `₱${plot.pricePerSqm.toLocaleString()}`
-                  : 'Not set'}
-              </dd>
+              <dd className="font-medium text-foreground">₱{Number(plot.pricePerSqm).toLocaleString()}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Total Price:</dt>
@@ -204,7 +201,7 @@ export function MapSitePopup({
         )}
       </dl>
 
-      {plot.isRegistered ? (
+      {!isClosed ? (
         <div className="mt-3 flex flex-col gap-1.5">
           <Button size="sm" className="w-full cursor-pointer gap-1.5" onClick={onViewDetails}>
             <span>View Details</span>

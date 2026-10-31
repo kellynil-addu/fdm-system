@@ -20,8 +20,6 @@ import { useMutation } from '@/lib/hooks/use-mutation';
 import { useSession } from '@/lib/hooks/use-session';
 import type { ClientProperty } from '@/lib/types/client';
 
-const DATE = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' });
-
 interface ClientPropertyClearanceProps {
   property: ClientProperty;
 }
@@ -63,57 +61,31 @@ export function ClientPropertyClearance({ property }: ClientPropertyClearancePro
     }
   );
 
-  // A titled lot shows no link here any more. The card above already opens the
-  // legal record — that is what `lotDestinationHref` resolves a titled lot to —
-  // so a second link to the same place eight pixels below it is a duplicate
-  // rather than a convenience.
-  if (property.has_title) {
-    return (
-      <p className="flex items-center gap-1.5 px-1 text-xs text-muted-foreground">
-        <BadgeCheck className="h-3.5 w-3.5 text-primary" />
-        <span>Title record in Legal{property.title_status ? ` (${property.title_status})` : ''}</span>
-      </p>
-    );
-  }
-
-  if (property.status === 'Forfeited') {
-    return (
-      <p className="flex items-center gap-1.5 text-xs font-medium text-[#7C3AED]">
-        <AlertOctagon className="h-3.5 w-3.5" />
-        Lot forfeited. Under 30-day grace period.
-      </p>
-    );
-  }
-
+  // Status is displayed contextually on the PropertyCallingCard status bar.
+  if (property.has_title) return null;
+  if (property.status === 'Forfeited') return null;
   if (!property.account_id) return null;
 
   if (property.cleared_at) {
+    if (!canClear) return null;
     return (
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {/* Same reasoning as the titled branch: the card opens Legal, so this
-            states the fact and leaves the navigation to it. */}
-        <p className="flex items-center gap-1.5 px-1 text-xs text-foreground">
-          <BadgeCheck className="h-3.5 w-3.5 text-success" />
-          <span>Cleared by Billing {DATE.format(new Date(property.cleared_at))}. Awaiting title from Legal.</span>
-        </p>
-        {canClear && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-7 gap-1.5 text-xs text-muted-foreground"
-            disabled={undo.state.status === 'pending'}
-            onClick={() => void undo.execute(property.account_id!)}
-          >
-            {undo.state.status === 'pending' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
-            Undo
-          </Button>
-        )}
+      <div className="flex items-center justify-end">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-7 gap-1.5 text-xs text-muted-foreground"
+          disabled={undo.state.status === 'pending'}
+          onClick={() => void undo.execute(property.account_id!)}
+        >
+          {undo.state.status === 'pending' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+          Undo
+        </Button>
       </div>
     );
   }
 
   if (!canClear && !canForfeit) {
-    return <p className="text-xs text-muted-foreground">Payments ongoing. Billing clears the account once fully paid.</p>;
+    return null;
   }
 
   const isPendingClear = clear.state.status === 'pending';
