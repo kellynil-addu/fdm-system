@@ -96,6 +96,8 @@ export interface ProjectAreaSubdivision {
   block_number: number;
   lot_number: number;
   boundary: unknown;
+  created_at: string;
+  updated_at: string;
 }
 
 /** A project area with its pre-planned subdivisions and any registered property lots. */
