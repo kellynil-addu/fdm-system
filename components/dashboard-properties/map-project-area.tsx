@@ -241,6 +241,13 @@ function scaleTextSize(expr: unknown, factor: number = 1.28): unknown {
   return expr;
 }
 
+// The VersaTiles colorful style requests globe projection, where MapLibre renders a 3D globe and
+// stops enforcing the transform's pan constraint. This map is a bounded flat plat viewer, so every
+// basemap is pinned to mercator.
+function withMercatorProjection(style: StyleSpecification): StyleSpecification {
+  return { ...style, projection: { type: 'mercator' } };
+}
+
 // Transform basemap style layers to enlarge street and place labels
 function scaleBasemapSymbolText(style: StyleSpecification | unknown, factor: number = 1.28): StyleSpecification {
   const spec = style as StyleSpecification;
@@ -1472,7 +1479,7 @@ export function ProjectAreaMap({
             const res = await fetch('https://tiles.versatiles.org/assets/styles/colorful/style.json');
             if (!res.ok) throw new Error(`Failed to load normal style: ${res.status}`);
             const styleJson = await res.json();
-            cachedScaledNormalStyle = scaleBasemapSymbolText(styleJson, 1.28);
+            cachedScaledNormalStyle = withMercatorProjection(scaleBasemapSymbolText(styleJson, 1.28));
           }
           if (isCancelled) return;
           isSettingStyleRef.current = true;
