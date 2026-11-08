@@ -619,7 +619,10 @@ export function ProjectAreaMap({
     [map, preview]
   );
 
-  // Filter visible projectAreas on map canvas (archived projectAreas only visible in editor mode)
+  // Filter visible projectAreas on map canvas. In view mode this is the only filter: archived
+  // project areas are never drawn there. In editor mode the caller supplies an already-filtered
+  // list (see `editorProjectAreas` in map-project-area-unified-view.tsx), so `allProjectAreas` is
+  // that view's set and the branch below passes it through untouched.
   const activeVisibleProjectAreas = useMemo(() => {
     return isEditorMode ? allProjectAreas : allProjectAreas.filter((s) => !s.is_archived);
   }, [allProjectAreas, isEditorMode]);

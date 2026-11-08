@@ -13,6 +13,7 @@
 ### Session 2026-11-08
 
 - Q: Should the archived/active switch affect the everyday map view, or only the map editor? → A: Only when editor mode is enabled; the everyday (non-editor) map view and its surrounding panels keep their current behavior.
+- Q: When a staff member is halfway through drawing a shape — points placed but the shape not yet finished — and they switch views, what happens? → A: The switch is blocked while a shape is in progress; the staff member is prompted to finish or cancel it first.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -68,6 +69,9 @@ The staff member can tell at a glance which set the editor is showing, and how m
 
 - **One of the two sets is empty**: the switch remains usable and the empty set, when selected, shows an empty-state message in the picker and an unbroken regional-overview map — not an error or a blank canvas.
 - **The last project area in the selected set is archived or restored inside the editor**: after the change is saved, the project area moves to the other set, so it disappears from the current view; the selection and focus clear as in Story 1 scenario 5.
+- **Shape partway drawn**: if points have been placed but the shape is not finished, the switch is
+  unavailable and the staff member is told to finish or cancel the shape. Switching never strands
+  unqueued points over a set that does not contain them.
 - **Unsaved editor work**: switching views is a display change only and MUST NOT discard drafts, pending plot changes, or pending boundary readjustments.
 - **Leaving the editor**: returning to the everyday map view restores that view's existing behavior (archived project areas not drawn); the switch does not carry over or alter it.
 - **Deep link naming a hidden project area**: the editor opens on the active view and does not focus a project area outside it.
@@ -83,6 +87,7 @@ The staff member can tell at a glance which set the editor is showing, and how m
 - **FR-005**: Archived project areas MUST keep their existing archive marking and treatment inside the archived view, and actions unavailable for archived project areas MUST remain unavailable.
 - **FR-006**: Switching views MUST clear any project area selection and map focus that do not belong to the newly selected set, returning the map to the regional overview.
 - **FR-007**: Switching views MUST NOT discard unsaved editor work — draft lots, pending plot changes, and pending boundary readjustments survive the switch.
+- **FR-011**: While a shape is being drawn (points placed on the map, shape not yet finished), the view switch MUST be unavailable and MUST explain that the shape must be finished or cancelled first. A view change MUST NOT leave unqueued drawing points on the map or silently discard them.
 - **FR-008**: Each view option MUST show the count of project areas it contains, and a view with none MUST show an empty state rather than a silent blank map.
 - **FR-009**: The switch MUST be confined to editor mode: the everyday map view, its properties side panel, and every other screen MUST keep their current behavior and MUST NOT change which project areas they show.
 - **FR-010**: The switch MUST be available to every staff member who can currently use the map editor; it MUST NOT introduce a new permission.

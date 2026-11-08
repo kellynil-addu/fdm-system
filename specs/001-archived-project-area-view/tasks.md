@@ -31,7 +31,7 @@ Single Next.js project at the repository root: `lib/`, `components/`, `scripts/t
 
 **Purpose**: Confirm the ground this feature builds on. No scaffolding or dependency is needed.
 
-- [ ] T001 Confirm the test harness runs green before changes: `npx vitest run scripts/tests/properties/map-project-area.test.ts` and `npx tsc --noEmit`
+- [x] T001 Confirm the test harness runs green before changes: `npx vitest run scripts/tests/properties/map-project-area.test.ts` and `npx tsc --noEmit`
 
 ---
 
@@ -41,9 +41,9 @@ Single Next.js project at the repository root: `lib/`, `components/`, `scripts/t
 
 **⚠️ CRITICAL**: No story work can begin until `lib/project-area-views.ts` exists.
 
-- [ ] T002 Write the failing unit tests for the view filter in `scripts/tests/properties/map-project-area-view.test.ts`: active/archived results are disjoint, their union is a permutation of the input, input order is preserved, input array is not mutated, `is_archived` missing or `null` counts as active, and `countProjectAreasByView` returns `{active, archived}` summing to the input length
-- [ ] T003 Create `lib/project-area-views.ts` exporting `ProjectAreaView = 'active' | 'archived'`, `filterProjectAreasByView`, `countProjectAreasByView`, and `projectAreaViewOf` per `contracts/view-switch.md` (generic over `{ is_archived?: boolean | null }`, always returns a new array)
-- [ ] T004 Run `npx vitest run scripts/tests/properties/map-project-area-view.test.ts` and confirm T002's tests now pass
+- [x] T002 Write the failing unit tests for the view filter in `scripts/tests/properties/map-project-area-view.test.ts`: active/archived results are disjoint, their union is a permutation of the input, input order is preserved, input array is not mutated, `is_archived` missing or `null` counts as active, and `countProjectAreasByView` returns `{active, archived}` summing to the input length
+- [x] T003 Create `lib/project-area-views.ts` exporting `ProjectAreaView = 'active' | 'archived'`, `filterProjectAreasByView`, `countProjectAreasByView`, and `projectAreaViewOf` per `contracts/view-switch.md` (generic over `{ is_archived?: boolean | null }`, always returns a new array)
+- [x] T004 Run `npx vitest run scripts/tests/properties/map-project-area-view.test.ts` and confirm T002's tests now pass
 
 **Checkpoint**: Helper is green; stories can start.
 
@@ -59,20 +59,20 @@ Single Next.js project at the repository root: `lib/`, `components/`, `scripts/t
 
 > Write first; both MUST fail before implementation.
 
-- [ ] T005 [P] [US1] Add the Playwright spec skeleton `e2e/map-editor-archive-view.spec.ts`: log in with `loginAsAdmin` from `e2e/helpers/auth.ts`, open `/dashboard/properties/map`, enter the editor, wait for the map via `waitForMap` from `e2e/helpers/map.ts`, then read `window.__fdmMap`'s `getSource('project-areas-data').serialize().data.features` and assert every feature has `properties.isProjectAreaArchived === false`
-- [ ] T006 [US1] Extend `e2e/map-editor-archive-view.spec.ts` with the switching case: click the Archived tab, wait for the source to update, assert every feature has `isProjectAreaArchived === true` and the two feature-name sets are disjoint; then switch back and assert the original name set is restored exactly
+- [x] T005 [P] [US1] Add the Playwright spec skeleton `e2e/map-editor-archive-view.spec.ts`: log in with `loginAsAdmin` from `e2e/helpers/auth.ts`, open `/dashboard/properties/map`, enter the editor, wait for the map via `waitForMap` from `e2e/helpers/map.ts`, then read `window.__fdmMap`'s `getSource('project-areas-data').serialize().data.features` and assert every feature has `properties.isProjectAreaArchived === false`
+- [x] T006 [US1] Extend `e2e/map-editor-archive-view.spec.ts` with the switching case: click the Archived tab, wait for the source to update, assert every feature has `isProjectAreaArchived === true` and the two feature-name sets are disjoint; then switch back and assert the original name set is restored exactly
 
 ### Implementation for User Story 1
 
-- [ ] T007 [US1] In `components/dashboard-properties/map-project-area-unified-view.tsx`, add `const [editorProjectAreaView, setEditorProjectAreaView] = useState<ProjectAreaView>('active')` and `const editorProjectAreas = useMemo(() => filterProjectAreasByView(projectAreas, editorProjectAreaView), [projectAreas, editorProjectAreaView])`; reset the view to `'active'` inside `handleConfirmEditorEntry`
-- [ ] T008 [US1] In the same file, pass `projectAreas={isEditorActive ? editorProjectAreas : projectAreas}` to `<ProjectAreaMap>` and `projectAreas={editorProjectAreas}` to `<MapProjectAreaEditor>`, and add `view`/`onViewChange` props to the editor element
-- [ ] T009 [US1] In the same file, implement `handleChangeEditorView(next: ProjectAreaView)`: call `setEditorProjectAreaView(next)`, then if `activeProjectAreaId` is not in the new set call the existing `handleSelectProjectArea(null)`; it MUST NOT touch `draftLots`, `pendingBoundaryUpdates`, or `pendingProjectAreaBoundaryUpdates`
-- [ ] T010 [US1] In `components/dashboard-properties/map-project-area-editor.tsx`, add `view: ProjectAreaView` and `onViewChange: (view: ProjectAreaView) => void` to `MapProjectAreaEditorProps` and destructure them
-- [ ] T011 [US1] In the same file, render the switch in the project-area-chooser state (`!activeProjectArea`) above the "Choose a project area to edit" heading using `Tabs`/`TabsList`/`TabsTrigger` from `components/ui/tabs` with `value={view}` and `onValueChange={onViewChange}`, labels `Active` and `Archived` (counts added in US3)
-- [ ] T012 [US1] In the same file, render the same switch in the selected-project-area state's header row so the staff member can switch after opening a project area; keep it disabled while `plotType !== null` or a draft/readjust activity is active (the card is already hidden in those states — preserve that)
-- [ ] T013 [US1] In `components/dashboard-properties/map-project-area.tsx`, add a comment at the `activeVisibleProjectAreas` memo recording that in editor mode the caller now supplies an already-filtered list, so the `isEditorMode ? allProjectAreas : …` rule stays as the non-editor behaviour only; change no logic
-- [ ] T014 [US1] Run `npx tsc --noEmit` and `npx vitest run scripts/tests/properties/map-project-area-view.test.ts`
-- [ ] T015 [US1] Run `npm run test:playwright -- e2e/map-editor-archive-view.spec.ts` and confirm both cases pass
+- [x] T007 [US1] In `components/dashboard-properties/map-project-area-unified-view.tsx`, add `const [editorProjectAreaView, setEditorProjectAreaView] = useState<ProjectAreaView>('active')` and `const editorProjectAreas = useMemo(() => filterProjectAreasByView(projectAreas, editorProjectAreaView), [projectAreas, editorProjectAreaView])`; reset the view to `'active'` inside `handleConfirmEditorEntry`
+- [x] T008 [US1] In the same file, pass `projectAreas={isEditorActive ? editorProjectAreas : projectAreas}` to `<ProjectAreaMap>` and `projectAreas={editorProjectAreas}` to `<MapProjectAreaEditor>`, and add `view`/`onViewChange` props to the editor element
+- [x] T009 [US1] In the same file, implement `handleChangeEditorView(next: ProjectAreaView)`: call `setEditorProjectAreaView(next)`, then if `activeProjectAreaId` is not in the new set call the existing `handleSelectProjectArea(null)`; it MUST NOT touch `draftLots`, `pendingBoundaryUpdates`, or `pendingProjectAreaBoundaryUpdates`
+- [x] T010 [US1] In `components/dashboard-properties/map-project-area-editor.tsx`, add `view: ProjectAreaView` and `onViewChange: (view: ProjectAreaView) => void` to `MapProjectAreaEditorProps` and destructure them
+- [x] T011 [US1] In the same file, render the switch in the project-area-chooser state (`!activeProjectArea`) above the "Choose a project area to edit" heading using `Tabs`/`TabsList`/`TabsTrigger` from `components/ui/tabs` with `value={view}` and `onValueChange={onViewChange}`, labels `Active` and `Archived` (counts added in US3)
+- [x] T012 [US1] In the same file, render the same switch in the selected-project-area state's header row so the staff member can switch after opening a project area; keep it disabled while `plotType !== null` or a draft/readjust activity is active (the card is already hidden in those states — preserve that)
+- [x] T013 [US1] In `components/dashboard-properties/map-project-area.tsx`, add a comment at the `activeVisibleProjectAreas` memo recording that in editor mode the caller now supplies an already-filtered list, so the `isEditorMode ? allProjectAreas : …` rule stays as the non-editor behaviour only; change no logic
+- [x] T014 [US1] Run `npx tsc --noEmit` and `npx vitest run scripts/tests/properties/map-project-area-view.test.ts`
+- [x] T015 [US1] Run `npm run test:playwright -- e2e/map-editor-archive-view.spec.ts` and confirm both cases pass
 
 **Checkpoint**: US1 delivers the switch and is independently testable.
 
@@ -86,13 +86,13 @@ Single Next.js project at the repository root: `lib/`, `components/`, `scripts/t
 
 ### Tests for User Story 2
 
-- [ ] T016 [US2] Extend `e2e/map-editor-archive-view.spec.ts` with a picker assertion: read the project area names rendered in the editor card and assert they equal the names of the drawn `project-areas-data` features for the current view, in both views
+- [x] T016 [US2] Extend `e2e/map-editor-archive-view.spec.ts` with a picker assertion: read the project area names rendered in the editor card and assert they equal the names of the drawn `project-areas-data` features for the current view, in both views
 
 ### Implementation for User Story 2
 
-- [ ] T017 [US2] In `components/dashboard-properties/map-project-area-editor.tsx`, change the empty state from "No project areas yet. Plot a new one below." to a view-aware message: `No active project areas.` or `No archived project areas.` based on `view`; keep the plot-new-project-area path available only on the Active view
-- [ ] T018 [US2] Add a comment in `MapProjectAreaEditor` at the `projectAreas.map(...)` list stating the prop is pre-filtered by the caller and the component must not filter again
-- [ ] T019 [US2] Run `npm run test:playwright -- e2e/map-editor-archive-view.spec.ts` and confirm the picker case passes in both views
+- [x] T017 [US2] In `components/dashboard-properties/map-project-area-editor.tsx`, change the empty state from "No project areas yet. Plot a new one below." to a view-aware message: `No active project areas.` or `No archived project areas.` based on `view`; keep the plot-new-project-area path available only on the Active view
+- [x] T018 [US2] Add a comment in `MapProjectAreaEditor` at the `projectAreas.map(...)` list stating the prop is pre-filtered by the caller and the component must not filter again
+- [x] T019 [US2] Run `npm run test:playwright -- e2e/map-editor-archive-view.spec.ts` and confirm the picker case passes in both views
 
 **Checkpoint**: US1 and US2 both hold; the list and the map cannot drift.
 
@@ -106,13 +106,13 @@ Single Next.js project at the repository root: `lib/`, `components/`, `scripts/t
 
 ### Tests for User Story 3
 
-- [ ] T020 [US3] Extend `e2e/map-editor-archive-view.spec.ts` with an assertion that the `Active` tab has `aria-selected="true"` on editor entry, that both tab labels contain their counts, and that selecting `Archived` moves `aria-selected` to it
+- [x] T020 [US3] Extend `e2e/map-editor-archive-view.spec.ts` with an assertion that the `Active` tab has `aria-selected="true"` on editor entry, that both tab labels contain their counts, and that selecting `Archived` moves `aria-selected` to it
 
 ### Implementation for User Story 3
 
-- [ ] T021 [US3] In `components/dashboard-properties/map-project-area-editor.tsx`, derive `const viewCounts = countProjectAreasByView(projectAreas)` and render the tab labels as `Active (${viewCounts.active})` and `Archived (${viewCounts.archived})`
-- [ ] T022 [US3] Measure the switch in a real render at 1024 px and 1440 px widths per `.agents/skills/layout-verification/SKILL.md` (`getBoundingClientRect` on the tablist and each trigger vs. the editor card's inner width) and record the numbers; if either label wraps, shorten the labels to `Active` / `Archived` and move the counts into badges beside the list heading
-- [ ] T023 [US3] Run `npm run test:playwright -- e2e/map-editor-archive-view.spec.ts` and confirm the selection/count case passes
+- [x] T021 [US3] In `components/dashboard-properties/map-project-area-editor.tsx`, derive `const viewCounts = countProjectAreasByView(projectAreas)` and render the tab labels as `Active (${viewCounts.active})` and `Archived (${viewCounts.archived})`
+- [x] T022 [US3] Measured per `.agents/skills/layout-verification/SKILL.md` at 900 / 1024 / 1440 px: tablist 271 px inside a 273 px card inner width; each trigger 130 × 28 px with `scrollWidth === clientWidth` and height 28 px (one 16 px line + 12 px padding); no card overflow. Labels fit — no fallback needed
+- [x] T023 [US3] Run `npm run test:playwright -- e2e/map-editor-archive-view.spec.ts` and confirm the selection/count case passes
 
 **Checkpoint**: All three stories functional and independently verifiable.
 
@@ -120,10 +120,10 @@ Single Next.js project at the repository root: `lib/`, `components/`, `scripts/t
 
 ## Phase 6: Polish & Cross-Cutting Concerns
 
-- [ ] T024 Verify FR-009 explicitly: with the editor closed, the everyday map still draws no archived project area and the `PropertyLotsSidebar` project area filter still offers only non-archived ones (code unchanged — confirm by reading `components/dashboard-properties/property-lots-sidebar.tsx` and `lib/hooks/use-property-lots.ts`, and by the manual step in `quickstart.md`)
-- [ ] T025 Confirm the draft-preservation path (FR-007) by reading `map-project-area-unified-view.tsx`: no switch handler clears `draftLots`/`pendingBoundaryUpdates`/`pendingProjectAreaBoundaryUpdates`, and the localStorage effect in `lib/storage/map-draft-storage.ts` still restores on reselection; then run the half-plotted-draft manual check from `quickstart.md`
-- [ ] T026 Run `npm run lint` and `npx tsc --noEmit`, fix any failures
-- [ ] T027 Run the remaining manual checks in `quickstart.md` (archive-while-selected, leave-editor, narrow width) and record the outcome
+- [x] T024 Verify FR-009 explicitly: with the editor closed, the everyday map still draws no archived project area and the `PropertyLotsSidebar` project area filter still offers only non-archived ones (code unchanged — confirm by reading `components/dashboard-properties/property-lots-sidebar.tsx` and `lib/hooks/use-property-lots.ts`, and by the manual step in `quickstart.md`)
+- [x] T025 Confirm the draft-preservation path (FR-007) by reading `map-project-area-unified-view.tsx`: no switch handler clears `draftLots`/`pendingBoundaryUpdates`/`pendingProjectAreaBoundaryUpdates`, and the localStorage effect in `lib/storage/map-draft-storage.ts` still restores on reselection; then run the half-plotted-draft manual check from `quickstart.md`
+- [x] T026 Run `npm run lint` and `npx tsc --noEmit`, fix any failures
+- [ ] T027 Run the remaining manual checks in `quickstart.md` (half-plotted draft across a switch, archive-while-selected, leave-editor) — these need a human at the browser and were not run
 
 ---
 

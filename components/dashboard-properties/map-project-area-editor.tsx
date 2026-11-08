@@ -25,6 +25,8 @@ import { useSession } from '@/lib/hooks/use-session';
 import { LoadingButton } from '@/components/ui/loading-button';
 import { calculatePolygonAreaSqm } from '@/lib/geometry';
 import { getArchiveEligibility } from '@/lib/utils/archive-rules';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { ProjectAreaView } from '@/lib/project-area-views';
 import { DeleteProjectAreaDialog } from './project-area-delete-dialog';
 import type { ProjectArea, ProjectAreaWithLots } from '@/lib/types/property';
 import {
@@ -71,7 +73,12 @@ export interface ReadjustProjectAreaState {
 }
 
 export interface MapProjectAreaEditorProps {
+  /** Already filtered to the selected view by the caller. Never filter again here. */
   projectAreas: (ProjectAreaWithLots | ProjectArea)[];
+  view: ProjectAreaView;
+  onViewChange: (view: ProjectAreaView) => void;
+  /** Size of each view, for the switch labels. Both sets, not just `projectAreas`. */
+  viewCounts: Record<ProjectAreaView, number>;
   activeProjectAreaId: string | null;
   onSelectProjectArea: (projectAreaId: string) => void;
   onLeaveProjectArea: () => void;
@@ -129,8 +136,44 @@ export interface MapProjectAreaEditorProps {
   onDeleteProjectArea?: (projectAreaId: string) => Promise<void>;
 }
 
+/**
+ * Editor-only switch between the active and archived sets. Both options carry their count so the
+ * current mode and what it hides are readable without opening anything.
+ */
+function ProjectAreaViewSwitch({
+  counts,
+  view,
+  onViewChange,
+  className,
+}: {
+  counts: Record<ProjectAreaView, number>;
+  view: ProjectAreaView;
+  onViewChange: (view: ProjectAreaView) => void;
+  className?: string;
+}) {
+  return (
+    <Tabs
+      value={view}
+      onValueChange={(next) => onViewChange(next as ProjectAreaView)}
+      className={className}
+    >
+      <TabsList aria-label="Project area view" className="w-full">
+        <TabsTrigger value="active" className="flex-1 text-xs">
+          Active ({counts.active})
+        </TabsTrigger>
+        <TabsTrigger value="archived" className="flex-1 text-xs">
+          Archived ({counts.archived})
+        </TabsTrigger>
+      </TabsList>
+    </Tabs>
+  );
+}
+
 export function MapProjectAreaEditor({
   projectAreas,
+  view,
+  onViewChange,
+  viewCounts,
   activeProjectAreaId,
   onSelectProjectArea,
   onLeaveProjectArea,
@@ -328,12 +371,24 @@ export function MapProjectAreaEditor({
                 <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
                   Choose a project area to edit
                 </p>
+                <ProjectAreaViewSwitch
+                  counts={viewCounts}
+                  view={view}
+                  onViewChange={onViewChange}
+                  className="mb-2"
+                />
                 {projectAreas.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-border px-2.5 py-3 text-[11px] text-muted-foreground">
-                    No project areas yet. Plot a new one below.
+                    {view === 'archived'
+                      ? 'No archived project areas.'
+                      : 'No active project areas. Plot a new one below.'}
                   </p>
                 ) : (
-                  <div className="max-h-[300px] space-y-1 overflow-y-auto pr-0.5">
+                  <div
+                    role="group"
+                    aria-label="Project areas to edit"
+                    className="max-h-[300px] space-y-1 overflow-y-auto pr-0.5"
+                  >
                     {projectAreas.map((s) => {
                       const lotCount = 'lots' in s && Array.isArray(s.lots) ? s.lots.length : 0;
                       return (
@@ -370,18 +425,20 @@ export function MapProjectAreaEditor({
                 )}
               </div>
 
-              <div className="border-t border-border pt-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => onStartPlotting('project-area')}
-                  className="h-8 w-full gap-1.5 border-border bg-card text-xs font-medium text-foreground hover:bg-row-hover"
-                  title="Plot a new project area boundary"
-                >
-                  <MapPin className="h-3.5 w-3.5 text-primary" />
-                  <span>+ New Project Area</span>
-                </Button>
-              </div>
+              {view === 'active' && (
+                <div className="border-t border-border pt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onStartPlotting('project-area')}
+                    className="h-8 w-full gap-1.5 border-border bg-card text-xs font-medium text-foreground hover:bg-row-hover"
+                    title="Plot a new project area boundary"
+                  >
+                    <MapPin className="h-3.5 w-3.5 text-primary" />
+                    <span>+ New Project Area</span>
+                  </Button>
+                </div>
+              )}
             </>
           ) : (
             /* State: Project Area Focused — editing is scoped to this one project area.
@@ -463,6 +520,13 @@ export function MapProjectAreaEditor({
                   )}
                 </div>
               </div>
+
+              <ProjectAreaViewSwitch
+                counts={viewCounts}
+                view={view}
+                onViewChange={onViewChange}
+                className="pt-0.5"
+              />
 
               <div className="space-y-1.5 pt-0.5">
                 <Button

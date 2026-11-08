@@ -36,6 +36,11 @@ import {
 } from '@/lib/actions/project-areas';
 import { parseRing, calculatePolygonAreaSqm, isPolygonContained } from '@/lib/geometry';
 import { getProjectAreaDraft, saveProjectAreaDraft, clearProjectAreaDraft } from '@/lib/storage/map-draft-storage';
+import {
+  countProjectAreasByView,
+  filterProjectAreasByView,
+  type ProjectAreaView,
+} from '@/lib/project-area-views';
 import type {
   PropertyLotWithClient,
   ProjectAreaWithLots,
@@ -77,6 +82,8 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
 
   // Editor states
   const [isEditorActive, setIsEditorActive] = useState(false);
+  // The editor draws one set of project areas at a time; the everyday map keeps its own rule.
+  const [editorProjectAreaView, setEditorProjectAreaView] = useState<ProjectAreaView>('active');
   const [activeProjectAreaId, setActiveProjectAreaId] = useState<string | null>(() => {
     if (targetLotId) {
       for (const projectArea of projectAreas) {
@@ -119,6 +126,14 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
   const [activeDraft, setActiveDraft] = useState<ActiveDraftState | null>(null);
   const [editingSubdivisionId, setEditingSubdivisionId] = useState<string | null>(null);
   const [hasStoredDraft, setHasStoredDraft] = useState(false);
+
+  // The list the editor draws and lists. Filtering here, once, keeps the map canvas, the picker,
+  // the pins and the lot geometry on the same set — they all read from this array.
+  const editorProjectAreas = useMemo(
+    () => filterProjectAreasByView(projectAreas, editorProjectAreaView),
+    [projectAreas, editorProjectAreaView]
+  );
+  const editorProjectAreaCounts = useMemo(() => countProjectAreasByView(projectAreas), [projectAreas]);
 
   // Active projectArea boundary ring for ray-casting containment. A queued readjustment wins over
   // the stored ring so newly plotted lots are checked against the outline the user is editing.
@@ -301,7 +316,23 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
     // Start at the top of the decision tree: a projectArea may have been selected in view mode,
     // but editing begins with an explicit choice from the projectArea list.
     setActiveProjectAreaId(null);
+    setEditorProjectAreaView('active');
   }, []);
+
+  /** Switch the editor between active and archived project areas. Drafts and pending geometry are
+   * deliberately left alone — they are keyed by project area, so switching parks them rather than
+   * discarding them. */
+  const handleChangeEditorView = useCallback(
+    (nextView: ProjectAreaView) => {
+      setEditorProjectAreaView(nextView);
+      setActiveProjectAreaId((currentId) => {
+        if (!currentId) return null;
+        const current = projectAreas.find((s) => s.project_area_id === currentId);
+        return current && filterProjectAreasByView([current], nextView).length > 0 ? currentId : null;
+      });
+    },
+    [projectAreas]
+  );
 
   // Request leaving the chosen projectArea or exiting editor mode
   const handleLeaveProjectArea = useCallback(() => {
@@ -836,7 +867,7 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
         {/* Background: Edge-to-edge interactive MapLibre canvas */}
         <div className="absolute inset-0 h-full w-full flex flex-col">
           <ProjectAreaMap
-            projectAreas={projectAreas}
+            projectAreas={isEditorActive ? editorProjectAreas : projectAreas}
             isSidebarOpen={isSidebarOpen}
             hoveredLotKey={hoveredLotKey}
             selectedLotId={selectedPropertyLot?.property_id}
@@ -879,7 +910,10 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
 
         {/* Floating Map Editor Shell */}
         <MapProjectAreaEditor
-          projectAreas={projectAreas}
+          projectAreas={editorProjectAreas}
+          view={editorProjectAreaView}
+          onViewChange={handleChangeEditorView}
+          viewCounts={editorProjectAreaCounts}
           activeProjectAreaId={activeProjectAreaId}
           onSelectProjectArea={handleSelectProjectArea}
           onLeaveProjectArea={handleLeaveProjectArea}
