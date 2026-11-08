@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,8 @@ import {
   ChevronRight,
   RotateCcw,
   Save,
+  LogOut,
+  PenTool,
 } from 'lucide-react';
 
 export interface SelectedPlotInfo {
@@ -57,6 +60,14 @@ export interface ActiveDraftState {
   block?: number;
   lot?: number;
   isEditingExisting?: boolean;
+}
+
+/** Live state while the user drags the corners of an existing project area's outer boundary. */
+export interface ReadjustProjectAreaState {
+  boundary: [number, number][];
+  /** The boundary as stored, so "Reset" can undo every drag without leaving the activity. */
+  originalBoundary: [number, number][];
+  areaSize: number;
 }
 
 export interface MapProjectAreaEditorProps {
@@ -80,6 +91,14 @@ export interface MapProjectAreaEditorProps {
   onDiscardDraftLot: () => void;
   onRedrawDraftLot: () => void;
 
+  // Project area boundary readjustment activity (mutually exclusive with the lot draft panel)
+  readjustProjectArea: ReadjustProjectAreaState | null;
+  onConfirmReadjustProjectArea: () => void;
+  onDiscardReadjustProjectArea: () => void;
+  onResetReadjustProjectArea: () => void;
+  /** Start readjusting the active project area's outer boundary from the top-left control box. */
+  onStartReadjustProjectArea: () => void;
+
   // Selected plot deletion
   selectedPlotToDelete: SelectedPlotInfo | null;
   onConfirmDeletePlot: () => Promise<void>;
@@ -93,6 +112,8 @@ export interface MapProjectAreaEditorProps {
   // Draft session & batch commit
   draftLotsCount: number;
   pendingUpdatesCount: number;
+  /** Queued project area boundary readjustments, counted in the draft footer badge. */
+  pendingProjectAreaUpdatesCount?: number;
   onSaveAll: () => Promise<void>;
   onDiscardAllDrafts: () => void;
   isSaving: boolean;
@@ -126,6 +147,11 @@ export function MapProjectAreaEditor({
   onConfirmDraftLot,
   onDiscardDraftLot,
   onRedrawDraftLot,
+  readjustProjectArea,
+  onConfirmReadjustProjectArea,
+  onDiscardReadjustProjectArea,
+  onResetReadjustProjectArea,
+  onStartReadjustProjectArea,
   selectedPlotToDelete,
   onConfirmDeletePlot,
   onCancelDeletePlot,
@@ -134,6 +160,7 @@ export function MapProjectAreaEditor({
   onDiscardProjectArea,
   draftLotsCount,
   pendingUpdatesCount,
+  pendingProjectAreaUpdatesCount = 0,
   onSaveAll,
   onDiscardAllDrafts,
   isSaving,
@@ -206,7 +233,8 @@ export function MapProjectAreaEditor({
 
   return (
     <>
-      {/* Top-left editor menu and recovery stack */}
+      {/* Top-left editor menu and recovery stack — hidden while a focused activity is active */}
+      {!activeDraft && !readjustProjectArea && (
       <div className="absolute top-4 left-4 z-30 flex flex-col items-start gap-2 max-w-[calc(100vw-2rem)]">
         <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 shadow-xl transition-all">
           {plotType !== null ? (
@@ -285,14 +313,14 @@ export function MapProjectAreaEditor({
                   <span className="text-xs font-semibold text-foreground">Map Editor</span>
                 </div>
                 <Button
-                  variant="ghost"
-                  size="icon"
+                  variant="outline"
+                  size="sm"
                   onClick={() => onToggleEditor(false)}
-                  className="h-6 w-6 shrink-0 text-muted-foreground hover:bg-row-hover hover:text-foreground"
-                  title="Exit Editor"
-                  aria-label="Exit Editor"
+                  className="h-7 shrink-0 gap-1 border-border bg-card px-2 text-[11px] font-semibold text-foreground hover:bg-row-hover"
+                  title="Leave the map editor and return to the property lots view"
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span>Leave Editor</span>
                 </Button>
               </div>
 
@@ -433,21 +461,10 @@ export function MapProjectAreaEditor({
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
-
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => onToggleEditor(false)}
-                    className="h-6 w-6 shrink-0 text-muted-foreground hover:bg-row-hover hover:text-foreground"
-                    title="Exit Editor"
-                    aria-label="Exit Editor"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </Button>
                 </div>
               </div>
 
-              <div className="pt-0.5">
+              <div className="space-y-1.5 pt-0.5">
                 <Button
                   size="sm"
                   variant="outline"
@@ -463,7 +480,28 @@ export function MapProjectAreaEditor({
                   <LandPlot className="h-3.5 w-3.5 text-primary" />
                   <span>+ Plot Lot</span>
                 </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onStartReadjustProjectArea}
+                  disabled={activeProjectArea.is_archived || isSaving}
+                  className="h-8 w-full gap-1.5 border-border bg-card text-xs font-medium text-foreground hover:bg-row-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  title={
+                    activeProjectArea.is_archived
+                      ? 'Restore project area before readjusting its boundary'
+                      : 'Readjust this project area boundary'
+                  }
+                >
+                  <PenTool className="h-3.5 w-3.5 text-primary" />
+                  <span>Readjust Boundary</span>
+                </Button>
               </div>
+
+              <p className="border-t border-border pt-2 text-[11px] leading-relaxed text-muted-foreground">
+                Click a lot on the map to edit its boundary or delete it. Drag the corner dots while
+                readjusting to reshape the outline.
+              </p>
             </>
           )}
         </div>
@@ -498,28 +536,28 @@ export function MapProjectAreaEditor({
           </div>
         )}
       </div>
+      )}
 
-      {/* Bottom-Right Inline Lot Details Panel (replaces modal Dialog) */}
-      {activeDraft && (
-        <div className="absolute bottom-4 right-4 z-30 w-80 rounded-2xl border border-border bg-card p-4 shadow-2xl transition-all duration-200">
-          <form onSubmit={handleDraftSubmit} className="space-y-3">
-            <div className="flex items-center justify-between border-b border-border pb-2">
+      {activeDraft && !readjustProjectArea && (
+        <div className="absolute top-4 left-4 z-30 flex w-full max-w-xl flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-2xl transition-all duration-200">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <LandPlot className="h-4 w-4 shrink-0 text-primary" />
               <span className="text-sm font-bold text-foreground">
                 {activeDraft.isEditingExisting ? 'Edit Lot Boundary' : 'New Lot Details'}
               </span>
-              <span className="rounded-md bg-row-hover px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+              <span className="truncate rounded-md bg-row-hover px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
                 {activeProjectArea?.name}
               </span>
             </div>
-
-            <div className="rounded-lg bg-row-hover p-2.5 text-xs space-y-1 border border-border">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Calculated Area:</span>
-                <span className="font-semibold text-foreground">{activeDraft.areaSize} sqm</span>
-              </div>
+            <div className="text-xs">
+              <span className="text-muted-foreground">Area: </span>
+              <span className="font-semibold text-foreground">{activeDraft.areaSize} sqm</span>
             </div>
+          </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
+          <form onSubmit={handleDraftSubmit} className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-end gap-2.5">
               <div className="space-y-1">
                 <Label htmlFor="draft-blk" className="text-xs font-medium">
                   Block No. *
@@ -532,7 +570,7 @@ export function MapProjectAreaEditor({
                   autoFocus
                   value={lotBlock}
                   onChange={(e) => setLotBlock(e.target.value)}
-                  className="h-8 text-xs"
+                  className="h-8 w-24 text-xs"
                 />
               </div>
 
@@ -547,42 +585,37 @@ export function MapProjectAreaEditor({
                   required
                   value={lotNumber}
                   onChange={(e) => setLotNumber(e.target.value)}
-                  className="h-8 text-xs"
+                  className="h-8 w-24 text-xs"
                 />
               </div>
+
             </div>
 
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              💡 Drag vertex dots on the map to adjust corners in real time.
-            </p>
-
-            <div className="flex items-center justify-between pt-1 gap-1.5 border-t border-border">
-              <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={onRedrawDraftLot}
-                  className="h-8 px-2 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground"
-                  title="Clear points and re-plot"
-                >
-                  Redraw
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={onDiscardDraftLot}
-                  className="h-8 px-2 text-xs border-border text-foreground hover:bg-row-hover"
-                >
-                  Discard
-                </Button>
-              </div>
+            <div className="flex items-center gap-2 border-t border-border pt-3">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onRedrawDraftLot}
+                className="h-8 px-2 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground"
+                title="Clear points and re-plot"
+              >
+                Redraw
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={onDiscardDraftLot}
+                className="h-8 px-2 text-xs border-border text-foreground hover:bg-row-hover"
+              >
+                Discard
+              </Button>
 
               <Button
                 type="submit"
                 size="sm"
-                className="h-8 px-3 text-xs font-semibold bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
+                className="ml-auto h-8 px-3 text-xs font-semibold bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
               >
                 {activeDraft.isEditingExisting ? 'Update Lot' : 'Add to Drafts'}
               </Button>
@@ -591,13 +624,88 @@ export function MapProjectAreaEditor({
         </div>
       )}
 
+      {/* Focused activity screen: Readjust Boundary. Replaces the corner card so the activity
+          feels like a dedicated screen; the map stays interactive beneath it. */}
+      {readjustProjectArea && (
+        <div className="absolute top-4 left-4 z-30 flex w-full max-w-xl flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-2xl transition-all duration-200">
+          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <PenTool className="h-4 w-4 shrink-0 text-primary" />
+                <p className="text-sm font-bold text-foreground">Readjust Boundary</p>
+                <Badge variant="info" className="shrink-0">
+                  Editing
+                </Badge>
+              </div>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                {activeProjectArea?.name}
+              </p>
+            </div>
+            <div className="flex items-center gap-4 text-xs">
+              <div>
+                <span className="text-muted-foreground">Area: </span>
+                <span className="font-semibold text-foreground">
+                  {Math.round(readjustProjectArea.areaSize).toLocaleString()} sqm
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Corners: </span>
+                <span className="font-semibold text-foreground">
+                  {readjustProjectArea.boundary.length}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[11px] leading-relaxed text-muted-foreground">
+            💡 Drag the vertex dots on the map to reshape the project area outline. New lots must
+            still fall inside the adjusted boundary.
+          </p>
+
+          <div className="flex items-center gap-2 border-t border-border pt-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={onResetReadjustProjectArea}
+              className="h-8 px-2 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground"
+              title="Reset the outline to the saved boundary"
+            >
+              Reset
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onDiscardReadjustProjectArea}
+              className="h-8 px-2 text-xs border-border text-foreground hover:bg-row-hover"
+            >
+              Discard
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              onClick={onConfirmReadjustProjectArea}
+              disabled={readjustProjectArea.boundary.length < 3}
+              className="ml-auto h-8 px-3 text-xs font-semibold bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Queue Update
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Bottom-Left Draft Session Badge & Save All & Exit Footer */}
-      {(draftLotsCount > 0 || pendingUpdatesCount > 0) && !activeDraft && (
+      {(draftLotsCount > 0 || pendingUpdatesCount > 0 || pendingProjectAreaUpdatesCount > 0) &&
+        !activeDraft &&
+        !readjustProjectArea && (
         <div className="absolute bottom-4 left-4 z-30 flex items-center gap-3 rounded-xl border border-border bg-card px-3.5 py-2 shadow-2xl">
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold text-foreground">
-              📝 {draftLotsCount + pendingUpdatesCount} Pending Draft
-              {draftLotsCount + pendingUpdatesCount === 1 ? '' : 's'}
+              📝 {draftLotsCount + pendingUpdatesCount + pendingProjectAreaUpdatesCount} Pending
+              Draft
+              {draftLotsCount + pendingUpdatesCount + pendingProjectAreaUpdatesCount === 1 ? '' : 's'}
             </span>
           </div>
 

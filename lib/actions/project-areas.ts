@@ -9,6 +9,7 @@ import {
   createSubdivisionLotSchema,
   deleteSubdivisionLotSchema,
   updateSubdivisionBoundarySchema,
+  updateProjectAreaBoundarySchema,
 } from "@/lib/validations/property";
 import { calculatePolygonAreaSqm } from "@/lib/geometry";
 import {
@@ -25,6 +26,7 @@ import type {
   CreateSubdivisionLotInput,
   DeleteSubdivisionLotInput,
   UpdateSubdivisionBoundaryInput,
+  UpdateProjectAreaBoundaryInput,
 } from "@/lib/types/property";
 
 const property = createScope(["properties.read"]);
@@ -348,6 +350,30 @@ export async function updateSubdivisionLotBoundary(
   });
 }
 
+
+/** Update a project area's outer boundary from the map editor's boundary readjustment flow. */
+export async function updateProjectAreaBoundary(
+  input: UpdateProjectAreaBoundaryInput
+): Promise<ActionResult<ProjectArea>> {
+  return propertyWrite.run({
+    schema: updateProjectAreaBoundarySchema,
+    input,
+    handler: async (validated, { supabase }) => {
+      const { data, error } = await supabase
+        .from("project_area")
+        .update({ boundary: validated.boundary })
+        .eq("project_area_id", validated.project_area_id)
+        .select()
+        .single<ProjectArea>();
+
+      if (error || !data) {
+        throw new Error(`Failed to update project area boundary: ${error?.message ?? "Unknown error"}`);
+      }
+
+      return data;
+    },
+  });
+}
 
 export async function deleteSubdivisionLot(input: DeleteSubdivisionLotInput): Promise<ActionResult<void>> {
   return propertyDelete.run({

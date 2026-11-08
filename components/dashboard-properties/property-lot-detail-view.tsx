@@ -23,6 +23,7 @@ import {
   ExternalLink,
   MoreHorizontal,
   RotateCcw,
+  PhilippinePeso,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -737,7 +738,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
             {/* Computed Base Price Row */}
             <div className="group flex items-center justify-between gap-2 rounded-lg border-t border-border p-2 transition-colors hover:bg-row-hover">
               <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                <DollarSign className="h-4 w-4 shrink-0 text-primary" />
+                <PhilippinePeso className="h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-medium text-muted-foreground">
                     Base contract price

@@ -12,16 +12,19 @@ import {
   uploadClientDocumentObject,
 } from "@/lib/storage/client-documents";
 import { documentsForLot, getMissingReleaseDocuments } from "@/lib/utils/release-requirements";
+import { CLIENT_DOCUMENT_COLUMNS, toClientDocuments, toClientDocument } from "@/lib/attachments";
 import type { ClientDocument } from "@/lib/types/client";
 import {
   RELEASE_DOCUMENT_TYPES,
+  type FileAttachment,
   type ReleaseDocumentType,
 } from "@/lib/types/title";
 
 /**
- * The release packet is stored as the title client's documents, so everything
- * here reads and writes `client_document`. Legal can manage only the release
- * packet types (enforced again by the table's policies).
+ * The release packet lives in `file_attachment` as `entity_type = 'land_title'`
+ * rows that also carry `client_id`, so they appear on the title's packet and on
+ * the client's profile. Legal writes title attachments; the table's policies
+ * keep them out of client paperwork.
  */
 const releaseRead = createScope(["legal.read"]);
 const releaseWrite = createScope(["legal.update"]);
@@ -57,18 +60,18 @@ async function fetchReleaseDocuments(
   title: TitleRef
 ): Promise<ClientDocument[]> {
   const { data, error } = await supabase
-    .from("client_document")
-    .select("*")
+    .from("file_attachment")
+    .select(CLIENT_DOCUMENT_COLUMNS)
     .eq("client_id", title.client_id)
-    .in("document_type", [...RELEASE_DOCUMENT_TYPES])
+    .in("file_category", [...RELEASE_DOCUMENT_TYPES])
     .order("uploaded_at", { ascending: false })
-    .returns<ClientDocument[]>();
+    .returns<FileAttachment[]>();
 
   if (error) {
     throw new Error(`Failed to fetch release documents: ${error.message}`);
   }
 
-  return documentsForLot(data ?? [], title.property_id);
+  return documentsForLot(toClientDocuments(data), title.property_id);
 }
 
 /** The client documents that make up a title's release packet. */
@@ -102,12 +105,13 @@ export async function uploadReleaseDocument(
       const title = await loadTitle(supabase, validId);
 
       const { data: previous, error: previousError } = await supabase
-        .from("client_document")
-        .select("document_id, file_path")
+        .from("file_attachment")
+        .select("attachment_id, file_path")
+        .eq("entity_type", "land_title")
         .eq("client_id", title.client_id)
         .eq("property_id", title.property_id)
-        .eq("document_type", document_type)
-        .returns<{ document_id: string; file_path: string }[]>();
+        .eq("file_category", document_type)
+        .returns<{ attachment_id: string; file_path: string }[]>();
 
       if (previousError) {
         throw new Error(`Failed to check existing documents: ${previousError.message}`);
@@ -116,16 +120,21 @@ export async function uploadReleaseDocument(
       const filePath = await uploadClientDocumentObject(title.client_id, file);
 
       const { data, error } = await supabase
-        .from("client_document")
+        .from("file_attachment")
         .insert({
+          entity_type: "land_title",
+          entity_id: validId,
           client_id: title.client_id,
           property_id: title.property_id,
-          document_type,
+          file_category: document_type,
           file_path: filePath,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type,
           uploaded_by: userId,
         })
-        .select()
-        .single<ClientDocument>();
+        .select(CLIENT_DOCUMENT_COLUMNS)
+        .single<FileAttachment>();
 
       if (error || !data) {
         await removeClientDocumentObject(filePath).catch((cleanupError) => {
@@ -136,11 +145,11 @@ export async function uploadReleaseDocument(
 
       for (const old of previous ?? []) {
         const { error: deleteError } = await supabase
-          .from("client_document")
+          .from("file_attachment")
           .delete()
-          .eq("document_id", old.document_id);
+          .eq("attachment_id", old.attachment_id);
         if (deleteError) {
-          console.error(`Failed to remove replaced document ${old.document_id}:`, deleteError.message);
+          console.error(`Failed to remove replaced document ${old.attachment_id}:`, deleteError.message);
           continue;
         }
         await removeClientDocumentObject(old.file_path).catch((storageError) => {
@@ -148,7 +157,7 @@ export async function uploadReleaseDocument(
         });
       }
 
-      return data;
+      return toClientDocument(data);
     },
   });
 }
@@ -159,9 +168,9 @@ export async function getReleaseDocumentUrl(documentId: string): Promise<string>
     input: documentId,
     handler: async (validId, { supabase }) => {
       const { data, error } = await supabase
-        .from("client_document")
+        .from("file_attachment")
         .select("file_path")
-        .eq("document_id", validId)
+        .eq("attachment_id", validId)
         .single<{ file_path: string }>();
 
       if (error || !data) {
@@ -183,19 +192,19 @@ export async function deleteReleaseDocument(documentId: string): Promise<ActionR
     input: documentId,
     handler: async (validId, { supabase }) => {
       const { data: existing, error: lookupError } = await supabase
-        .from("client_document")
-        .select("file_path, document_type")
-        .eq("document_id", validId)
-        .single<{ file_path: string; document_type: string }>();
+        .from("file_attachment")
+        .select("file_path, file_category")
+        .eq("attachment_id", validId)
+        .single<{ file_path: string; file_category: string }>();
 
       if (lookupError || !existing) {
         throw new Error(`Document not found: ${lookupError?.message ?? "Unknown error"}`);
       }
-      if (!(RELEASE_DOCUMENT_TYPES as readonly string[]).includes(existing.document_type)) {
+      if (!(RELEASE_DOCUMENT_TYPES as readonly string[]).includes(existing.file_category)) {
         throw new Error("Only release packet documents can be removed from the Legal page.");
       }
 
-      const { error } = await supabase.from("client_document").delete().eq("document_id", validId);
+      const { error } = await supabase.from("file_attachment").delete().eq("attachment_id", validId);
       if (error) {
         throw new Error(`Failed to delete release document: ${error.message}`);
       }

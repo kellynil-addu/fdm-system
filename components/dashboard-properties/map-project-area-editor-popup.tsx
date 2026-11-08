@@ -8,6 +8,7 @@ export interface MapProjectAreaEditorPopupProps {
   plot: LotPlotProperties;
   onEditBoundary: () => void;
   onDeletePlot: () => void;
+  onStartReadjustProjectArea: () => void;
 }
 
 export function MapProjectAreaEditorPopup({ plot, onEditBoundary, onDeletePlot }: MapProjectAreaEditorPopupProps) {

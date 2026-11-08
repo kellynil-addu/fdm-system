@@ -205,6 +205,11 @@ export interface UpdateSubdivisionBoundaryInput {
   boundary: [number, number][];
 }
 
+export interface UpdateProjectAreaBoundaryInput {
+  project_area_id: string;
+  boundary: [number, number][];
+}
+
 export interface DraftLot {
   draftId: string;
   projectAreaId: string;
@@ -225,10 +230,20 @@ export interface PendingBoundaryUpdate {
   updatedAt: number;
 }
 
+/** A queued readjustment of a project area's outer boundary, committed on "Save All". */
+export interface PendingProjectAreaBoundaryUpdate {
+  projectAreaId: string;
+  boundary: [number, number][];
+  areaSize: number;
+  updatedAt: number;
+}
+
 export interface ProjectAreaDraftStoragePayload {
   projectAreaId: string;
   draftLots: DraftLot[];
   pendingBoundaryUpdates: PendingBoundaryUpdate[];
+  /** Older stored drafts predate project area boundary readjustment, so this is optional. */
+  pendingProjectAreaBoundaryUpdates?: PendingProjectAreaBoundaryUpdate[];
   lastModified: number;
 }
 

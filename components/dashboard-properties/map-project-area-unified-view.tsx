@@ -18,11 +18,17 @@ import { LoadingButton } from '@/components/ui/loading-button';
 import { PanelLeftOpen, PenTool, AlertTriangle } from 'lucide-react';
 import { ProjectAreaMap } from './map-project-area';
 import { PropertyLotsSidebar } from './property-lots-sidebar';
-import { MapProjectAreaEditor, type SelectedPlotInfo, type ActiveDraftState } from './map-project-area-editor';
+import {
+  MapProjectAreaEditor,
+  type SelectedPlotInfo,
+  type ActiveDraftState,
+  type ReadjustProjectAreaState,
+} from './map-project-area-editor';
 import {
   createProjectArea,
   batchCreateSubdivisionLots,
   updateSubdivisionLotBoundary,
+  updateProjectAreaBoundary,
   deleteSubdivisionLot,
   archiveProjectArea,
   unarchiveProjectArea,
@@ -35,6 +41,7 @@ import type {
   ProjectAreaWithLots,
   DraftLot,
   PendingBoundaryUpdate,
+  PendingProjectAreaBoundaryUpdate,
 } from '@/lib/types/property';
 import type { LotPlotProperties } from './map-project-area-popup';
 import { toast } from 'sonner';
@@ -99,6 +106,13 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
   const [pendingProjectAreaBoundary, setPendingProjectAreaBoundary] = useState<[number, number][] | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Project area boundary readjustment activity. Mirrors the lot draft panel: only one of the two
+  // is ever active at a time, so the user never sees two overlapping editing popups.
+  const [readjustProjectArea, setReadjustProjectArea] = useState<ReadjustProjectAreaState | null>(null);
+  const [pendingProjectAreaBoundaryUpdates, setPendingProjectAreaBoundaryUpdates] = useState<
+    PendingProjectAreaBoundaryUpdate[]
+  >([]);
+
   // Draft session queue for active projectArea
   const [draftLots, setDraftLots] = useState<DraftLot[]>([]);
   const [pendingBoundaryUpdates, setPendingBoundaryUpdates] = useState<PendingBoundaryUpdate[]>([]);
@@ -106,12 +120,18 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
   const [editingSubdivisionId, setEditingSubdivisionId] = useState<string | null>(null);
   const [hasStoredDraft, setHasStoredDraft] = useState(false);
 
-  // Active projectArea boundary ring for ray-casting containment
+  // Active projectArea boundary ring for ray-casting containment. A queued readjustment wins over
+  // the stored ring so newly plotted lots are checked against the outline the user is editing.
   const activeProjectArea = useMemo(() => projectAreas.find((s) => s.project_area_id === activeProjectAreaId), [projectAreas, activeProjectAreaId]);
   const activeProjectAreaRing = useMemo(() => {
-    if (!activeProjectArea?.boundary) return null;
-    return parseRing(activeProjectArea.boundary);
-  }, [activeProjectArea]);
+    if (!activeProjectAreaId) return null;
+    const pendingUpdate = pendingProjectAreaBoundaryUpdates.find(
+      (u) => u.projectAreaId === activeProjectAreaId
+    );
+    const boundary = pendingUpdate ? pendingUpdate.boundary : activeProjectArea?.boundary;
+    if (!boundary) return null;
+    return parseRing(boundary);
+  }, [activeProjectArea, activeProjectAreaId, pendingProjectAreaBoundaryUpdates]);
 
   // Out-of-bounds vertex status. Only meaningful for lots: a new projectArea boundary is plotted
   // outside every existing projectArea ring by definition, so containment must not gate it.
@@ -141,7 +161,12 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
       return;
     }
     const saved = getProjectAreaDraft(activeProjectAreaId);
-    if (saved && (saved.draftLots?.length > 0 || saved.pendingBoundaryUpdates?.length > 0)) {
+    if (
+      saved &&
+      (saved.draftLots?.length > 0 ||
+        saved.pendingBoundaryUpdates?.length > 0 ||
+        (saved.pendingProjectAreaBoundaryUpdates?.length ?? 0) > 0)
+    ) {
       setHasStoredDraft(true);
     } else {
       setHasStoredDraft(false);
@@ -153,6 +178,8 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
   draftLotsRef.current = draftLots;
   const pendingBoundaryUpdatesRef = useRef(pendingBoundaryUpdates);
   pendingBoundaryUpdatesRef.current = pendingBoundaryUpdates;
+  const pendingProjectAreaBoundaryUpdatesRef = useRef(pendingProjectAreaBoundaryUpdates);
+  pendingProjectAreaBoundaryUpdatesRef.current = pendingProjectAreaBoundaryUpdates;
 
   useEffect(() => {
     if (!isEditorActive || !activeProjectAreaId) return;
@@ -160,11 +187,17 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
     const timer = setTimeout(() => {
       const currentLots = draftLotsRef.current;
       const currentUpdates = pendingBoundaryUpdatesRef.current;
-      if (currentLots.length > 0 || currentUpdates.length > 0) {
+      const currentProjectAreaUpdates = pendingProjectAreaBoundaryUpdatesRef.current;
+      if (
+        currentLots.length > 0 ||
+        currentUpdates.length > 0 ||
+        currentProjectAreaUpdates.length > 0
+      ) {
         saveProjectAreaDraft(activeProjectAreaId, {
           projectAreaId: activeProjectAreaId,
           draftLots: currentLots,
           pendingBoundaryUpdates: currentUpdates,
+          pendingProjectAreaBoundaryUpdates: currentProjectAreaUpdates,
         });
       } else {
         clearProjectAreaDraft(activeProjectAreaId);
@@ -172,11 +205,14 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [isEditorActive, activeProjectAreaId, draftLots, pendingBoundaryUpdates]);
+  }, [isEditorActive, activeProjectAreaId, draftLots, pendingBoundaryUpdates, pendingProjectAreaBoundaryUpdates]);
 
   // beforeunload protection when unsaved drafts exist
   useEffect(() => {
-    const hasUnsaved = draftLots.length > 0 || pendingBoundaryUpdates.length > 0;
+    const hasUnsaved =
+      draftLots.length > 0 ||
+      pendingBoundaryUpdates.length > 0 ||
+      pendingProjectAreaBoundaryUpdates.length > 0;
     if (!hasUnsaved) return;
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -186,7 +222,16 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [draftLots, pendingBoundaryUpdates]);
+  }, [draftLots, pendingBoundaryUpdates, pendingProjectAreaBoundaryUpdates]);
+
+  /** Any queued edit — lot drafts, lot boundary updates, or a project area boundary readjustment. */
+  const hasPendingChanges = useCallback(
+    () =>
+      draftLots.length > 0 ||
+      pendingBoundaryUpdates.length > 0 ||
+      pendingProjectAreaBoundaryUpdates.length > 0,
+    [draftLots, pendingBoundaryUpdates, pendingProjectAreaBoundaryUpdates]
+  );
 
   const totalLots = projectAreas.reduce((sum, s) => sum + s.lots.length, 0);
 
@@ -260,23 +305,22 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
 
   // Request leaving the chosen projectArea or exiting editor mode
   const handleLeaveProjectArea = useCallback(() => {
-    const hasUnsaved = draftLots.length > 0 || pendingBoundaryUpdates.length > 0;
-    if (hasUnsaved) {
+    if (hasPendingChanges()) {
       setPendingExitTarget('leaveProjectArea');
       setIsExitGuardOpen(true);
       return;
     }
     setActiveProjectAreaId(null);
     setActiveDraft(null);
+    setReadjustProjectArea(null);
     setDraftPoints([]);
     setPlotType(null);
-  }, [draftLots, pendingBoundaryUpdates]);
+  }, [hasPendingChanges]);
 
   const handleToggleEditor = useCallback(
     (active: boolean) => {
       if (!active) {
-        const hasUnsaved = draftLots.length > 0 || pendingBoundaryUpdates.length > 0;
-        if (hasUnsaved) {
+        if (hasPendingChanges()) {
           setPendingExitTarget('exitEditor');
           setIsExitGuardOpen(true);
           return;
@@ -285,14 +329,16 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
         setPlotType(null);
         setDraftPoints([]);
         setActiveDraft(null);
+        setReadjustProjectArea(null);
         setSelectedPlotToDelete(null);
         setPendingProjectAreaBoundary(null);
         setIsSidebarOpen(true);
+        toast.success('Left the map editor. You are back in the property lots view.');
       } else {
         handleRequestEditorEntry();
       }
     },
-    [draftLots, pendingBoundaryUpdates, handleRequestEditorEntry]
+    [hasPendingChanges, handleRequestEditorEntry]
   );
 
   // LocalStorage draft recovery actions
@@ -302,6 +348,7 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
     if (saved) {
       setDraftLots(saved.draftLots ?? []);
       setPendingBoundaryUpdates(saved.pendingBoundaryUpdates ?? []);
+      setPendingProjectAreaBoundaryUpdates(saved.pendingProjectAreaBoundaryUpdates ?? []);
       toast.success('Restored previous draft lots.');
     }
     setHasStoredDraft(false);
@@ -314,12 +361,14 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
     toast.info('Discarded stored drafts.');
   }, [activeProjectAreaId]);
 
-  // Start plotting shape
+  // Start plotting shape. Starting a plot is a distinct activity, so an open project area
+  // boundary readjustment is dismissed rather than left running in parallel.
   const handleStartPlotting = useCallback((type: 'lot' | 'project-area') => {
     setPlotType(type);
     setDraftPoints([]);
     setActiveDraft(null);
     setEditingSubdivisionId(null);
+    setReadjustProjectArea(null);
     setIsSidebarOpen(false);
   }, []);
 
@@ -328,6 +377,7 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
     setDraftPoints([]);
     setActiveDraft(null);
     setEditingSubdivisionId(null);
+    setReadjustProjectArea(null);
   }, []);
 
   const handleAddDraftPoint = useCallback((pt: [number, number]) => {
@@ -338,12 +388,16 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
     setDraftPoints((prev) => prev.slice(0, -1));
   }, []);
 
-  // Update draft points (from live vertex drag on map canvas)
+  // Update draft points (from live vertex drag on map canvas). A project area boundary
+  // readjustment uses the same vertex handles, so the active activity decides where the drag lands.
   const handleUpdateDraftPoints = useCallback((points: [number, number][]) => {
     setDraftPoints(points);
     if (points.length >= 3) {
       const area = Math.max(10, Math.round(calculatePolygonAreaSqm(points) * 100) / 100);
       setActiveDraft((prev) => (prev ? { ...prev, boundary: points, areaSize: area } : null));
+      setReadjustProjectArea((prev) =>
+        prev ? { ...prev, boundary: points, areaSize: area } : null
+      );
     }
   }, []);
 
@@ -368,8 +422,10 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
     }
   }, [draftPoints, plotType, editingSubdivisionId]);
 
-  // Existing lot "Edit Boundary" clicked in popup
+  // Existing lot "Edit Boundary" clicked in popup. This is a lot activity, so any project area
+  // boundary readjustment in progress is dismissed to keep a single activity on screen.
   const handleEditBoundary = useCallback((plot: LotPlotProperties) => {
+    setReadjustProjectArea(null);
     // Find subdivision boundary for this plot
     let foundBoundary: [number, number][] | null = null;
     for (const projectArea of projectAreas) {
@@ -457,9 +513,74 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
 
   const handleRedrawDraftLot = useCallback(() => {
     setActiveDraft(null);
+    setReadjustProjectArea(null);
     setPlotType('lot');
     setDraftPoints([]);
   }, []);
+
+  // "Readjust Boundary" clicked in the editor control box. Mirrors handleEditBoundary: load the
+  // stored ring into the shared vertex handles and open the inline readjustment panel. Any lot
+  // draft activity is cleared first, so only one editing activity is active.
+  const handleReadjustProjectAreaBoundary = useCallback(() => {
+    if (!activeProjectArea) {
+      toast.error('No project area is open.');
+      return;
+    }
+
+    const ring = parseRing(activeProjectArea.boundary);
+    if (!ring) {
+      toast.error('Boundary geometry not found for this project area.');
+      return;
+    }
+
+    setActiveDraft(null);
+    setEditingSubdivisionId(null);
+    setDraftPoints(ring as [number, number][]);
+    setReadjustProjectArea({
+      boundary: ring as [number, number][],
+      originalBoundary: ring as [number, number][],
+      areaSize: Math.max(10, Math.round(calculatePolygonAreaSqm(ring) * 100) / 100),
+    });
+    setPlotType(null);
+  }, [activeProjectArea]);
+
+  // Queue the readjusted project area boundary into the draft session (committed on Save All).
+  const handleConfirmReadjustProjectArea = useCallback(() => {
+    if (!activeProjectAreaId || !readjustProjectArea) return;
+    setPendingProjectAreaBoundaryUpdates((prev) => {
+      const filtered = prev.filter((p) => p.projectAreaId !== activeProjectAreaId);
+      return [
+        ...filtered,
+        {
+          projectAreaId: activeProjectAreaId,
+          boundary: readjustProjectArea.boundary,
+          areaSize: readjustProjectArea.areaSize,
+          updatedAt: Date.now(),
+        },
+      ];
+    });
+    toast.success('Project area boundary queued for save.');
+    setReadjustProjectArea(null);
+    setDraftPoints([]);
+  }, [activeProjectAreaId, readjustProjectArea]);
+
+  const handleDiscardReadjustProjectArea = useCallback(() => {
+    setReadjustProjectArea(null);
+    setDraftPoints([]);
+  }, []);
+
+  const handleResetReadjustProjectArea = useCallback(() => {
+    if (!readjustProjectArea) return;
+    setReadjustProjectArea({
+      ...readjustProjectArea,
+      boundary: readjustProjectArea.originalBoundary,
+      areaSize: Math.max(
+        10,
+        Math.round(calculatePolygonAreaSqm(readjustProjectArea.originalBoundary) * 100) / 100
+      ),
+    });
+    setDraftPoints(readjustProjectArea.originalBoundary);
+  }, [readjustProjectArea]);
 
   const handleDiscardAllDrafts = useCallback(() => {
     if (activeProjectAreaId) {
@@ -467,7 +588,9 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
     }
     setDraftLots([]);
     setPendingBoundaryUpdates([]);
+    setPendingProjectAreaBoundaryUpdates([]);
     setActiveDraft(null);
+    setReadjustProjectArea(null);
     setEditingSubdivisionId(null);
     setDraftPoints([]);
     toast.info('All draft lots discarded.');
@@ -475,7 +598,7 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
 
   // Save All drafts & exit editor mode
   const handleSaveAll = useCallback(async () => {
-    if (draftLots.length === 0 && pendingBoundaryUpdates.length === 0) {
+    if (!hasPendingChanges()) {
       setIsEditorActive(false);
       setIsSidebarOpen(true);
       return;
@@ -514,8 +637,22 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
         }
       }
 
+      // 3. Commit project area outer-boundary readjustments
+      for (const update of pendingProjectAreaBoundaryUpdates) {
+        const res = await updateProjectAreaBoundary({
+          project_area_id: update.projectAreaId,
+          boundary: update.boundary,
+        });
+        if (!res.success) {
+          toast.error(res.error);
+          return;
+        }
+      }
+
       toast.success(
-        `Saved ${draftLots.length + pendingBoundaryUpdates.length} change(s) successfully.`
+        `Saved ${
+          draftLots.length + pendingBoundaryUpdates.length + pendingProjectAreaBoundaryUpdates.length
+        } change(s) successfully.`
       );
 
       if (activeProjectAreaId) {
@@ -523,7 +660,9 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
       }
       setDraftLots([]);
       setPendingBoundaryUpdates([]);
+      setPendingProjectAreaBoundaryUpdates([]);
       setActiveDraft(null);
+      setReadjustProjectArea(null);
       setEditingSubdivisionId(null);
       setDraftPoints([]);
       setIsEditorActive(false);
@@ -534,7 +673,14 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
     } finally {
       setIsSaving(false);
     }
-  }, [draftLots, pendingBoundaryUpdates, activeProjectAreaId, router]);
+  }, [
+    draftLots,
+    pendingBoundaryUpdates,
+    pendingProjectAreaBoundaryUpdates,
+    activeProjectAreaId,
+    hasPendingChanges,
+    router,
+  ]);
 
   // Confirm discarding drafts when exit guard triggers
   const handleConfirmDiscardAndExit = useCallback(() => {
@@ -542,9 +688,11 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
     setIsExitGuardOpen(false);
     if (pendingExitTarget === 'leaveProjectArea') {
       setActiveProjectAreaId(null);
+      toast.success('Left this project area. Choose another to keep editing.');
     } else {
       setIsEditorActive(false);
       setIsSidebarOpen(true);
+      toast.success('Left the map editor. You are back in the property lots view.');
     }
     setPendingExitTarget(null);
   }, [handleDiscardAllDrafts, pendingExitTarget]);
@@ -701,13 +849,15 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
             onAddDraftPoint={handleAddDraftPoint}
             onDeletePlot={handleDeletePlotTrigger}
             onEditBoundary={handleEditBoundary}
+            onStartReadjustProjectArea={handleReadjustProjectAreaBoundary}
             focusedProjectAreaId={activeProjectAreaId}
             onSelectProjectArea={handleSelectProjectArea}
             activeProjectAreaRing={activeProjectAreaRing}
             draftLots={draftLots}
             pendingBoundaryUpdates={pendingBoundaryUpdates}
+            pendingProjectAreaBoundaryUpdates={pendingProjectAreaBoundaryUpdates}
             onUpdateDraftPoints={handleUpdateDraftPoints}
-            isAdjustingVertices={activeDraft !== null}
+            isAdjustingVertices={activeDraft !== null || readjustProjectArea !== null}
           />
         </div>
 
@@ -746,6 +896,11 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
           onConfirmDraftLot={handleConfirmDraftLot}
           onDiscardDraftLot={handleDiscardDraftLot}
           onRedrawDraftLot={handleRedrawDraftLot}
+          readjustProjectArea={readjustProjectArea}
+          onConfirmReadjustProjectArea={handleConfirmReadjustProjectArea}
+          onDiscardReadjustProjectArea={handleDiscardReadjustProjectArea}
+          onResetReadjustProjectArea={handleResetReadjustProjectArea}
+          onStartReadjustProjectArea={handleReadjustProjectAreaBoundary}
           selectedPlotToDelete={selectedPlotToDelete}
           onConfirmDeletePlot={handleConfirmDeletePlot}
           onCancelDeletePlot={() => setSelectedPlotToDelete(null)}
@@ -754,6 +909,7 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
           onDiscardProjectArea={() => setPendingProjectAreaBoundary(null)}
           draftLotsCount={draftLots.length}
           pendingUpdatesCount={pendingBoundaryUpdates.length}
+          pendingProjectAreaUpdatesCount={pendingProjectAreaBoundaryUpdates.length}
           onSaveAll={handleSaveAll}
           onDiscardAllDrafts={handleDiscardAllDrafts}
           isSaving={isSaving}
@@ -865,7 +1021,13 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
               </AlertDialogTitle>
               <AlertDialogDescription className="text-xs text-foreground leading-relaxed space-y-2">
                 <p>
-                  You have <strong>{draftLots.length + pendingBoundaryUpdates.length}</strong> unsaved draft change(s) on{' '}
+                  You have{' '}
+                  <strong>
+                    {draftLots.length +
+                      pendingBoundaryUpdates.length +
+                      pendingProjectAreaBoundaryUpdates.length}
+                  </strong>{' '}
+                  unsaved draft change(s) on{' '}
                   <strong>{projectAreas.find((s) => s.project_area_id === activeProjectAreaId)?.name ?? 'this project area'}</strong>.
                 </p>
                 <p className="text-muted-foreground">

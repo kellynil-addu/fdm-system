@@ -43,11 +43,11 @@ export async function GET(
     await Promise.all([
       supabase.from('client').select('full_name').eq('client_id', clientId).maybeSingle(),
       supabase
-        .from('client_document')
-        .select('document_id, document_type, file_path, uploaded_at')
+        .from('file_attachment')
+        .select('attachment_id, file_category, file_path, uploaded_at')
         .eq('client_id', clientId)
         .order('uploaded_at', { ascending: true })
-        .returns<Array<{ document_id: string; document_type: DocType; file_path: string; uploaded_at: string }>>(),
+        .returns<Array<{ attachment_id: string; file_category: DocType; file_path: string; uploaded_at: string }>>(),
     ]);
 
   if (clientError || !client) {
@@ -68,7 +68,7 @@ export async function GET(
 
     for (const document of documents) {
       const object = await storage.send(new GetObjectCommand({ Bucket: bucket, Key: document.file_path }));
-      if (!object.Body) throw new Error(`Stored file is empty: ${document.document_type}`);
+      if (!object.Body) throw new Error(`Stored file is empty: ${document.file_category}`);
       const bytes = await object.Body.transformToByteArray();
       const extension = fileExtension(document.file_path);
 
@@ -89,7 +89,7 @@ export async function GET(
       }
 
       const page = output.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
-      const label = DOC_TYPE_LABEL[document.document_type] ?? document.document_type;
+      const label = DOC_TYPE_LABEL[document.file_category] ?? document.file_category;
       const uploadedDate = new Date(document.uploaded_at).toLocaleDateString('en-PH', {
         dateStyle: 'medium',
         timeZone: 'Asia/Manila',

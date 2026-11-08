@@ -97,7 +97,7 @@ export async function getClientReportData(clientId: string): Promise<ClientRepor
       // Query client core profile with contacts, documents, and interaction audit logs
       const { data: client, error: clientErr } = await supabase
         .from("client")
-        .select("*, contact_info(*), client_document(*), client_log(*)")
+        .select("*, contact_info(*), client_document:file_attachment!client_id(file_category), client_log(*)")
         .eq("client_id", validClientId)
         .single();
 
@@ -107,7 +107,7 @@ export async function getClientReportData(clientId: string): Promise<ClientRepor
 
       // Calculate document compliance status against mandatory checklists
       const documents = client.client_document ?? [];
-      const presentDocs: DocType[] = Array.from(new Set(documents.map((d: { document_type: DocType }) => d.document_type)));
+      const presentDocs: DocType[] = Array.from(new Set(documents.map((d: { file_category: string }) => d.file_category as DocType)));
       const missingDocs = REQUIRED_CLIENT_DOCUMENTS.filter((req) => !presentDocs.includes(req));
 
       // Query assigned properties via active ledger accounts

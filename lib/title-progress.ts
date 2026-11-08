@@ -485,7 +485,7 @@ export function getCallingCardStatus(
     const uploaded = new Set(
       (title?.client?.documents ?? [])
         .filter((d) => d.property_id === property?.property_id)
-        .map((d) => d.document_type)
+        .map((d) => d.file_category)
     );
     const missing = getMissingReleaseDocuments(title?.is_legacy_transferred, uploaded);
     return {

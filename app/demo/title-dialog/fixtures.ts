@@ -223,7 +223,7 @@ const F3: LandTitle = {
     tin_number: '987-654-321',
     contact_info: CONTACTS,
     documents: F3_DOCUMENTS.map((doc) => ({
-      document_type: doc.document_type,
+      file_category: doc.document_type,
       property_id: doc.property_id,
     })),
   },

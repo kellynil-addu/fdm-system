@@ -77,8 +77,7 @@ async function deletePropertyLotRecord(propertyId: string) {
 async function deleteClientRecord(clientId: string) {
   await supabase.from("land_title").delete().eq("client_id", clientId);
   await supabase.from("account_party").delete().eq("client_id", clientId);
-  await supabase.from("client_document").delete().eq("client_id", clientId);
-  await supabase.from("file_attachment").delete().eq("entity_type", "client").eq("entity_id", clientId);
+  await supabase.from("file_attachment").delete().eq("client_id", clientId);
   await supabase.from("client_log").delete().eq("client_id", clientId);
   await supabase.from("contact_info").delete().eq("client_id", clientId);
   await supabase.from("search_index").delete().eq("entity_type", "client_document").eq("entity_id", clientId);
@@ -245,8 +244,8 @@ async function cleanupTestData() {
     .select("index_id, entity_type, entity_id");
 
   if (orphanedIndexes && orphanedIndexes.length > 0) {
-    const { data: allDocs } = await supabase.from("client_document").select("document_id");
-    const validDocIds = new Set((allDocs ?? []).map((d) => d.document_id));
+    const { data: allDocs } = await supabase.from("file_attachment").select("attachment_id");
+    const validDocIds = new Set((allDocs ?? []).map((d) => d.attachment_id));
 
     const indicesToDelete = orphanedIndexes.filter(
       (idx) => idx.entity_type === "client_document" && !validDocIds.has(idx.entity_id)

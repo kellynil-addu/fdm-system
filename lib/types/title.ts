@@ -40,8 +40,8 @@ export interface LandTitle {
     tin_number?: string | null;
     /** Selected by `TITLE_SELECT` for the calling cards' contact line. */
     contact_info?: ContactInfo[] | null;
-    /** The client's documents, used for the release packet progress on title lists. */
-    documents?: Pick<ClientDocument, 'document_type' | 'property_id'>[];
+    /** The client's documents from `file_attachment`, for release packet progress on title lists. */
+    documents?: { file_category: string; property_id?: string | null }[];
   } | null;
   property?: {
     property_id: string;
@@ -62,6 +62,10 @@ export interface FileAttachment {
   attachment_id: string;
   entity_type: string;
   entity_id: string;
+  /** Set when the file belongs to a client, including Legal's release packets. */
+  client_id?: string | null;
+  /** The lot the file is filed under, when it is lot-specific. */
+  property_id?: string | null;
   file_category: string;
   file_path: string;
   file_name: string | null;

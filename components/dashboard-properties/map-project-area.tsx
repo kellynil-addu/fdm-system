@@ -14,7 +14,15 @@ import {
 import { getArcGISHybridStyle } from '@/lib/actions/arcgis';
 import { useMapLibreMap } from '@/lib/hooks/use-maplibre-map';
 import { parseRing, ringBounds, ringCentroid, pointInPolygon, isPolygonContained, type Ring } from '@/lib/geometry';
-import type { PropertyLotWithClient, PropertyStatus, ProjectArea, ProjectAreaWithLots, DraftLot, PendingBoundaryUpdate } from '@/lib/types/property';
+import type {
+  PropertyLotWithClient,
+  PropertyStatus,
+  ProjectArea,
+  ProjectAreaWithLots,
+  DraftLot,
+  PendingBoundaryUpdate,
+  PendingProjectAreaBoundaryUpdate,
+} from '@/lib/types/property';
 import type {
   ErrorEvent as MapLibreErrorEvent,
   GeoJSONSource,
@@ -58,19 +66,25 @@ export interface ProjectAreaMapProps {
   onAddDraftPoint?: (point: [number, number]) => void;
   onDeletePlot?: (plot: { subdivisionId?: string; projectAreaId: string; projectAreaName: string; block: number; lot: number; status: string }) => void;
   onEditBoundary?: (plot: LotPlotProperties) => void;
+  /** Start readjusting the focused project area's outer boundary from the map popup. */
+  onStartReadjustProjectArea?: () => void;
   focusedProjectAreaId?: string | null;
   onSelectProjectArea?: (projectAreaId: string) => void;
   preview?: boolean;
   activeProjectAreaRing?: Ring | null;
   draftLots?: DraftLot[];
   pendingBoundaryUpdates?: PendingBoundaryUpdate[];
+  /** Queued project area boundary readjustments, rendered as unsaved outlines while editing. */
+  pendingProjectAreaBoundaryUpdates?: PendingProjectAreaBoundaryUpdate[];
   onUpdateDraftPoints?: (points: [number, number][]) => void;
   isAdjustingVertices?: boolean;
 }
 
 const SIDEBAR_WIDTH = 460;
 const REGIONAL_CENTER: [number, number] = [125.7150395, 7.0445282];
-const REGIONAL_ZOOM = 11.8;
+// Samal Island spans roughly 1° of longitude. At 11.8 the viewport showed only ~0.55° (less once
+// the 460px sidebar padding is applied), clipping the coastline — 10.2 fits the whole island.
+const REGIONAL_ZOOM = 10.2;
 const DETAILS_ZOOM = 14;
 
 const SAMAL_ISLAND_BOUNDS: [[number, number], [number, number]] = [
@@ -314,12 +328,14 @@ export function ProjectAreaMap({
   onAddDraftPoint,
   onDeletePlot,
   onEditBoundary,
+  onStartReadjustProjectArea,
   focusedProjectAreaId,
   onSelectProjectArea,
   preview = false,
   activeProjectAreaRing,
   draftLots = [],
   pendingBoundaryUpdates = [],
+  pendingProjectAreaBoundaryUpdates = [],
   onUpdateDraftPoints,
   isAdjustingVertices = false,
 }: ProjectAreaMapProps) {
@@ -340,6 +356,8 @@ export function ProjectAreaMap({
   onDeletePlotRef.current = onDeletePlot;
   const onEditBoundaryRef = useRef(onEditBoundary);
   onEditBoundaryRef.current = onEditBoundary;
+  const onStartReadjustProjectAreaRef = useRef(onStartReadjustProjectArea);
+  onStartReadjustProjectAreaRef.current = onStartReadjustProjectArea;
   const onSelectProjectAreaRef = useRef(onSelectProjectArea);
   onSelectProjectAreaRef.current = onSelectProjectArea;
   const isEditorModeRef = useRef(isEditorMode);
@@ -677,11 +695,17 @@ export function ProjectAreaMap({
     map.getCanvas().style.cursor = isPlotting ? 'crosshair' : '';
   }, [map, isPlotting]);
 
-  // GeoJSON features for all projectArea boundaries
+  // GeoJSON features for all projectArea boundaries. A queued boundary readjustment replaces the
+  // stored ring so the edited outline stays visible while the draft is pending.
   const projectAreasGeoJson = useMemo(() => {
+    const pendingUpdatesMap = new Map(
+      pendingProjectAreaBoundaryUpdates.map((u) => [u.projectAreaId, u])
+    );
+
     const features = activeVisibleProjectAreas
       .map((s) => {
-        const ring = parseRing(s.boundary);
+        const pendingUpdate = pendingUpdatesMap.get(s.project_area_id);
+        const ring = parseRing(pendingUpdate ? pendingUpdate.boundary : s.boundary);
         if (!ring) return null;
         return {
           type: 'Feature' as const,
@@ -689,6 +713,10 @@ export function ProjectAreaMap({
             projectAreaId: s.project_area_id,
             name: s.name,
             isProjectAreaArchived: Boolean(s.is_archived),
+            hasUnsavedChange: Boolean(pendingUpdate),
+            corners: ring.length,
+            centerLng: ringCentroid(ring)[0],
+            centerLat: ringCentroid(ring)[1],
           },
           geometry: {
             type: 'Polygon' as const,
@@ -702,7 +730,7 @@ export function ProjectAreaMap({
       type: 'FeatureCollection' as const,
       features,
     };
-  }, [activeVisibleProjectAreas]);
+  }, [activeVisibleProjectAreas, pendingProjectAreaBoundaryUpdates]);
 
   // GeoJSON features for all subdivisions across visible projectAreas
   const lotsGeoJson = useMemo(() => {
@@ -887,6 +915,8 @@ export function ProjectAreaMap({
             'case',
             ['boolean', ['get', 'isProjectAreaArchived'], false],
             0.08,
+            ['boolean', ['get', 'hasUnsavedChange'], false],
+            0.25,
             0.15,
           ],
         },
@@ -901,9 +931,16 @@ export function ProjectAreaMap({
             'case',
             ['boolean', ['get', 'isProjectAreaArchived'], false],
             '#d97706',
+            ['boolean', ['get', 'hasUnsavedChange'], false],
+            '#0284c7',
             '#38bdf8',
           ],
-          'line-width': 2.5,
+          'line-width': [
+            'case',
+            ['boolean', ['get', 'hasUnsavedChange'], false],
+            3.5,
+            2.5,
+          ],
           'line-dasharray': [4, 2],
         },
       });
@@ -1179,7 +1216,7 @@ export function ProjectAreaMap({
         anchor: 'bottom',
         offset: [0, -6],
         className: 'maplibre-property-popup',
-        maxWidth: '280px',
+        maxWidth: '240px',
       });
       popupRef.current = popupInstance;
 
@@ -1223,6 +1260,7 @@ export function ProjectAreaMap({
         const p = feature.properties as LotPlotProperties;
         const lotId = p.id;
         const nextId = activeLotIdRef.current === lotId ? null : lotId;
+
         setActiveLotId(nextId);
         onSelectLot?.(nextId);
 
@@ -1638,6 +1676,10 @@ export function ProjectAreaMap({
             onEditBoundary={() => {
               handleClosePopup();
               onEditBoundaryRef.current?.(selectedPlot);
+            }}
+            onStartReadjustProjectArea={() => {
+              handleClosePopup();
+              onStartReadjustProjectAreaRef.current?.();
             }}
           />
         ) : (

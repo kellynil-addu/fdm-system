@@ -49,7 +49,7 @@ export async function getDashboardOverview(): Promise<DashboardStats> {
         const { from, to, limit } = getPaginationOffsets({ page, limit: 500 });
         const { data, error } = await supabase
           .from("client")
-          .select("client_id, full_name, contact_info(value), client_document(document_type)")
+          .select("client_id, full_name, contact_info(value), documents:file_attachment!client_id(file_category)")
           .neq("status", "Archived")
           .order("client_id")
           .range(from, to)

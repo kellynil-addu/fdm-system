@@ -121,7 +121,7 @@ export function TitleRecordCard({ item, onClick }: TitleRecordCardProps) {
   const hasTct = Boolean(title.property?.title_number?.trim());
 
   const uploaded = documentsForLot(title.client?.documents ?? [], title.property_id).map(
-    (d) => d.document_type
+    (d) => d.file_category
   );
   const required = getRequiredReleaseDocuments(title.is_legacy_transferred).length;
   const missing = getMissingReleaseDocuments(title.is_legacy_transferred, uploaded).length;

@@ -39,10 +39,10 @@ describe('Dashboard overview presentation', () => {
   });
 
   it('flags blank contacts and checks required document types without counting duplicates', () => {
-    const result = reviewClientRecord({ client_id: 'client-1', full_name: 'Sample Client', contact_info: [{ value: '  ' }], client_document: [{ document_type: 'Other' }] });
+    const result = reviewClientRecord({ client_id: 'client-1', full_name: 'Sample Client', contact_info: [{ value: '  ' }], documents: [{ file_category: 'Other' }] });
     expect(result.missingContact).toBe(true);
     expect(result.missingDocuments).toEqual(['Valid ID']);
-    const complete = reviewClientRecord({ client_id: 'client-2', full_name: 'Complete Client', contact_info: [{ value: '09000000000' }], client_document: [{ document_type: 'Valid ID' }, { document_type: 'Valid ID' }] });
+    const complete = reviewClientRecord({ client_id: 'client-2', full_name: 'Complete Client', contact_info: [{ value: '09000000000' }], documents: [{ file_category: 'Valid ID' }, { file_category: 'Valid ID' }] });
     expect(complete.missingContact).toBe(false);
     expect(complete.missingDocuments).toEqual([]);
   });

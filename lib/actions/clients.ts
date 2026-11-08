@@ -40,6 +40,8 @@ import {
 } from "@/lib/types/client";
 
 import type { PropertyLot } from "@/lib/types/property";
+import type { FileAttachment } from "@/lib/types/title";
+import { toClientDocument, toClientDocuments, CLIENT_DOCUMENT_COLUMNS } from "@/lib/attachments";
 import { deleteEntityIndex } from "@/lib/actions/search-index";
 import {
   uploadClientDocumentObject,
@@ -298,19 +300,23 @@ export async function getClientById(clientId: string): Promise<ClientWithDetails
     schema: uuidSchema,
     input: clientId,
     handler: async (validId, { supabase }) => {
-      const { data, error } = await supabase
+      const { data: row, error } = await supabase
         .from("client")
-        .select("*, contact_info(*), client_document(*), client_log(*)")
+        .select(
+          "*, contact_info(*), documents:file_attachment!client_id(attachment_id, client_id, file_category, file_path, property_id, uploaded_by, uploaded_at), client_log(*)"
+        )
         .eq("client_id", validId)
-        .single<ClientWithDetails>();
+        .single<ClientWithDetails & { documents: FileAttachment[] }>();
 
-      if (error || !data) {
+      if (error || !row) {
         throw new Error(`Client not found: ${error?.message ?? "Unknown error"}`);
       }
 
+      const { documents, ...data } = row;
       const names = await resolveUserNames(supabase, data.client_log.flatMap(log => log.performed_by ? [log.performed_by] : []));
       return {
         ...data,
+        client_document: toClientDocuments(documents),
         client_log: data.client_log
           .map(log => ({ ...log, performer_name: log.performed_by ? names.get(log.performed_by) ?? 'Staff member' : 'System' }))
           .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()),
@@ -605,16 +611,21 @@ export async function uploadClientDocument(
       const filePath = await uploadClientDocumentObject(validId, file);
 
       const { data, error } = await supabase
-        .from("client_document")
+        .from("file_attachment")
         .insert({
+          entity_type: "client",
+          entity_id: validId,
           client_id: validId,
-          document_type,
           property_id,
+          file_category: document_type,
           file_path: filePath,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type,
           uploaded_by: userId,
         })
-        .select()
-        .single<ClientDocument>();
+        .select(CLIENT_DOCUMENT_COLUMNS)
+        .single<FileAttachment>();
 
       if (error || !data) {
         await removeClientDocumentObject(filePath).catch((cleanupError) => {
@@ -623,7 +634,7 @@ export async function uploadClientDocument(
         throw new Error(`Failed to save document metadata: ${error?.message ?? "Unknown error"}`);
       }
 
-      return data;
+      return toClientDocument(data);
     },
   });
 }
@@ -634,9 +645,9 @@ export async function getClientDocumentUrl(documentId: string): Promise<string> 
     input: documentId,
     handler: async (validId, { supabase }) => {
       const { data, error } = await supabase
-        .from("client_document")
+        .from("file_attachment")
         .select("file_path")
-        .eq("document_id", validId)
+        .eq("attachment_id", validId)
         .single<{ file_path: string }>();
 
       if (error || !data) {
@@ -657,21 +668,23 @@ export async function createClientDocument(
     input: { clientId, ...input },
     handler: async ({ clientId: validId, ...data }, { supabase, userId }) => {
       const { data: created, error } = await supabase
-        .from("client_document")
+        .from("file_attachment")
         .insert({
+          entity_type: "client",
+          entity_id: validId,
           client_id: validId,
-          document_type: data.document_type,
+          file_category: data.document_type,
           file_path: data.file_path,
           uploaded_by: userId,
         })
-        .select()
-        .single<ClientDocument>();
+        .select(CLIENT_DOCUMENT_COLUMNS)
+        .single<FileAttachment>();
 
       if (error || !created) {
         throw new Error(`Failed to save document metadata: ${error?.message ?? "Unknown error"}`);
       }
 
-      return created;
+      return toClientDocument(created);
     },
   });
 }
@@ -685,23 +698,23 @@ export async function getClientDocuments(
     input: { clientId, ...params },
     handler: async ({ clientId: validId, category }, { supabase }) => {
       let query = supabase
-        .from("client_document")
-        .select("*")
+        .from("file_attachment")
+        .select(CLIENT_DOCUMENT_COLUMNS)
         .eq("client_id", validId);
 
       if (category) {
-        query = query.eq("document_type", category);
+        query = query.eq("file_category", category);
       }
 
       const { data, error } = await query
         .order("uploaded_at", { ascending: false })
-        .returns<ClientDocument[]>();
+        .returns<FileAttachment[]>();
 
       if (error) {
         throw new Error(`Failed to fetch client documents: ${error.message}`);
       }
 
-      return data ?? [];
+      return toClientDocuments(data);
     },
   });
 }
@@ -711,30 +724,27 @@ export async function deleteClientDocument(documentId: string): Promise<ActionRe
     schema: uuidSchema,
     input: documentId,
     handler: async (validId, { supabase }) => {
-      const { data: existing } = await supabase
-        .from("client_document")
-        .select("file_path")
-        .eq("document_id", validId)
-        .single<{ file_path: string }>();
-
-      const { error } = await supabase
-        .from("client_document")
+      const { data: deleted, error } = await supabase
+        .from("file_attachment")
         .delete()
-        .eq("document_id", validId);
+        .eq("attachment_id", validId)
+        .select("file_path")
+        .maybeSingle<{ file_path: string }>();
 
       if (error) {
         throw new Error(`Failed to delete client document: ${error.message}`);
+      }
+      if (!deleted) {
+        throw new Error("Document not found or you do not have permission to remove it.");
       }
 
       await deleteEntityIndex("client_document", validId).catch((indexError) => {
         console.error(`Failed to clear search index for ${validId}:`, indexError);
       });
 
-      if (existing?.file_path) {
-        await removeClientDocumentObject(existing.file_path).catch((storageError) => {
-          console.error(`Failed to remove storage object ${existing.file_path}:`, storageError);
-        });
-      }
+      await removeClientDocumentObject(deleted.file_path).catch((storageError) => {
+        console.error(`Failed to remove storage object ${deleted.file_path}:`, storageError);
+      });
     },
   });
 }
@@ -747,17 +757,17 @@ export async function checkClientDocumentStatus(
     input: clientId,
     handler: async (validId, { supabase }) => {
       const { data: documents, error } = await supabase
-        .from("client_document")
-        .select("document_type")
+        .from("file_attachment")
+        .select("file_category")
         .eq("client_id", validId)
-        .returns<Array<{ document_type: DocType }>>();
+        .returns<Array<{ file_category: string }>>();
 
       if (error) {
         throw new Error(`Failed to fetch client documents: ${error.message}`);
       }
 
       const presentTypes = Array.from(
-        new Set((documents ?? []).map((doc) => doc.document_type))
+        new Set((documents ?? []).map((doc) => doc.file_category as DocType))
       );
 
       const missingTypes = REQUIRED_CLIENT_DOCUMENTS.filter(
@@ -778,7 +788,7 @@ export async function getClientsWithMissingDocuments(): Promise<ClientDocumentNo
   return client.query(async ({ supabase }) => {
     const { data: clients, error: clientErr } = await supabase
       .from("client")
-      .select("client_id, full_name, contact_info(*), client_document(document_type)")
+      .select("client_id, full_name, contact_info(*), documents:file_attachment!client_id(file_category)")
       .neq("status", "Archived");
 
     if (clientErr || !clients) {
@@ -789,7 +799,7 @@ export async function getClientsWithMissingDocuments(): Promise<ClientDocumentNo
 
     for (const item of clients) {
       const presentTypes = new Set(
-        (item.client_document ?? []).map((d: { document_type: DocType }) => d.document_type)
+        (item.documents ?? []).map((d: { file_category: string }) => d.file_category as DocType)
       );
 
       const missing = REQUIRED_CLIENT_DOCUMENTS.filter((req) => !presentTypes.has(req));

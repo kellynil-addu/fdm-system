@@ -187,17 +187,17 @@ export async function searchDocumentText(
       if (matches.length === 0) return [];
 
       const { data: documents, error: docError } = await supabase
-        .from("client_document")
-        .select("document_id, client_id, document_type, file_path, client(full_name)")
+        .from("file_attachment")
+        .select("attachment_id, client_id, file_category, file_path, client:client_id(full_name)")
         .in(
-          "document_id",
+          "attachment_id",
           matches.map((m) => m.entity_id)
         )
         .returns<
           Array<{
-            document_id: string;
-            client_id: string;
-            document_type: string;
+            attachment_id: string;
+            client_id: string | null;
+            file_category: string;
             file_path: string;
             client: { full_name: string } | null;
           }>
@@ -208,18 +208,18 @@ export async function searchDocumentText(
       }
 
       const contentById = new Map(matches.map((m) => [m.entity_id, m.content]));
-      const documentById = new Map((documents ?? []).map((doc) => [doc.document_id, doc]));
+      const documentById = new Map((documents ?? []).map((doc) => [doc.attachment_id, doc]));
 
       return matches
         .map((match) => documentById.get(match.entity_id))
         .filter((doc): doc is NonNullable<typeof doc> => Boolean(doc))
         .map((doc) => ({
-          document_id: doc.document_id,
-          client_id: doc.client_id,
+          document_id: doc.attachment_id,
+          client_id: doc.client_id ?? "",
           client_name: doc.client?.full_name ?? "Unknown client",
-          document_type: doc.document_type,
+          document_type: doc.file_category,
           file_path: doc.file_path,
-          excerpt: buildExcerpt(contentById.get(doc.document_id) ?? null, words),
+          excerpt: buildExcerpt(contentById.get(doc.attachment_id) ?? null, words),
         }));
     },
   });

@@ -19,6 +19,7 @@ import {
   Info,
   DollarSign,
   Pencil,
+  PhilippinePeso,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -816,7 +817,7 @@ export function PropertyAssignmentWizard({
 
                 {isEditingPrice ? (
                   <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <PhilippinePeso className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
                       id="total-contract-price"
                       type="number"

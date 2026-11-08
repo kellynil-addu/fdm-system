@@ -210,6 +210,11 @@ export const updateSubdivisionBoundarySchema = z.object({
   boundary: polygonBoundarySchema,
 });
 
+export const updateProjectAreaBoundarySchema = z.object({
+  project_area_id: uuidSchema,
+  boundary: polygonBoundarySchema,
+});
+
 export type CreatePropertyLotFormData = z.infer<typeof createPropertyLotSchema>;
 export type UpdateLotFormData = z.infer<typeof updateLotSchema>;
 export type OpenSubdivisionForSaleFormData = z.infer<typeof openSubdivisionForSaleSchema>;
@@ -217,5 +222,6 @@ export type CreateAndAssignPropertyFromSubdivisionFormData = z.infer<typeof crea
 export type ForfeitPropertyLotFormData = z.infer<typeof forfeitPropertyLotSchema>;
 export type ReopenPropertyLotForSaleFormData = z.infer<typeof reopenPropertyLotForSaleSchema>;
 export type UpdateSubdivisionBoundaryFormData = z.infer<typeof updateSubdivisionBoundarySchema>;
+export type UpdateProjectAreaBoundaryFormData = z.infer<typeof updateProjectAreaBoundarySchema>;
 
 

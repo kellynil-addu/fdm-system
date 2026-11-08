@@ -202,10 +202,10 @@ For a new developer to clone and run the project on a local machine or computer,
 
 | Field | Value |
 | :---- | :---- |
-| **Table Name** | `public.client_document` |
-| **Purpose** | Tracks uploaded client documents (identification cards, deeds of sale, eCAR certifications, affidavits). |
-| **Structure** | **Column**, **Datatype**<br>\*`document_id`, UUID (Primary Key, default `gen_random_uuid()`)<br>\*`client_id`, UUID (Foreign Key -> `public.client.client_id` ON DELETE CASCADE)<br>\*`document_type`, `public.doc_type_enum` (`'Valid ID'`, `'Deed of Sale'`, `'eCAR'`, `'Other'`)<br>\*`file_path`, TEXT (Storage path inside `client-documents` bucket)<br>\*`uploaded_at`, TIMESTAMPTZ (Default `CURRENT_TIMESTAMP`)<br>`uploaded_by`, UUID (Foreign Key -> `auth.users.id` ON DELETE SET NULL) |
-| **Notes** | Files are stored securely in Supabase Storage with signed URL access tokens. |
+| **Table Name** | `public.file_attachment` |
+| **Purpose** | Stores every uploaded file — client documents (identification cards, deeds of sale, eCAR certifications, affidavits), Legal's release packets, notice proofs, and lot files — in one polymorphic table. Replaced the retired `public.client_document` table. |
+| **Structure** | **Column**, **Datatype**<br>\*`attachment_id`, UUID (Primary Key, default `gen_random_uuid()`)<br>\*`entity_type`, TEXT (`'client'`, `'land_title'`, `'land_title_notice'`, `'property'`)<br>\*`entity_id`, UUID (The owning record)<br>`client_id`, UUID (Foreign Key -> `public.client.client_id` ON DELETE CASCADE; set for client paperwork and for Legal's release packets so they appear on the client profile)<br>`property_id`, UUID (Foreign Key -> `public.property_lot.property_id` ON DELETE SET NULL)<br>\*`file_category`, TEXT (e.g. `'Valid ID'`, `'SOA'`, `'release_acknowledgment'`, `'notice_rts'`)<br>\*`file_path`, TEXT (Storage path inside `client-documents` bucket)<br>`file_name`, TEXT<br>`file_size`, BIGINT<br>`mime_type`, TEXT<br>`metadata`, JSONB<br>\*`uploaded_at`, TIMESTAMPTZ (Default `CURRENT_TIMESTAMP`)<br>`uploaded_by`, UUID (Foreign Key -> `auth.users.id` ON DELETE SET NULL) |
+| **Notes** | Write access is enforced by RLS per `entity_type`: `'client'` needs `clients.create`/`clients.update`; `'land_title'` and `'land_title_notice'` need `legal.create`/`legal.update`; `'property'` needs `properties.update`. Legal is read-only on client paperwork. Files are stored securely in Supabase Storage with signed URL access tokens. |
 
 | Field | Value |
 | :---- | :---- |
