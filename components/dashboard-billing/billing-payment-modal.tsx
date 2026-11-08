@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { FormField } from '@/components/ui/form-field';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Select,
@@ -116,35 +117,25 @@ export function BillingPaymentModal({
               />
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="or_number" className="text-xs">
-                Receipt / OR Number
-              </Label>
-              <Input
-                id="or_number"
-                placeholder="e.g. OR#38578"
-                {...register('or_number')}
-                className="h-9 text-xs"
-              />
-              {errors.or_number && (
-                <p className="text-[11px] text-destructive">{errors.or_number.message}</p>
-              )}
-            </div>
+            <FormField
+              id="or_number"
+              label="Receipt / OR Number"
+              placeholder="e.g. OR#38578"
+              error={errors.or_number?.message}
+              labelClassName="text-xs"
+              className="h-9 text-xs"
+              {...register('or_number')}
+            />
 
-            <div className="space-y-1">
-              <Label htmlFor="payment_date" className="text-xs">
-                Payment Date
-              </Label>
-              <Input
-                id="payment_date"
-                type="date"
-                {...register('payment_date')}
-                className="h-9 text-xs"
-              />
-              {errors.payment_date && (
-                <p className="text-[11px] text-destructive">{errors.payment_date.message}</p>
-              )}
-            </div>
+            <FormField
+              id="payment_date"
+              label="Payment Date"
+              type="date"
+              error={errors.payment_date?.message}
+              labelClassName="text-xs"
+              className="h-9 text-xs"
+              {...register('payment_date')}
+            />
           </div>
 
           <div className="space-y-1">

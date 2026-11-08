@@ -3,6 +3,7 @@
 import { ArrowDownLeft, RotateCcw, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Table,
   TableBody,
@@ -27,32 +28,30 @@ export function BillingJournalTab({
 }: BillingJournalTabProps) {
   if (transactions.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
-        <p className="text-sm font-medium">No journal entries recorded</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          Payments, penalty charges, and fee adjustments will appear sequentially in this ledger.
-        </p>
-      </div>
+      <EmptyState
+        title="No journal entries recorded"
+        description="Payments, penalty charges, and fee adjustments will appear sequentially in this ledger."
+      />
     );
   }
 
   const getTypeBadge = (type: string, isReversed: boolean) => {
     if (isReversed) {
       return (
-        <Badge variant="outline" className="text-[10px] line-through text-muted-foreground">
+        <Badge variant="outline" shape="pill" className="text-[10px] line-through text-muted-foreground">
           {type}
         </Badge>
       );
     }
     switch (type) {
       case 'payment':
-        return <Badge variant="success" className="text-[10px] uppercase font-semibold">Payment</Badge>;
+        return <Badge variant="success" shape="pill" dot className="text-[10px] uppercase font-semibold">Payment</Badge>;
       case 'penalty_charge':
-        return <Badge variant="warning" className="text-[10px] uppercase font-semibold">Penalty</Badge>;
+        return <Badge variant="warning" shape="pill" dot className="text-[10px] uppercase font-semibold">Penalty</Badge>;
       case 'reversal':
-        return <Badge variant="destructive" className="text-[10px] uppercase font-semibold">Reversal</Badge>;
+        return <Badge variant="destructive" shape="pill" dot className="text-[10px] uppercase font-semibold">Reversal</Badge>;
       default:
-        return <Badge variant="secondary" className="text-[10px] uppercase font-semibold">{type}</Badge>;
+        return <Badge variant="secondary" shape="pill" dot className="text-[10px] uppercase font-semibold">{type}</Badge>;
     }
   };
 
@@ -72,8 +71,8 @@ export function BillingJournalTab({
 
       <div className="relative w-full overflow-x-auto rounded-lg border border-border">
         <Table className="w-full text-xs">
-          <TableHeader className="bg-muted/40 border-b border-border">
-            <TableRow>
+          <TableHeader className="bg-card border-b border-border">
+            <TableRow className="bg-card hover:bg-card">
               <TableHead className="w-16 text-center text-xs font-semibold">Seq #</TableHead>
               <TableHead className="w-28 text-xs font-semibold">Value Date</TableHead>
               <TableHead className="w-24 text-center text-xs font-semibold">Type</TableHead>
@@ -148,10 +147,10 @@ export function BillingJournalTab({
                   <TableCell className="text-right pr-4">
                     {canEdit && isPayment && !txn.is_reversed && (
                       <Button
-                        variant="ghost"
+                        variant="danger"
                         size="sm"
                         onClick={() => onReverseTransaction(txn)}
-                        className="h-6 gap-1 px-2 text-[10px] text-destructive hover:bg-destructive/10 hover:text-destructive"
+                        className="h-6 gap-1 px-2 text-[10px]"
                       >
                         <RotateCcw className="h-3 w-3" />
                         Reverse

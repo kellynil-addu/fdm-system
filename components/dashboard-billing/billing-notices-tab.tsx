@@ -1,9 +1,12 @@
 'use client';
 
 import { useMemo } from 'react';
-import { AlertTriangle, FileText, Lock, Unlock, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Mail, AlertTriangle, FileText, Lock, Unlock } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import {
   Table,
   TableBody,
@@ -14,34 +17,36 @@ import {
 } from '@/components/ui/table';
 import { computeMacedaCashSurrenderValue } from '@/lib/billing/maceda';
 import { formatCentavosToPhp } from '@/lib/status-colors';
-import type { BillingAccountSummary } from '@/lib/types/billing';
+import type { BillingAccountSummary, BillingAccountNotice } from '@/lib/types/billing';
 
 interface BillingNoticesTabProps {
   account: BillingAccountSummary;
+  onOpenNoticeModal?: () => void;
   onOpenLotHoldDialog: () => void;
   canEdit: boolean;
 }
 
 export function BillingNoticesTab({
   account,
+  onOpenNoticeModal,
   onOpenLotHoldDialog,
   canEdit,
 }: BillingNoticesTabProps) {
-  const notices = account.notices ?? [];
+  const notices: BillingAccountNotice[] = account.notices ?? [];
   const isForfeited = String(account.status || '').toLowerCase() === 'forfeited';
 
-  // Compute Maceda Law statutory cash surrender values
   const maceda = useMemo(() => {
-    const totalPaid = Number(account.total_principal_paid ?? account.total_paid ?? 0);
-    const monthlyAmort = Number(account.monthly_amortization || 0);
-    const estimatedMonths =
-      monthlyAmort > 0
-        ? Math.floor(totalPaid / monthlyAmort)
-        : Math.floor(totalPaid / (Number(account.total_contract_price || 1) / (account.terms_months || 60)));
-
+    const paidMonths = Math.min(
+      account.terms_months || 60,
+      Math.round(
+        (Number(account.total_principal_paid || 0) /
+          (Number(account.monthly_amortization) || 1))
+      )
+    );
     return computeMacedaCashSurrenderValue({
-      totalInstallmentsPaid: totalPaid,
-      installmentsPaidMonths: estimatedMonths,
+      totalInstallmentsPaid: Number(account.total_principal_paid || 0),
+      installmentsPaidMonths: paidMonths,
+      authorizedDeductions: Number(account.penalties_due || 0),
     });
   }, [account]);
 
@@ -49,16 +54,14 @@ export function BillingNoticesTab({
     <div className="space-y-6">
       {/* Forfeiture Hold Banner if applicable */}
       {isForfeited && (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-destructive">
-              <Lock className="h-5 w-5 flex-shrink-0" />
-              <div>
-                <h4 className="text-sm font-semibold">Forfeiture Hold Active (FR-060)</h4>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  This lot is legally locked from assignment or resale until formal grace periods elapse.
-                </p>
-              </div>
+        <Alert variant="destructive" className="border-[color-mix(in_srgb,var(--destructive)_40%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_12%,white)]">
+          <Lock className="h-4 w-4" />
+          <div className="flex flex-wrap items-center justify-between gap-3 w-full">
+            <div>
+              <AlertTitle>Forfeiture Hold Active (FR-060)</AlertTitle>
+              <AlertDescription className="text-xs text-muted-foreground mt-0.5">
+                This lot is legally locked from assignment or resale until formal grace periods elapse.
+              </AlertDescription>
             </div>
             {canEdit && (
               <Button
@@ -72,11 +75,11 @@ export function BillingNoticesTab({
               </Button>
             )}
           </div>
-        </div>
+        </Alert>
       )}
 
       {/* Maceda Statutory Surrender Card */}
-      <div className="rounded-lg border border-border bg-muted/20 p-4 space-y-3">
+      <Card variant="default" padding="default" className="space-y-3">
         <div className="flex items-center justify-between border-b border-border/60 pb-3">
           <div className="flex items-center gap-2">
             <FileText className="h-4 w-4 text-primary" />
@@ -86,6 +89,8 @@ export function BillingNoticesTab({
           </div>
           <Badge
             variant={maceda.eligibleForRefund ? 'success' : 'secondary'}
+            shape="pill"
+            dot
             className="text-[10px] uppercase font-semibold"
           >
             {maceda.eligibleForRefund ? 'Refund Eligible (>= 2 Years)' : 'Under 2 Years Paid'}
@@ -118,7 +123,7 @@ export function BillingNoticesTab({
             </p>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Demand Notice History */}
       <div className="space-y-3">
@@ -130,14 +135,15 @@ export function BillingNoticesTab({
         </div>
 
         {notices.length === 0 ? (
-          <div className="rounded-lg border border-border p-6 text-center text-xs text-muted-foreground">
-            No formal notices or demand letters recorded on this account.
-          </div>
+          <EmptyState
+            title="No demand notices on file"
+            description="No formal notices or demand letters recorded on this account."
+          />
         ) : (
           <div className="relative w-full overflow-x-auto rounded-lg border border-border">
             <Table className="w-full text-xs">
-              <TableHeader className="bg-muted/40 border-b border-border">
-                <TableRow>
+              <TableHeader className="bg-card border-b border-border">
+                <TableRow className="bg-card hover:bg-card">
                   <TableHead className="text-xs font-semibold">Notice Type</TableHead>
                   <TableHead className="text-xs font-semibold">Notice Date</TableHead>
                   <TableHead className="text-xs font-semibold">Delivery Status</TableHead>
@@ -163,6 +169,8 @@ export function BillingNoticesTab({
                             ? 'destructive'
                             : 'secondary'
                         }
+                        shape="pill"
+                        dot
                         className="text-[10px] uppercase font-semibold"
                       >
                         {n.delivery_status}

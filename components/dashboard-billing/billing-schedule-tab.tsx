@@ -2,6 +2,7 @@
 
 import { Calendar, CheckCircle2, AlertTriangle, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Table,
   TableBody,
@@ -21,12 +22,10 @@ interface BillingScheduleTabProps {
 export function BillingScheduleTab({ schedule, totalPaid }: BillingScheduleTabProps) {
   if (!schedule || !schedule.installments || schedule.installments.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
-        <p className="text-sm font-medium">No explicit installment schedule found</p>
-        <p className="text-xs text-muted-foreground mt-1">
-          This account may be unamortized or waiting for initial schedule generation.
-        </p>
-      </div>
+      <EmptyState
+        title="No explicit installment schedule found"
+        description="This account may be unamortized or waiting for initial schedule generation."
+      />
     );
   }
 
@@ -47,11 +46,11 @@ export function BillingScheduleTab({ schedule, totalPaid }: BillingScheduleTabPr
               Installment Schedule (Version {schedule.version})
             </h3>
             {schedule.is_active ? (
-              <Badge variant="success" className="text-[10px] uppercase font-semibold">
+              <Badge variant="success" shape="pill" dot className="text-[10px] uppercase font-semibold">
                 Active Schedule
               </Badge>
             ) : (
-              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+              <Badge variant="outline" shape="pill" className="text-[10px] text-muted-foreground">
                 Archived Version
               </Badge>
             )}
@@ -66,8 +65,8 @@ export function BillingScheduleTab({ schedule, totalPaid }: BillingScheduleTabPr
       {/* Table */}
       <div className="relative w-full overflow-x-auto rounded-lg border border-border">
         <Table className="w-full text-xs">
-          <TableHeader className="bg-muted/40 border-b border-border">
-            <TableRow>
+          <TableHeader className="bg-card border-b border-border">
+            <TableRow className="bg-card hover:bg-card">
               <TableHead className="w-16 text-center text-xs font-semibold">#</TableHead>
               <TableHead className="w-32 text-xs font-semibold">Due Date</TableHead>
               <TableHead className="text-right text-xs font-semibold">Monthly Due</TableHead>

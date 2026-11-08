@@ -3,6 +3,7 @@
 import Link from 'next/navigation';
 import { useRouter } from 'next/navigation';
 import { ArrowUpRight, Banknote, Calendar, CheckCircle2, ChevronRight, AlertTriangle } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatCentavosToPhp, getBillingStatusLabel, getBillingStatusVariant } from '@/lib/status-colors';
+import { formatCentavosToPhp, getBillingStatusLabel, BILLING_STATUS_BADGE_VARIANT } from '@/lib/status-colors';
 import type { BillingAccountSummary } from '@/lib/types/billing';
 
 interface BillingAccountsTableProps {
@@ -31,18 +32,18 @@ export function BillingAccountsTable({
 
   if (accounts.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
-        <p className="text-sm font-medium">No matching billing accounts found</p>
-        <p className="text-xs text-muted-foreground mt-1">Try adjusting search criteria or clearing status filters.</p>
-      </div>
+      <EmptyState
+        title="No matching billing accounts"
+        description="Try adjusting search criteria or clearing active filters."
+      />
     );
   }
 
   return (
     <div className="relative w-full overflow-x-auto">
       <Table className="w-full text-xs">
-        <TableHeader className="bg-muted/40 sticky top-0 z-10 border-b border-border">
-          <TableRow>
+        <TableHeader className="bg-card sticky top-0 z-10 border-b border-border">
+          <TableRow className="bg-card hover:bg-card">
             <TableHead className="w-[200px] text-xs font-semibold">Buyer</TableHead>
             <TableHead className="w-[180px] text-xs font-semibold">Property Lot</TableHead>
             <TableHead className="text-right text-xs font-semibold">Total Price</TableHead>
@@ -58,7 +59,6 @@ export function BillingAccountsTable({
               ? 'cleared'
               : String(account.status || '').toLowerCase();
             const statusLabel = getBillingStatusLabel(rawStatus);
-            const statusVariant = getBillingStatusVariant(rawStatus);
             const monthsBehind = account.installments_behind ?? 0;
             const penaltiesDue = Number(account.penalties_due || 0);
             const hasArrears = monthsBehind > 0 || penaltiesDue > 0;
@@ -124,7 +124,12 @@ export function BillingAccountsTable({
 
                 {/* Canonical Status Badge */}
                 <TableCell className="text-center">
-                  <Badge variant={statusVariant} className="text-[10px] uppercase font-semibold tracking-wider">
+                  <Badge
+                    variant={BILLING_STATUS_BADGE_VARIANT[rawStatus] ?? 'secondary'}
+                    shape="pill"
+                    dot
+                    className="text-[10px] uppercase font-semibold tracking-wider"
+                  >
                     {statusLabel}
                   </Badge>
                 </TableCell>
@@ -134,7 +139,7 @@ export function BillingAccountsTable({
                   <div className="flex items-center justify-end gap-1.5">
                     {canEdit && !account.cleared_at && rawStatus !== 'forfeited' && (
                       <Button
-                        variant="outline"
+                        variant="quiet"
                         size="sm"
                         onClick={() => onOpenPaymentModal(account)}
                         className="h-7 gap-1 px-2 text-[11px]"

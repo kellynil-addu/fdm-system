@@ -1,13 +1,21 @@
 'use client';
 
 import { useState } from 'react';
-import { Card, CardTableFooter } from '@/components/ui/card';
+import {
+  Card,
+  CardStickyHeader,
+  CardTableFooter,
+  CardTitle,
+  CardDescription,
+} from '@/components/ui/card';
+import { FilterToolbar } from '@/components/ui/filter-toolbar';
+import { Button } from '@/components/ui/button';
+import { Upload, Rows, LayoutList } from 'lucide-react';
 import {
   BillingAccountsProvider,
   useBillingAccounts,
 } from '@/lib/hooks/use-billing-accounts';
 import { BillingKpiCards } from './billing-kpi-cards';
-import { BillingTableToolbar } from './billing-table-toolbar';
 import { BillingAccountsTable } from './billing-accounts-table';
 import { BillingAccountCard } from './billing-account-card';
 import { BillingPdcTracker } from './billing-pdc-tracker';
@@ -77,17 +85,62 @@ function BillingRecordsContent() {
         {/* Tab 1: Billing Accounts */}
         {topTab === 'accounts' && (
           <>
-            <BillingTableToolbar
-              search={search}
-              onSearchChange={setSearch}
-              activeTab={tab}
-              onTabChange={setTab}
-              counts={counts}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              onOpenImportModal={() => setActiveModal({ type: 'excel-import' })}
-              canEdit={canEdit}
-            />
+            <CardStickyHeader>
+              <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6 pb-0 sm:pb-0">
+                <div>
+                  <CardTitle>Accounts Ledger</CardTitle>
+                  <CardDescription>
+                    Real-time balances, overdue installments, and cashier actions
+                  </CardDescription>
+                </div>
+                {canEdit && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="quiet"
+                      size="sm"
+                      onClick={() => setActiveModal({ type: 'excel-import' })}
+                      className="gap-1.5 text-xs"
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      Import Legacy SOA
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              <FilterToolbar
+                tabs={{
+                  value: tab === 'delinquent' ? 'in_arrears' : tab,
+                  onChange: (val) => setTab(val as any),
+                  items: [
+                    { value: 'all', label: 'All', count: counts.all },
+                    { value: 'active', label: 'Active', count: counts.active },
+                    { value: 'in_arrears', label: 'In Arrears', count: counts.in_arrears ?? counts.delinquent },
+                    { value: 'matured', label: 'Matured', count: counts.matured },
+                    { value: 'cleared', label: 'Cleared', count: counts.cleared },
+                    { value: 'forfeited', label: 'Forfeited', count: counts.forfeited },
+                  ],
+                }}
+                search={{
+                  value: search,
+                  onChange: setSearch,
+                  placeholder: 'Search buyer name, lot, or location...',
+                }}
+                viewMode={{
+                  value: viewMode,
+                  onChange: (val) => setViewMode(val as any),
+                  options: [
+                    { value: 'table', label: 'Table view', icon: <Rows className="h-4 w-4" /> },
+                    { value: 'cards', label: 'Cards view', icon: <LayoutList className="h-4 w-4" /> },
+                  ],
+                }}
+                isFiltered={search !== '' || tab !== 'all'}
+                onClear={() => {
+                  setSearch('');
+                  setTab('all');
+                }}
+              />
+            </CardStickyHeader>
 
             <div className="min-h-[400px]">
               {viewMode === 'table' ? (

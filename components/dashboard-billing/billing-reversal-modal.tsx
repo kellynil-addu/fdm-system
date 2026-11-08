@@ -2,7 +2,7 @@
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -83,9 +84,17 @@ export function BillingReversalModal({
             Reverse Transaction #{transaction.transaction_sequence}
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Non-destructive correction: appends an audit reversal entry without deleting historical records (FR-011, FR-012)
+            Non-destructive audit reversal: appends a compensatory entry without deleting history (FR-005).
           </p>
         </DialogHeader>
+
+        <Alert variant="warning" className="border-[color-mix(in_srgb,var(--warning)_40%,transparent)] bg-[color-mix(in_srgb,var(--warning)_12%,white)]">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle className="text-xs font-semibold">Ledger Recalculation Notice</AlertTitle>
+          <AlertDescription className="text-xs">
+            Reversing this transaction will recompute overdue installment aging and penalties due across subsequent periods.
+          </AlertDescription>
+        </Alert>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="rounded-lg border border-border p-3 bg-muted/20 text-xs space-y-1">
@@ -123,7 +132,7 @@ export function BillingReversalModal({
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button
               type="button"
-              variant="outline"
+              variant="quiet"
               size="sm"
               onClick={() => onOpenChange(false)}
             >

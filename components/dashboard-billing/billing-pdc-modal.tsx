@@ -11,8 +11,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { FormField } from '@/components/ui/form-field';
 import { recordPdcSchema, type RecordPdcInput } from '@/lib/validations/billing';
 import { recordPostDatedCheck } from '@/lib/actions/billing';
 import { useMutation } from '@/lib/hooks/use-mutation';
@@ -78,67 +77,40 @@ export function BillingPdcModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="check_number" className="text-xs">
-              Check Number
-            </Label>
-            <Input
-              id="check_number"
-              placeholder="e.g. 00012345"
-              {...register('check_number')}
-              className="h-9 text-xs"
-            />
-            {errors.check_number && (
-              <p className="text-[11px] text-destructive">{errors.check_number.message}</p>
-            )}
-          </div>
+          <FormField
+            id="check_number"
+            label="Check Number"
+            placeholder="e.g. 00012345"
+            {...register('check_number')}
+            error={errors.check_number?.message}
+          />
 
-          <div className="space-y-1">
-            <Label htmlFor="bank_name" className="text-xs">
-              Issuing Bank & Branch
-            </Label>
-            <Input
-              id="bank_name"
-              placeholder="e.g. BDO - Davao Claveria"
-              {...register('bank_name')}
-              className="h-9 text-xs"
-            />
-            {errors.bank_name && (
-              <p className="text-[11px] text-destructive">{errors.bank_name.message}</p>
-            )}
-          </div>
+          <FormField
+            id="bank_name"
+            label="Issuing Bank & Branch"
+            placeholder="e.g. BDO - Davao Claveria"
+            {...register('bank_name')}
+            error={errors.bank_name?.message}
+          />
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="check_date" className="text-xs">
-                Check Due Date
-              </Label>
-              <Input
-                id="check_date"
-                type="date"
-                {...register('check_date')}
-                className="h-9 text-xs"
-              />
-              {errors.check_date && (
-                <p className="text-[11px] text-destructive">{errors.check_date.message}</p>
-              )}
-            </div>
+            <FormField
+              id="check_date"
+              label="Check Due Date"
+              type="date"
+              {...register('check_date')}
+              error={errors.check_date?.message}
+            />
 
-            <div className="space-y-1">
-              <Label htmlFor="amount" className="text-xs">
-                Amount (₱)
-              </Label>
-              <Input
-                id="amount"
-                type="number"
-                step="0.01"
-                {...register('amount', { valueAsNumber: true })}
-                className="h-9 text-xs font-mono"
-              />
-              {errors.amount && (
-                <p className="text-[11px] text-destructive">{errors.amount.message}</p>
-              )}
-            </div>
+            <FormField
+              id="amount"
+              label="Amount (₱)"
+              type="number"
+              step="0.01"
+              {...register('amount', { valueAsNumber: true })}
+              error={errors.amount?.message}
+              className="font-mono"
+            />
           </div>
 
           <p className="text-[11px] text-muted-foreground rounded-md bg-muted/40 p-2">
@@ -148,7 +120,7 @@ export function BillingPdcModal({
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button
               type="button"
-              variant="outline"
+              variant="quiet"
               size="sm"
               onClick={() => onOpenChange(false)}
             >

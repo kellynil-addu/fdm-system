@@ -36,7 +36,7 @@ import { BillingLotHoldDialog } from './billing-lot-hold-dialog';
 import {
   formatCentavosToPhp,
   getBillingStatusLabel,
-  getBillingStatusVariant,
+  BILLING_STATUS_BADGE_VARIANT,
 } from '@/lib/status-colors';
 import type {
   BillingAccountSummary,
@@ -71,7 +71,6 @@ export function BillingAccountDetailWorkspace({
 
   const rawStatus = account.cleared_at ? 'cleared' : String(account.status || '').toLowerCase();
   const statusLabel = getBillingStatusLabel(rawStatus);
-  const statusVariant = getBillingStatusVariant(rawStatus);
   const isForfeited = rawStatus === 'forfeited';
 
   const buyer = account.client;
@@ -86,7 +85,7 @@ export function BillingAccountDetailWorkspace({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Button
-            variant="outline"
+            variant="quiet"
             size="sm"
             onClick={() => router.push('/dashboard/billing')}
             className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
@@ -99,7 +98,12 @@ export function BillingAccountDetailWorkspace({
               <h1 className="text-xl font-bold tracking-tight text-foreground">
                 {buyer?.full_name ?? 'Unassigned Lot Account'}
               </h1>
-              <Badge variant={statusVariant} className="text-[10px] uppercase font-semibold">
+              <Badge
+                variant={BILLING_STATUS_BADGE_VARIANT[rawStatus] ?? 'secondary'}
+                shape="pill"
+                dot
+                className="text-[10px] uppercase font-semibold"
+              >
                 {statusLabel}
               </Badge>
             </div>
@@ -121,7 +125,7 @@ export function BillingAccountDetailWorkspace({
             </Button>
           )}
           <Button
-            variant="outline"
+            variant="quiet"
             size="sm"
             onClick={() => setActiveTab('statement')}
             className="gap-1.5 text-xs"
@@ -241,7 +245,7 @@ export function BillingAccountDetailWorkspace({
                     {!account.cleared_at && !isForfeited && (
                       <>
                         <Button
-                          variant="outline"
+                          variant="quiet"
                           size="sm"
                           onClick={() => setRestructureModalOpen(true)}
                           className="justify-start h-8 text-xs gap-2"
@@ -250,7 +254,7 @@ export function BillingAccountDetailWorkspace({
                           Restructure Terms (FR-040)
                         </Button>
                         <Button
-                          variant="outline"
+                          variant="quiet"
                           size="sm"
                           onClick={() => setPenaltyModalOpen(true)}
                           className="justify-start h-8 text-xs gap-2"
@@ -259,7 +263,7 @@ export function BillingAccountDetailWorkspace({
                           Penalty Policy / Waiver
                         </Button>
                         <Button
-                          variant="outline"
+                          variant="quiet"
                           size="sm"
                           onClick={() => setPdcModalOpen(true)}
                           className="justify-start h-8 text-xs gap-2"

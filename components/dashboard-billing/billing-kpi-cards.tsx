@@ -2,7 +2,8 @@
 
 import { useMemo } from 'react';
 import { AlertTriangle, CheckCircle2, Clock, Wallet } from 'lucide-react';
-import { Card } from '@/components/ui/card';
+import { Card, CardTitle, CardDescription } from '@/components/ui/card';
+import { IconBox } from '@/components/ui/icon-box';
 import { useBillingAccounts } from '@/lib/hooks/use-billing-accounts';
 import { formatCentavosToPhp } from '@/lib/status-colors';
 
@@ -29,75 +30,75 @@ export function BillingKpiCards() {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {/* 1. Outstanding Receivables */}
-      <Card className="p-4 sm:p-5">
+      <Card variant="canvas" padding="default">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <CardTitle size="sm" className="uppercase tracking-wider text-muted-foreground font-semibold text-[11px]">
             Total Receivables
-          </p>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] text-primary">
+          </CardTitle>
+          <IconBox variant="canvas" size="default" shape="square" className="text-primary">
             <Wallet className="h-4 w-4" />
-          </div>
+          </IconBox>
         </div>
         <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono">
           {formatCentavosToPhp(metrics.totalOutstanding)}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <CardDescription className="mt-1 text-xs">
           Remaining principal across active portfolio
-        </p>
+        </CardDescription>
       </Card>
 
       {/* 2. Total Collected */}
-      <Card className="p-4 sm:p-5">
+      <Card variant="canvas" padding="default">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <CardTitle size="sm" className="uppercase tracking-wider text-muted-foreground font-semibold text-[11px]">
             Total Collected
-          </p>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--success)_12%,transparent)] text-success">
+          </CardTitle>
+          <IconBox variant="canvas" size="default" shape="square" className="text-success">
             <CheckCircle2 className="h-4 w-4" />
-          </div>
+          </IconBox>
         </div>
         <p className="mt-2 text-2xl font-bold tracking-tight text-foreground font-mono">
           {formatCentavosToPhp(metrics.totalCollected)}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Principal paid to date
-        </p>
+        <CardDescription className="mt-1 text-xs">
+          Principal settled to date
+        </CardDescription>
       </Card>
 
       {/* 3. In Arrears Accounts */}
-      <Card className="p-4 sm:p-5">
+      <Card variant="canvas" padding="default">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <CardTitle size="sm" className="uppercase tracking-wider text-muted-foreground font-semibold text-[11px]">
             In Arrears
-          </p>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--warning)_15%,transparent)] text-warning">
+          </CardTitle>
+          <IconBox variant="canvas" size="default" shape="square" className="text-warning">
             <AlertTriangle className="h-4 w-4" />
-          </div>
+          </IconBox>
         </div>
         <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
           {inArrearsCount}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <CardDescription className="mt-1 text-xs">
           Accounts with past-due installments
-        </p>
+        </CardDescription>
       </Card>
 
       {/* 4. Active Contracts */}
-      <Card className="p-4 sm:p-5">
+      <Card variant="canvas" padding="default">
         <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <CardTitle size="sm" className="uppercase tracking-wider text-muted-foreground font-semibold text-[11px]">
             Active Accounts
-          </p>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+          </CardTitle>
+          <IconBox variant="canvas" size="default" shape="square">
             <Clock className="h-4 w-4" />
-          </div>
+          </IconBox>
         </div>
         <p className="mt-2 text-2xl font-bold tracking-tight text-foreground">
           {counts.active ?? 0}
         </p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <CardDescription className="mt-1 text-xs">
           Regular monthly amortization contracts
-        </p>
+        </CardDescription>
       </Card>
     </div>
   );

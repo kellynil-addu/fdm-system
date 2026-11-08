@@ -11,9 +11,11 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { FormField } from '@/components/ui/form-field';
 import { Textarea } from '@/components/ui/textarea';
 import {
   restructureAccountSchema,
@@ -96,7 +98,7 @@ export function BillingRestructureModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 text-xs border border-border rounded-lg p-3 bg-muted/20">
+          <Card variant="default" padding="sm" className="grid grid-cols-2 gap-3 text-xs bg-muted/20">
             <div>
               <p className="text-muted-foreground">Original Terms:</p>
               <p className="font-semibold">{account.terms_months} months</p>
@@ -109,40 +111,30 @@ export function BillingRestructureModal({
               <p className="text-muted-foreground mt-1">New Monthly Amort:</p>
               <p className="font-mono font-bold text-success">{CURRENCY.format(newMonthlyDue)}</p>
             </div>
-          </div>
+          </Card>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="effective_date" className="text-xs">
-                Effective Start Date
-              </Label>
-              <Input
-                id="effective_date"
-                type="date"
-                {...register('effective_date')}
-                className="h-9 text-xs"
-              />
-              {errors.effective_date && (
-                <p className="text-[11px] text-destructive">{errors.effective_date.message}</p>
-              )}
-            </div>
+            <FormField
+              id="effective_date"
+              label="Effective Start Date"
+              type="date"
+              error={errors.effective_date?.message}
+              labelClassName="text-xs"
+              className="h-9 text-xs"
+              {...register('effective_date')}
+            />
 
-            <div className="space-y-1">
-              <Label htmlFor="term_months" className="text-xs">
-                New Term (Max 12 Months)
-              </Label>
-              <Input
-                id="term_months"
-                type="number"
-                min="1"
-                max="12"
-                {...register('term_months', { valueAsNumber: true })}
-                className="h-9 text-xs font-mono"
-              />
-              {errors.term_months && (
-                <p className="text-[11px] text-destructive">{errors.term_months.message}</p>
-              )}
-            </div>
+            <FormField
+              id="term_months"
+              label="New Term (Max 12 Months)"
+              type="number"
+              min="1"
+              max="12"
+              error={errors.term_months?.message}
+              labelClassName="text-xs"
+              className="h-9 text-xs font-mono"
+              {...register('term_months', { valueAsNumber: true })}
+            />
           </div>
 
           <div className="space-y-1">
@@ -163,7 +155,7 @@ export function BillingRestructureModal({
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button
               type="button"
-              variant="outline"
+              variant="quiet"
               size="sm"
               onClick={() => onOpenChange(false)}
             >

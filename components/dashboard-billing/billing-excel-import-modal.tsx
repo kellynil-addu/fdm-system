@@ -96,7 +96,7 @@ export function BillingExcelImportModal({
 
           <div
             onClick={() => fileInputRef.current?.click()}
-            className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-border hover:border-primary/60 rounded-xl cursor-pointer bg-muted/20 transition-colors"
+            className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-border hover:border-primary rounded-xl cursor-pointer bg-muted/20 transition-colors"
           >
             <UploadCloud className="h-8 w-8 text-muted-foreground mb-2" />
             <p className="text-sm font-semibold text-foreground">

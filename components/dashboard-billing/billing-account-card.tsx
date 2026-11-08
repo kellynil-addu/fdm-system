@@ -144,7 +144,7 @@ export function BillingAccountCard({ account }: BillingAccountCardProps) {
             </Button>
           )}
           <Button
-            variant="outline"
+            variant="quiet"
             size="sm"
             className="h-8 text-xs"
             onClick={() => setActiveAccount(account)}

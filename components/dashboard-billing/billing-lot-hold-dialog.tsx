@@ -12,6 +12,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -110,7 +111,7 @@ export function BillingLotHoldDialog({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="rounded-lg border border-border p-3 bg-muted/20 text-xs space-y-2">
+          <Card variant="default" padding="sm" className="bg-muted/20 text-xs space-y-2">
             <p className="font-semibold text-foreground flex items-center gap-1.5">
               <AlertCircle className="h-4 w-4 text-accent-gold-foreground" />
               Statutory Cash Surrender Value (Maceda Law — FR-064)
@@ -141,7 +142,7 @@ export function BillingLotHoldDialog({
                 </p>
               </div>
             </div>
-          </div>
+          </Card>
 
           <div className="space-y-2 border-t border-border pt-3">
             <p className="text-xs font-semibold text-foreground">
@@ -182,7 +183,7 @@ export function BillingLotHoldDialog({
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button
               type="button"
-              variant="outline"
+              variant="quiet"
               size="sm"
               onClick={() => onOpenChange(false)}
             >

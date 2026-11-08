@@ -3,6 +3,7 @@
 import { Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Table,
   TableBody,
@@ -39,17 +40,23 @@ export function BillingPdcTab({ pdcs, onOpenAddModal, canEdit }: BillingPdcTabPr
       </div>
 
       {pdcs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center p-12 text-center text-muted-foreground">
-          <p className="text-sm font-medium">No post-dated checks on file</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Register buyer post-dated checks to track upcoming bank deposits.
-          </p>
-        </div>
+        <EmptyState
+          title="No post-dated checks on file"
+          description="Register buyer post-dated checks to track upcoming bank deposits."
+          action={
+            canEdit ? (
+              <Button size="sm" onClick={onOpenAddModal} className="h-7 gap-1.5 text-xs">
+                <Plus className="h-3.5 w-3.5" />
+                Add Check
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="relative w-full overflow-x-auto rounded-lg border border-border">
           <Table className="w-full text-xs">
-            <TableHeader className="bg-muted/40 border-b border-border">
-              <TableRow>
+            <TableHeader className="bg-card border-b border-border">
+              <TableRow className="bg-card hover:bg-card">
                 <TableHead className="text-xs font-semibold">Bank</TableHead>
                 <TableHead className="text-xs font-semibold">Check #</TableHead>
                 <TableHead className="text-xs font-semibold">Maturity Date</TableHead>

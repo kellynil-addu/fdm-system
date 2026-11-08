@@ -114,13 +114,13 @@ export function BillingCsvImportModal({
           </div>
 
           {parseError && (
-            <p className="rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+            <p className="rounded-md bg-[color-mix(in_srgb,var(--destructive)_12%,white)] p-2 text-xs text-destructive">
               {parseError}
             </p>
           )}
 
           {parsePreview && parsePreview.length > 0 && (
-            <div className="rounded-lg border border-border p-3 space-y-2 bg-row-hover/50">
+            <div className="rounded-lg border border-border p-3 space-y-2 bg-row-hover">
               <p className="text-xs font-semibold text-foreground">
                 Detected {parsePreview.length} Statement Record{parsePreview.length === 1 ? '' : 's'}:
               </p>

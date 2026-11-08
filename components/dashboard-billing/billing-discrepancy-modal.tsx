@@ -112,7 +112,7 @@ export function BillingDiscrepancyModal({
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button
               type="button"
-              variant="outline"
+              variant="quiet"
               size="sm"
               onClick={() => onOpenChange(false)}
             >

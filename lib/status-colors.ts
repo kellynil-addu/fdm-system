@@ -138,6 +138,30 @@ export const BILLING_STATUS_VARIANT: Record<
   'Held (Forfeited)': 'destructive',
 };
 
+/** shadcn Badge variant for account billing status */
+export const BILLING_STATUS_BADGE_VARIANT: Record<
+  string,
+  'default' | 'secondary' | 'outline' | 'success' | 'warning' | 'info' | 'destructive'
+> = {
+  Active: 'success',
+  'In Arrears': 'warning',
+  in_arrears: 'warning',
+  Delinquent: 'warning',
+  delinquent: 'warning',
+  Matured: 'info',
+  matured: 'info',
+  Cleared: 'secondary',
+  cleared: 'secondary',
+  'Fully Paid': 'secondary',
+  Forfeited: 'destructive',
+  forfeited: 'destructive',
+  'Held (Forfeited)': 'destructive',
+  Restructured: 'info',
+  restructured: 'info',
+  Cancelled: 'outline',
+  cancelled: 'outline',
+};
+
 // Formats monetary values to exact Philippine Peso with two decimal places
 export function formatCentavosToPhp(amount: number): string {
   return new Intl.NumberFormat('en-PH', {

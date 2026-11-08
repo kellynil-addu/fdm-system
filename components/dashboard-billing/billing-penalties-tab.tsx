@@ -1,8 +1,10 @@
 'use client';
 
 import { ShieldCheck, Plus, CheckCircle2, Clock } from 'lucide-react';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import {
   Table,
   TableBody,
@@ -31,7 +33,7 @@ export function BillingPenaltiesTab({
   return (
     <div className="space-y-6">
       {/* Policy Summary Card */}
-      <div className="rounded-lg border border-border bg-muted/20 p-4">
+      <Card variant="default" padding="default">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -78,7 +80,7 @@ export function BillingPenaltiesTab({
             </p>
           </div>
         </div>
-      </div>
+      </Card>
 
       {/* Compromise Agreements History */}
       <div className="space-y-3">
@@ -86,14 +88,15 @@ export function BillingPenaltiesTab({
           Executive Compromise &amp; Waiver Agreements
         </h4>
         {compromises.length === 0 ? (
-          <div className="rounded-lg border border-border p-6 text-center text-xs text-muted-foreground">
-            No executive compromise agreements on file for this account.
-          </div>
+          <EmptyState
+            title="No compromise agreements on file"
+            description="No executive penalty waivers or restructuring agreements have been recorded for this account."
+          />
         ) : (
           <div className="relative w-full overflow-x-auto rounded-lg border border-border">
             <Table className="w-full text-xs">
-              <TableHeader className="bg-muted/40 border-b border-border">
-                <TableRow>
+              <TableHeader className="bg-card border-b border-border">
+                <TableRow className="bg-card hover:bg-card">
                   <TableHead className="text-xs font-semibold">Agreement Date</TableHead>
                   <TableHead className="text-right text-xs font-semibold">Original Penalty</TableHead>
                   <TableHead className="text-right text-xs font-semibold">Waiver Amount</TableHead>

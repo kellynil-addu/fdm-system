@@ -11,9 +11,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { FormField } from '@/components/ui/form-field';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import {
   attachPenaltyArrangementSchema,
   type AttachPenaltyArrangementInput,
@@ -87,48 +87,29 @@ export function BillingPenaltyModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="authority" className="text-xs">
-              Legal Authority / Reason
-            </Label>
-            <Input
-              id="authority"
-              placeholder="e.g. Bayanihan Act, Executive Amnesty"
-              {...register('authority')}
-              className="h-9 text-xs"
-            />
-            {errors.authority && (
-              <p className="text-[11px] text-destructive">{errors.authority.message}</p>
-            )}
-          </div>
+          <FormField
+            id="authority"
+            label="Legal Authority / Reason"
+            placeholder="e.g. Bayanihan Act, Executive Amnesty"
+            {...register('authority')}
+            error={errors.authority?.message}
+          />
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="start_date" className="text-xs">
-                Effective Start
-              </Label>
-              <Input
-                id="start_date"
-                type="date"
-                {...register('start_date')}
-                className="h-9 text-xs"
-              />
-              {errors.start_date && (
-                <p className="text-[11px] text-destructive">{errors.start_date.message}</p>
-              )}
-            </div>
+            <FormField
+              id="start_date"
+              label="Effective Start"
+              type="date"
+              {...register('start_date')}
+              error={errors.start_date?.message}
+            />
 
-            <div className="space-y-1">
-              <Label htmlFor="end_date" className="text-xs">
-                Effective End (Optional)
-              </Label>
-              <Input
-                id="end_date"
-                type="date"
-                {...register('end_date')}
-                className="h-9 text-xs"
-              />
-            </div>
+            <FormField
+              id="end_date"
+              label="Effective End (Optional)"
+              type="date"
+              {...register('end_date')}
+            />
           </div>
 
           <div className="flex items-center space-x-2 pt-1">
@@ -142,25 +123,18 @@ export function BillingPenaltyModal({
             </Label>
           </div>
 
-          <div className="space-y-1">
-            <Label htmlFor="reason" className="text-xs">
-              Justification & Approval Notes
-            </Label>
-            <Input
-              id="reason"
-              placeholder="State reason for policy application"
-              {...register('reason')}
-              className="h-9 text-xs"
-            />
-            {errors.reason && (
-              <p className="text-[11px] text-destructive">{errors.reason.message}</p>
-            )}
-          </div>
+          <FormField
+            id="reason"
+            label="Justification & Approval Notes"
+            placeholder="State reason for policy application"
+            {...register('reason')}
+            error={errors.reason?.message}
+          />
 
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button
               type="button"
-              variant="outline"
+              variant="quiet"
               size="sm"
               onClick={() => onOpenChange(false)}
             >
