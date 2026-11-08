@@ -295,6 +295,8 @@ export function TitleDialog({
                   ? 'Intake Details'
                   : shownStage === 'Clearance Period'
                   ? 'Clearance Details'
+                  : shownStage === 'Released'
+                  ? 'Turnover Dossier'
                   : 'Document Preparation'}
               </TabsTrigger>
             </TabsList>

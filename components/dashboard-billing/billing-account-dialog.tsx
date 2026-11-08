@@ -79,7 +79,7 @@ export function BillingAccountDialog({
       return 'Matured';
     }
     if (account.notices.length > 0 || Number(account.baseline_penalties_accrued) > 0) {
-      return 'Delinquent';
+      return 'In Arrears';
     }
     return 'Active';
   }, [account]);
@@ -206,22 +206,22 @@ export function BillingAccountDialog({
                               {p.or_number}
                             </TableCell>
                             <TableCell className="text-xs text-muted-foreground">
-                              {p.payment_date}
+                              {p.payment_date ?? p.created_at?.split('T')[0] ?? '—'}
                             </TableCell>
                             <TableCell className="text-xs text-foreground">
                               {p.payment_mode}
                             </TableCell>
                             <TableCell className="text-right font-mono text-xs text-success">
-                              {CURRENCY.format(p.principal_amount)}
+                              {CURRENCY.format(p.principal_amount ?? p.total_received ?? 0)}
                             </TableCell>
                             <TableCell className="text-right font-mono text-xs text-destructive">
-                              {p.penalty_amount > 0 ? CURRENCY.format(p.penalty_amount) : '—'}
+                              {(p.penalty_amount ?? 0) > 0 ? CURRENCY.format(p.penalty_amount ?? 0) : '—'}
                             </TableCell>
                             <TableCell className="text-right font-mono text-xs text-muted-foreground">
-                              {p.titling_fee_amount > 0 ? CURRENCY.format(p.titling_fee_amount) : '—'}
+                              {(p.titling_fee_amount ?? 0) > 0 ? CURRENCY.format(p.titling_fee_amount ?? 0) : '—'}
                             </TableCell>
                             <TableCell className="text-right font-mono text-xs font-bold text-foreground">
-                              {CURRENCY.format(p.total_amount)}
+                              {CURRENCY.format(p.total_amount ?? p.total_received ?? 0)}
                             </TableCell>
                           </TableRow>
                         ))}

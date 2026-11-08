@@ -36,12 +36,14 @@ interface BillingPaymentModalProps {
   account: BillingAccountSummary;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }
 
 export function BillingPaymentModal({
   account,
   open,
   onOpenChange,
+  onSuccess,
 }: BillingPaymentModalProps) {
   const { recordPayment, isRecordingPayment } = useBillingAccounts();
 
@@ -83,6 +85,7 @@ export function BillingPaymentModal({
 
   const onSubmit = async (data: RecordPaymentInput) => {
     await recordPayment(data);
+    onSuccess?.();
   };
 
   const clientName = account.client?.full_name ?? 'Buyer';
@@ -99,7 +102,20 @@ export function BillingPaymentModal({
         </DialogHeader>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1">
+              <Label htmlFor="or_series" className="text-xs">
+                Series
+              </Label>
+              <Input
+                id="or_series"
+                placeholder="Main"
+                defaultValue="Main"
+                {...register('or_series')}
+                className="h-9 text-xs"
+              />
+            </div>
+
             <div className="space-y-1">
               <Label htmlFor="or_number" className="text-xs">
                 Receipt / OR Number

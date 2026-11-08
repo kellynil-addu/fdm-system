@@ -61,7 +61,7 @@ export function BillingCsvImportModal({
 
   const handleImport = async () => {
     if (!csvContent.trim()) return;
-    await importCsv({ csv_content: csvContent });
+    await importCsv({ csv_content: csvContent, dry_run: false });
   };
 
   return (

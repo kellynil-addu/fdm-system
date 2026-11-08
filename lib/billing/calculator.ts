@@ -21,7 +21,7 @@ export function calculateAccountLedgerSchedule(
   
   // Group itemized payments by date
   const sortedPayments = [...(account.payments || [])].sort(
-    (a, b) => new Date(a.payment_date).getTime() - new Date(b.payment_date).getTime()
+    (a, b) => new Date(a.payment_date ?? a.created_at).getTime() - new Date(b.payment_date ?? b.created_at).getTime()
   );
 
   let totalPaidDuringContract = Number(account.baseline_principal_paid) || 0;
@@ -54,15 +54,15 @@ export function calculateAccountLedgerSchedule(
     const cyclePayments: LedgerPayment[] = [];
     while (
       paymentIndex < sortedPayments.length &&
-      new Date(sortedPayments[paymentIndex].payment_date).getTime() < cycleEndDate.getTime()
+      new Date(sortedPayments[paymentIndex].payment_date ?? sortedPayments[paymentIndex].created_at).getTime() < cycleEndDate.getTime()
     ) {
       cyclePayments.push(sortedPayments[paymentIndex]);
       paymentIndex++;
     }
 
-    const totalCyclePaid = cyclePayments.reduce((acc, p) => acc + Number(p.principal_amount), 0);
+    const totalCyclePaid = cyclePayments.reduce((acc, p) => acc + Number(p.principal_amount ?? p.total_received ?? 0), 0);
     const cycleReceipts = cyclePayments.map((p) => p.or_number).join(', ');
-    const lastPayDate = cyclePayments.length > 0 ? cyclePayments[cyclePayments.length - 1].payment_date : undefined;
+    const lastPayDate = cyclePayments.length > 0 ? (cyclePayments[cyclePayments.length - 1].payment_date ?? cyclePayments[cyclePayments.length - 1].created_at) : undefined;
 
     totalPaidDuringContract += totalCyclePaid;
     runningTspBalance -= totalCyclePaid;
@@ -103,15 +103,15 @@ export function calculateAccountLedgerSchedule(
 
     while (
       paymentIndex < sortedPayments.length &&
-      new Date(sortedPayments[paymentIndex].payment_date).getTime() < cycleEndDate.getTime()
+      new Date(sortedPayments[paymentIndex].payment_date ?? sortedPayments[paymentIndex].created_at).getTime() < cycleEndDate.getTime()
     ) {
       cyclePayments.push(sortedPayments[paymentIndex]);
       paymentIndex++;
     }
 
-    const totalCyclePaid = cyclePayments.reduce((acc, p) => acc + Number(p.principal_amount), 0);
+    const totalCyclePaid = cyclePayments.reduce((acc, p) => acc + Number(p.principal_amount ?? p.total_received ?? 0), 0);
     const cycleReceipts = cyclePayments.map((p) => p.or_number).join(', ');
-    const lastPayDate = cyclePayments.length > 0 ? cyclePayments[cyclePayments.length - 1].payment_date : undefined;
+    const lastPayDate = cyclePayments.length > 0 ? (cyclePayments[cyclePayments.length - 1].payment_date ?? cyclePayments[cyclePayments.length - 1].created_at) : undefined;
 
     totalPaidAfterContract += totalCyclePaid;
     runningTspBalance -= totalCyclePaid;

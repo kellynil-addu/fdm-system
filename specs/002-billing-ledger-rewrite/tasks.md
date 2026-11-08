@@ -19,8 +19,8 @@
 
 **Purpose**: Dependency installation and runtime preparation
 
-- [ ] T001 Install `xlsx` dependency for legacy Excel workbook ingestion in `package.json`
-- [ ] T002 [P] Verify Vitest configuration and billing test script runner in `package.json`
+- [x] T001 Install `xlsx` dependency for legacy Excel workbook ingestion in `package.json`
+- [x] T002 [P] Verify Vitest configuration and billing test script runner in `package.json`
 
 ---
 
@@ -30,7 +30,7 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T003 Create PostgreSQL database migration in `supabase/migrations/20261109000000_billing_ledger_rewrite.sql` defining:
+- [x] T003 Create PostgreSQL database migration in `supabase/migrations/20261109000000_billing_ledger_rewrite.sql` defining:
   - `billing_account` with `status IN ('active', 'matured', 'fully_paid', 'fully_paid_unclaimed', 'cancelled', 'restructured', 'forfeited')`, `cadence IN ('monthly', 'quarterly', 'semi-annual', 'annual')`, `amortization_day BETWEEN 1 AND 31`, `total_selling_price NUMERIC(15, 2) CHECK (total_selling_price > 0)`, and partial unique constraint `UNIQUE (property_id) WHERE status IN ('active', 'matured', 'fully_paid', 'fully_paid_unclaimed', 'restructured', 'forfeited') AND reopened_at IS NULL`
   - `billing_schedule` with `term_months INT CHECK (term_months > 0)` and `is_active BOOLEAN DEFAULT true`
   - `billing_schedule_installment` with `amount NUMERIC(15, 2) CHECK (amount > 0)` and `installment_number INT CHECK (installment_number > 0)`
@@ -45,10 +45,10 @@
   - `billing_import_discrepancy` with `status IN ('pending', 'resolved', 'dismissed')`
   - Database function / view `get_billing_account_summary` computing dynamic balances from append-only transactions
   - RLS policies and role grants for `billing.read`, `billing.create`, `billing.update`, and `legal.read`
-- [ ] T004 [P] Implement centavo precision arithmetic utilities in `lib/billing/money.ts` (`roundCentavos`, `addMoney`, `subtractMoney`, `multiplyMoney`, `divideMoneyWithResidual`) ensuring `Math.round((val + Number.EPSILON) * 100) / 100` and zero floating-point accumulation
-- [ ] T005 [P] Implement installment schedule generator in `lib/billing/schedule.ts` enforcing `SUM(installment.amount) === total_selling_price` with residual centavos placed in final installment
-- [ ] T006 [P] Update domain TypeScript interfaces in `lib/types/billing.ts` to reflect the rewritten schema, account states, transactions, and statement types
-- [ ] T007 [P] Update Zod validation schemas in `lib/validations/billing.ts` matching contracts in `specs/002-billing-ledger-rewrite/contracts/billing-actions.ts`
+- [x] T004 [P] Implement centavo precision arithmetic utilities in `lib/billing/money.ts` (`roundCentavos`, `addMoney`, `subtractMoney`, `multiplyMoney`, `divideMoneyWithResidual`) ensuring `Math.round((val + Number.EPSILON) * 100) / 100` and zero floating-point accumulation
+- [x] T005 [P] Implement installment schedule generator in `lib/billing/schedule.ts` enforcing `SUM(installment.amount) === total_selling_price` with residual centavos placed in final installment
+- [x] T006 [P] Update domain TypeScript interfaces in `lib/types/billing.ts` to reflect the rewritten schema, account states, transactions, and statement types
+- [x] T007 [P] Update Zod validation schemas in `lib/validations/billing.ts` matching contracts in `specs/002-billing-ledger-rewrite/contracts/billing-actions.ts`
 
 **Checkpoint**: Foundation ready — database schema, money arithmetic, schedule generators, and types verified.
 
@@ -61,15 +61,15 @@
 **Independent Test**: Load billing account with 60 installments and 14 payments; verify balance matches hand calculation. Post backdated payment 3 years in the past; verify balance, installments behind, and aging update dynamically with zero row overwrites.
 
 ### Tests for User Story 1
-- [ ] T008 [P] [US1] Create integration test in `scripts/tests/billing/billing-journal.test.ts` verifying dynamic balance derivation, out-of-order backdated payment insertion, and aging metrics calculation
+- [x] T008 [P] [US1] Create integration test in `scripts/tests/billing/billing-journal.test.ts` verifying dynamic balance derivation, out-of-order backdated payment insertion, and aging metrics calculation
 
 ### Implementation for User Story 1
-- [ ] T009 [US1] Implement server query action `getBillingAccounts` in `lib/actions/billing.ts` using `createScope(['billing.read'])` with pagination, status filters, and aging calculation
-- [ ] T010 [US1] Implement server query action `getBillingAccountDetail` in `lib/actions/billing.ts` returning dynamic summary, active schedule, transactions journal, and lot hold status
-- [ ] T011 [US1] Implement server mutation action `createBillingAccount` in `lib/actions/billing.ts` using `createScope(['billing.create'])` enforcing single live contract per lot (`FR-005`) and generating version 1 schedule
-- [ ] T012 [P] [US1] Update `components/dashboard-billing/billing-kpi-cards.tsx` to display real-time arrears, maturing accounts, and aging breakdown without stored totals
-- [ ] T013 [P] [US1] Update `components/dashboard-billing/billing-account-card.tsx` to display canonical account statuses (`active`, `matured`, `fully_paid`, `fully_paid_unclaimed`, `forfeited`) and lot hold badges
-- [ ] T014 [US1] Refactor `components/dashboard-billing/billing-records-section.tsx` and `app/(dashboard)/dashboard/billing/page.tsx` to consume dynamic accounts query and aging filters
+- [x] T009 [US1] Implement server query action `getBillingAccounts` in `lib/actions/billing.ts` using `createScope(['billing.read'])` with pagination, status filters, and aging calculation
+- [x] T010 [US1] Implement server query action `getBillingAccountDetail` in `lib/actions/billing.ts` returning dynamic summary, active schedule, transactions journal, and lot hold status
+- [x] T011 [US1] Implement server mutation action `createBillingAccount` in `lib/actions/billing.ts` using `createScope(['billing.create'])` enforcing single live contract per lot (`FR-005`) and generating version 1 schedule
+- [x] T012 [P] [US1] Update `components/dashboard-billing/billing-kpi-cards.tsx` to display real-time arrears, maturing accounts, and aging breakdown without stored totals
+- [x] T013 [P] [US1] Update `components/dashboard-billing/billing-account-card.tsx` to display canonical account statuses (`active`, `matured`, `fully_paid`, `fully_paid_unclaimed`, `forfeited`) and lot hold badges
+- [x] T014 [US1] Refactor `components/dashboard-billing/billing-records-section.tsx` and `app/(dashboard)/dashboard/billing/page.tsx` to consume dynamic accounts query and aging filters
 
 **Checkpoint**: User Story 1 functional and independently testable as MVP.
 
@@ -82,12 +82,12 @@
 **Independent Test**: Generate a statement for an account with late and on-time payments; verify printable output has <= 2 decimal places on all figures and sums match on-screen balances.
 
 ### Tests for User Story 2
-- [ ] T015 [P] [US2] Create integration test in `scripts/tests/billing/billing-statement.test.ts` verifying statement generation time (<2s), centavo formatting, and canonical vocabulary ("Matured", "Total Selling Price", "Penalty")
+- [x] T015 [P] [US2] Create integration test in `scripts/tests/billing/billing-statement.test.ts` verifying statement generation time (<2s), centavo formatting, and canonical vocabulary ("Matured", "Total Selling Price", "Penalty")
 
 ### Implementation for User Story 2
-- [ ] T016 [US2] Implement server action `generateStatement` in `lib/actions/billing.ts` using `createScope(['billing.read'])` tracing every figure to dated transaction rows (`FR-041`, `FR-042`)
-- [ ] T017 [US2] Create printable statement view in `components/dashboard-billing/billing-statement-view.tsx` with print styles (`@media print`), installment breakdown table, and charge audit trail
-- [ ] T018 [US2] Create statement preview page in `app/(dashboard)/dashboard/billing/[accountId]/page.tsx` with PDF export trigger and print button
+- [x] T016 [US2] Implement server action `generateStatement` in `lib/actions/billing.ts` using `createScope(['billing.read'])` tracing every figure to dated transaction rows (`FR-041`, `FR-042`)
+- [x] T017 [US2] Create printable statement view in `components/dashboard-billing/billing-statement-view.tsx` with print styles (`@media print`), installment breakdown table, and charge audit trail
+- [x] T018 [US2] Create statement preview page in `app/(dashboard)/dashboard/billing/[accountId]/page.tsx` with PDF export trigger and print button
 
 **Checkpoint**: User Stories 1 AND 2 functional and independently testable.
 
@@ -100,14 +100,14 @@
 **Independent Test**: Post payment larger than 1 installment but smaller than total arrears; verify waterfall allocation order, receipt number series, and balance movement. Post PDC and confirm zero balance movement until cleared.
 
 ### Tests for User Story 3
-- [ ] T019 [P] [US3] Create integration test in `scripts/tests/billing/billing-waterfall.test.ts` verifying contract waterfall allocation order, overpayment credit balances (`FR-021`), and PDC lifecycle
+- [x] T019 [P] [US3] Create integration test in `scripts/tests/billing/billing-waterfall.test.ts` verifying contract waterfall allocation order, overpayment credit balances (`FR-021`), and PDC lifecycle
 
 ### Implementation for User Story 3
-- [ ] T020 [US3] Implement waterfall allocation engine in `lib/billing/waterfall.ts` applying incoming money to penalties, interest, taxes, then principal with named installments (`FR-016`, `FR-018`) and crediting excess as negative balance (`FR-021`)
-- [ ] T021 [US3] Implement server action `recordPayment` in `lib/actions/billing.ts` using `createScope(['billing.create'])` inserting `billing_transaction`, `billing_payment`, and `billing_payment_application` atomically
-- [ ] T022 [US3] Implement server action `recordPostDatedCheck` and `updatePdcStatus` in `lib/actions/billing.ts` enforcing record-only behavior without moving balance until cleared (`FR-019`)
-- [ ] T023 [P] [US3] Refactor `components/dashboard-billing/billing-payment-modal.tsx` with waterfall allocation preview, receipt series selector, and receipt file attachment
-- [ ] T024 [P] [US3] Create `components/dashboard-billing/billing-pdc-modal.tsx` for registering and tracking post-dated checks
+- [x] T020 [US3] Implement waterfall allocation engine in `lib/billing/waterfall.ts` applying incoming money to penalties, interest, taxes, then principal with named installments (`FR-016`, `FR-018`) and crediting excess as negative balance (`FR-021`)
+- [x] T021 [US3] Implement server action `recordPayment` in `lib/actions/billing.ts` using `createScope(['billing.create'])` inserting `billing_transaction`, `billing_payment`, and `billing_payment_application` atomically
+- [x] T022 [US3] Implement server action `recordPostDatedCheck` and `updatePdcStatus` in `lib/actions/billing.ts` enforcing record-only behavior without moving balance until cleared (`FR-019`)
+- [x] T023 [P] [US3] Refactor `components/dashboard-billing/billing-payment-modal.tsx` with waterfall allocation preview, receipt series selector, and receipt file attachment
+- [x] T024 [P] [US3] Create `components/dashboard-billing/billing-pdc-modal.tsx` for registering and tracking post-dated checks
 
 **Checkpoint**: User Stories 1, 2, and 3 functional and independently testable.
 
@@ -120,13 +120,13 @@
 **Independent Test**: Charge penalties for a historical period on account whose arrangement changed; confirm historical rate applied; rerun month and verify no duplicate charge.
 
 ### Tests for User Story 4
-- [ ] T025 [P] [US4] Create integration test in `scripts/tests/billing/billing-penalties.test.ts` verifying effective-dated penalty calculations, idempotency on re-run (`FR-028`, `SC-005`), and storage fee accrual (`FR-033`)
+- [x] T025 [P] [US4] Create integration test in `scripts/tests/billing/billing-penalties.test.ts` verifying effective-dated penalty calculations, idempotency on re-run (`FR-028`, `SC-005`), and storage fee accrual (`FR-033`)
 
 ### Implementation for User Story 4
-- [ ] T026 [US4] Implement penalty calculation engine in `lib/billing/penalties.ts` resolving account policy by charge period (`FR-026`), freezing applied rate/basis (`FR-027`), and calculating ₱540 storage fees post-title release (`FR-033`)
-- [ ] T027 [US4] Implement server action `attachPenaltyArrangement` in `lib/actions/billing.ts` using `createScope(['billing.update'])` with authority and contract extension flags (`FR-030`)
-- [ ] T028 [US4] Implement server action `runPenaltyAccrual` in `lib/actions/billing.ts` posting `penalty_charge` transactions idempotently
-- [ ] T029 [P] [US4] Create penalty policy attachment modal in `components/dashboard-billing/billing-penalty-modal.tsx` supporting Bayanihan moratoriums and amnesties
+- [x] T026 [US4] Implement penalty calculation engine in `lib/billing/penalties.ts` resolving account policy by charge period (`FR-026`), freezing applied rate/basis (`FR-027`), and calculating ₱540 storage fees post-title release (`FR-033`)
+- [x] T027 [US4] Implement server action `attachPenaltyArrangement` in `lib/actions/billing.ts` using `createScope(['billing.update'])` with authority and contract extension flags (`FR-030`)
+- [x] T028 [US4] Implement server action `runPenaltyAccrual` in `lib/actions/billing.ts` posting `penalty_charge` transactions idempotently
+- [x] T029 [P] [US4] Create penalty policy attachment modal in `components/dashboard-billing/billing-penalty-modal.tsx` supporting Bayanihan moratoriums and amnesties
 
 **Checkpoint**: User Stories 1 through 4 functional and independently testable.
 
@@ -139,11 +139,11 @@
 **Independent Test**: Post payment, reverse it with reason; verify balance returns to prior value, history shows both entries, and attempting to reverse the reversal fails.
 
 ### Tests for User Story 5
-- [ ] T030 [P] [US5] Add reversal test cases to `scripts/tests/billing/billing-journal.test.ts` verifying non-destructive reversals, anti-double-reversal guards (`FR-012`), and balance restoration (`SC-004`)
+- [x] T030 [P] [US5] Add reversal test cases to `scripts/tests/billing/billing-journal.test.ts` verifying non-destructive reversals, anti-double-reversal guards (`FR-012`), and balance restoration (`SC-004`)
 
 ### Implementation for User Story 5
-- [ ] T031 [US5] Implement server action `reverseTransaction` in `lib/actions/billing.ts` using `createScope(['billing.update'])` verifying target has not been reversed, posting signed reversal transaction, and marking `is_reversed = true`
-- [ ] T032 [US5] Create transaction reversal dialog in `components/dashboard-billing/billing-reversal-modal.tsx` requiring staff reason and showing preview of restored balance
+- [x] T031 [US5] Implement server action `reverseTransaction` in `lib/actions/billing.ts` using `createScope(['billing.update'])` verifying target has not been reversed, posting signed reversal transaction, and marking `is_reversed = true`
+- [x] T032 [US5] Create transaction reversal dialog in `components/dashboard-billing/billing-reversal-modal.tsx` requiring staff reason and showing preview of restored balance
 
 **Checkpoint**: User Stories 1 through 5 functional and independently testable.
 
@@ -156,13 +156,13 @@
 **Independent Test**: Restructure account midway through term; confirm prior installments unchanged, future installments follow new terms, and original terms remain retrievable.
 
 ### Tests for User Story 6
-- [ ] T033 [P] [US6] Create integration test in `scripts/tests/billing/billing-restructure.test.ts` verifying schedule versioning, principal-only re-spreading (`FR-040`), and side-by-side terms comparison
+- [x] T033 [P] [US6] Create integration test in `scripts/tests/billing/billing-restructure.test.ts` verifying schedule versioning, principal-only re-spreading (`FR-040`), and side-by-side terms comparison
 
 ### Implementation for User Story 6
-- [ ] T034 [US6] Implement server action `restructureAccount` in `lib/actions/billing.ts` using `createScope(['billing.update'])` creating `billing_schedule` version $N+1$ for unpaid principal while leaving accrued penalties to compromise agreements (`FR-040`)
-- [ ] T035 [US6] Implement server action `recordCompromise` in `lib/actions/billing.ts` saving agreed penalty reduction with original penalty visible for comparison (`FR-034`)
-- [ ] T036 [P] [US6] Create `components/dashboard-billing/billing-restructure-modal.tsx` allowing term selection (max 12 mos) and displaying side-by-side original vs compromised terms
-- [ ] T037 [P] [US6] Refactor `components/dashboard-billing/billing-compromise-modal.tsx` to record agreed penalty amounts with approval tracking
+- [x] T034 [US6] Implement server action `restructureAccount` in `lib/actions/billing.ts` using `createScope(['billing.update'])` creating `billing_schedule` version $N+1$ for unpaid principal while leaving accrued penalties to compromise agreements (`FR-040`)
+- [x] T035 [US6] Implement server action `recordCompromise` in `lib/actions/billing.ts` saving agreed penalty reduction with original penalty visible for comparison (`FR-034`)
+- [x] T036 [P] [US6] Create `components/dashboard-billing/billing-restructure-modal.tsx` allowing term selection (max 12 mos) and displaying side-by-side original vs compromised terms
+- [x] T037 [P] [US6] Refactor `components/dashboard-billing/billing-compromise-modal.tsx` to record agreed penalty amounts with approval tracking
 
 **Checkpoint**: User Stories 1 through 6 functional and independently testable.
 
@@ -175,19 +175,19 @@
 **Independent Test**: Import Excel workbook with conflicting totals and verify discrepancy queue logging; trigger forfeiture and confirm lot hold prevents resale; reopen lot with complete document checklist.
 
 ### Tests for User Story 7
-- [ ] T038 [P] [US7] Create integration test in `scripts/tests/billing/billing-excel-import.test.ts` verifying SheetJS parsing of legacy workbooks, recomputation of balances from rows, and discrepancy queue insertion (`SC-012`, `SC-016`)
-- [ ] T039 [P] [US7] Create integration test in `scripts/tests/billing/billing-lot-hold.test.ts` verifying lot hold locking (`FR-060`), Maceda cash surrender value computation (`FR-064`), and deliberate reopening (`FR-062`, `FR-063`)
+- [x] T038 [P] [US7] Create integration test in `scripts/tests/billing/billing-excel-import.test.ts` verifying SheetJS parsing of legacy workbooks, recomputation of balances from rows, and discrepancy queue insertion (`SC-012`, `SC-016`)
+- [x] T039 [P] [US7] Create integration test in `scripts/tests/billing/billing-lot-hold.test.ts` verifying lot hold locking (`FR-060`), Maceda cash surrender value computation (`FR-064`), and deliberate reopening (`FR-062`, `FR-063`)
 
 ### Implementation for User Story 7
-- [ ] T040 [US7] Implement legacy Excel workbook parser in `lib/billing/excel-importer.ts` using `xlsx` (SheetJS) extracting dated rows, recomputing balances, and identifying arithmetic discrepancies (`FR-056`, `FR-057`)
-- [ ] T041 [US7] Implement Maceda cash surrender value calculation in `lib/billing/maceda.ts` (`FR-064`) computing statutory return percentage based on installment years
-- [ ] T042 [US7] Implement server actions `importLegacyStatements` and `resolveDiscrepancy` in `lib/actions/billing.ts` using `createScope(['billing.create'])` and `createScope(['billing.update'])`
-- [ ] T043 [US7] Implement server action `reopenForfeitedLot` in `lib/actions/billing.ts` recording `reopened_by` and releasing property lot while keeping forfeited account closed (`FR-062`, `FR-063`)
-- [ ] T044 [US7] Refactor demand notice actions (`recordNotice`, `updateNoticeDelivery`) in `lib/actions/billing.ts` supporting courier tracking and RTS re-dispatch attempts (`FR-048`, `FR-049`)
-- [ ] T045 [P] [US7] Create `components/dashboard-billing/billing-excel-import-modal.tsx` supporting drag-and-drop `.xlsx`, `.xls`, and `.csv` files with progress feedback
-- [ ] T046 [P] [US7] Create `components/dashboard-billing/billing-discrepancy-modal.tsx` displaying discrepancy details, row comparisons, and resolution notes form
-- [ ] T047 [P] [US7] Update `components/dashboard-billing/billing-notice-modal.tsx` with RTS re-dispatch history and proof attachments
-- [ ] T048 [P] [US7] Create lot hold banner and release modal in `components/dashboard-billing/billing-lot-hold-dialog.tsx` requiring document checklist sign-off
+- [x] T040 [US7] Implement legacy Excel workbook parser in `lib/billing/excel-importer.ts` using `xlsx` (SheetJS) extracting dated rows, recomputing balances, and identifying arithmetic discrepancies (`FR-056`, `FR-057`)
+- [x] T041 [US7] Implement Maceda cash surrender value calculation in `lib/billing/maceda.ts` (`FR-064`) computing statutory return percentage based on installment years
+- [x] T042 [US7] Implement server actions `importLegacyStatements` and `resolveDiscrepancy` in `lib/actions/billing.ts` using `createScope(['billing.create'])` and `createScope(['billing.update'])`
+- [x] T043 [US7] Implement server action `reopenForfeitedLot` in `lib/actions/billing.ts` recording `reopened_by` and releasing property lot while keeping forfeited account closed (`FR-062`, `FR-063`)
+- [x] T044 [US7] Refactor demand notice actions (`recordNotice`, `updateNoticeDelivery`) in `lib/actions/billing.ts` supporting courier tracking and RTS re-dispatch attempts (`FR-048`, `FR-049`)
+- [x] T045 [P] [US7] Create `components/dashboard-billing/billing-excel-import-modal.tsx` supporting drag-and-drop `.xlsx`, `.xls`, and `.csv` files with progress feedback
+- [x] T046 [P] [US7] Create `components/dashboard-billing/billing-discrepancy-modal.tsx` displaying discrepancy details, row comparisons, and resolution notes form
+- [x] T047 [P] [US7] Update `components/dashboard-billing/billing-notice-modal.tsx` with RTS re-dispatch history and proof attachments
+- [x] T048 [P] [US7] Create lot hold banner and release modal in `components/dashboard-billing/billing-lot-hold-dialog.tsx` requiring document checklist sign-off
 
 **Checkpoint**: All 7 User Stories fully functional and independently testable.
 
@@ -197,10 +197,10 @@
 
 **Purpose**: System integration, validation runs, and codebase cleanup
 
-- [ ] T049 [P] Execute end-to-end test scenarios documented in `specs/002-billing-ledger-rewrite/quickstart.md`
-- [ ] T050 Run full billing E2E Vitest suite: `npm run test:e2e:billing`
-- [ ] T051 Verify layout fit and mobile-view responsiveness per `.agents/skills/layout-verification/SKILL.md`
-- [ ] T052 Remove deprecated trigger functions and obsolete legacy billing files
+- [x] T049 [P] Execute end-to-end test scenarios documented in `specs/002-billing-ledger-rewrite/quickstart.md`
+- [x] T050 Run full billing E2E Vitest suite: `npm run test:e2e:billing`
+- [x] T051 Verify layout fit and mobile-view responsiveness per `.agents/skills/layout-verification/SKILL.md`
+- [x] T052 Remove deprecated trigger functions and obsolete legacy billing files
 
 ---
 

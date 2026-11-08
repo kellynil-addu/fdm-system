@@ -279,28 +279,30 @@ export function MapProjectAreaEditor({
       {/* Top-left editor menu and recovery stack — hidden while a focused activity is active */}
       {!activeDraft && !readjustProjectArea && (
       <div className="absolute top-4 left-4 z-30 flex flex-col items-start gap-2 max-w-[calc(100vw-2rem)]">
-        <div className="flex flex-col gap-2 rounded-2xl border border-border bg-card p-3 shadow-xl transition-all">
+        <div data-testid="map-editor-card" className="flex w-[340px] max-w-[calc(100vw-2rem)] flex-col gap-2 rounded-2xl border border-border bg-card p-3 shadow-xl transition-all">
           {plotType !== null ? (
             /* State: Active Plotting */
             <>
-              <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
-                  </span>
-                  <span className="truncate text-xs font-semibold text-foreground">
-                    {plotType === 'lot' ? 'Plotting Lot' : 'Plotting New Project Area'}
-                  </span>
+              <div className="flex flex-col gap-1.5 border-b border-border pb-2">
+                <div className="flex items-center justify-between gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="relative flex h-2 w-2 shrink-0">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-primary" />
+                    </span>
+                    <span className="truncate text-xs font-semibold text-foreground">
+                      {plotType === 'lot' ? 'Plotting Lot' : 'Plotting New Project Area'}
+                    </span>
+                  </div>
                   <span className="rounded-full bg-sidebar-accent px-2 py-0.5 text-[11px] font-mono text-accent-blue-foreground shrink-0">
                     {draftPointsCount} {draftPointsCount === 1 ? 'pt' : 'pts'}
                   </span>
                 </div>
 
                 {hasOutOfBoundsVertex && (
-                  <span className="flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--destructive)_15%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-destructive shrink-0">
-                    <AlertTriangle className="h-3 w-3" />
-                    Outside Boundary
+                  <span className="flex items-center gap-1 rounded-md bg-[color-mix(in_srgb,var(--destructive)_15%,transparent)] px-2 py-0.5 text-[10px] font-semibold text-destructive">
+                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                    <span>Outside Boundary</span>
                   </span>
                 )}
               </div>
@@ -314,7 +316,7 @@ export function MapProjectAreaEditor({
                   className="h-7 px-2 text-xs text-foreground hover:bg-row-hover"
                   title="Undo last plotted point"
                 >
-                  <Undo2 className="h-3.5 w-3.5 mr-1" />
+                  <Undo2 className="h-3.5 w-3.5 mr-1 shrink-0" />
                   Undo
                 </Button>
 
@@ -324,7 +326,7 @@ export function MapProjectAreaEditor({
                   onClick={onCancelPlotting}
                   className="h-7 px-2 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground"
                 >
-                  <X className="h-3.5 w-3.5 mr-1" />
+                  <X className="h-3.5 w-3.5 mr-1 shrink-0" />
                   Cancel
                 </Button>
 
@@ -341,7 +343,7 @@ export function MapProjectAreaEditor({
                         : 'Close shape and enter details'
                   }
                 >
-                  <Check className="h-3.5 w-3.5" />
+                  <Check className="h-3.5 w-3.5 shrink-0" />
                   Finish Shape
                 </Button>
               </div>
@@ -359,7 +361,7 @@ export function MapProjectAreaEditor({
                   variant="outline"
                   size="sm"
                   onClick={() => onToggleEditor(false)}
-                  className="h-7 shrink-0 gap-1 border-border bg-card px-2 text-[11px] font-semibold text-foreground hover:bg-row-hover"
+                  className="h-7 shrink-0 gap-1 border-border bg-card px-2 text-xs font-medium text-foreground hover:bg-row-hover"
                   title="Leave the map editor and return to the property lots view"
                 >
                   <LogOut className="h-3.5 w-3.5" />
@@ -387,7 +389,7 @@ export function MapProjectAreaEditor({
                   <div
                     role="group"
                     aria-label="Project areas to edit"
-                    className="max-h-[300px] space-y-1 overflow-y-auto pr-0.5"
+                    className="max-h-[280px] space-y-1 overflow-y-auto pr-1 [scrollbar-gutter:stable]"
                   >
                     {projectAreas.map((s) => {
                       const lotCount = 'lots' in s && Array.isArray(s.lots) ? s.lots.length : 0;
@@ -416,7 +418,7 @@ export function MapProjectAreaEditor({
                                 <span>Archived</span>
                               </span>
                             )}
-                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary" />
+                            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary shrink-0" />
                           </span>
                         </button>
                       );
@@ -465,7 +467,7 @@ export function MapProjectAreaEditor({
                   <button
                     type="button"
                     onClick={onLeaveProjectArea}
-                    className="cursor-pointer px-1 text-[11px] font-medium text-primary hover:underline"
+                    className="cursor-pointer px-1 text-xs font-medium text-primary hover:underline"
                     title="Leave this project area and choose another"
                   >
                     Leave Project Area
@@ -477,10 +479,10 @@ export function MapProjectAreaEditor({
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 shrink-0 text-muted-foreground hover:bg-row-active hover:text-foreground"
+                          className="h-7 w-7 shrink-0 text-muted-foreground hover:bg-row-active hover:text-foreground"
                           aria-label={`Project area options for ${activeProjectArea.name}`}
                         >
-                          <MoreVertical className="h-3 w-3" />
+                          <MoreVertical className="h-3.5 w-3.5" />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="start" className="w-44">
@@ -520,13 +522,6 @@ export function MapProjectAreaEditor({
                   )}
                 </div>
               </div>
-
-              <ProjectAreaViewSwitch
-                counts={viewCounts}
-                view={view}
-                onViewChange={onViewChange}
-                className="pt-0.5"
-              />
 
               <div className="space-y-1.5 pt-0.5">
                 <Button
@@ -572,14 +567,14 @@ export function MapProjectAreaEditor({
 
         {/* LocalStorage Session Recovery Banner */}
         {hasStoredDraft && activeProjectArea && (
-          <div className="flex items-center gap-3 rounded-xl border border-[color-mix(in_srgb,var(--warning)_40%,transparent)] bg-card px-3.5 py-2 shadow-xl">
-            <div className="flex items-center gap-2 text-xs text-foreground">
+          <div className="flex w-[340px] max-w-[calc(100vw-2rem)] items-center justify-between gap-2 rounded-xl border border-[color-mix(in_srgb,var(--warning)_40%,transparent)] bg-card px-3 py-2 shadow-xl">
+            <div className="flex min-w-0 items-center gap-1.5 text-xs text-foreground">
               <RotateCcw className="h-3.5 w-3.5 text-warning shrink-0" />
-              <span>
-                Unsaved draft for <strong>{activeProjectArea.name}</strong>
+              <span className="truncate">
+                Draft: <strong>{activeProjectArea.name}</strong>
               </span>
             </div>
-            <div className="flex items-center gap-1.5">
+            <div className="flex shrink-0 items-center gap-1">
               <Button
                 size="sm"
                 variant="outline"
@@ -603,25 +598,25 @@ export function MapProjectAreaEditor({
       )}
 
       {activeDraft && !readjustProjectArea && (
-        <div className="absolute top-4 left-4 z-30 flex w-full max-w-xl flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-2xl transition-all duration-200">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
-            <div className="flex min-w-0 items-center gap-2">
-              <LandPlot className="h-4 w-4 shrink-0 text-primary" />
-              <span className="text-sm font-bold text-foreground">
+        <div
+          data-testid="map-editor-draft-card"
+          className="absolute top-4 left-4 z-30 flex w-[340px] max-w-[calc(100vw-2rem)] flex-col gap-2.5 rounded-2xl border border-border bg-card p-3 shadow-xl transition-all"
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-border pb-2">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <LandPlot className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <span className="truncate text-xs font-semibold text-foreground">
                 {activeDraft.isEditingExisting ? 'Edit Lot Boundary' : 'New Lot Details'}
               </span>
-              <span className="truncate rounded-md bg-row-hover px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
-                {activeProjectArea?.name}
-              </span>
             </div>
-            <div className="text-xs">
+            <div className="shrink-0 text-[11px]">
               <span className="text-muted-foreground">Area: </span>
               <span className="font-semibold text-foreground">{activeDraft.areaSize} sqm</span>
             </div>
           </div>
 
-          <form onSubmit={handleDraftSubmit} className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-end gap-2.5">
+          <form onSubmit={handleDraftSubmit} className="flex flex-col gap-2.5">
+            <div className="grid grid-cols-2 gap-2">
               <div className="space-y-1">
                 <Label htmlFor="draft-blk" className="text-xs font-medium">
                   Block No. *
@@ -634,7 +629,7 @@ export function MapProjectAreaEditor({
                   autoFocus
                   value={lotBlock}
                   onChange={(e) => setLotBlock(e.target.value)}
-                  className="h-8 w-24 text-xs"
+                  className="h-8 w-full text-xs"
                 />
               </div>
 
@@ -649,19 +644,18 @@ export function MapProjectAreaEditor({
                   required
                   value={lotNumber}
                   onChange={(e) => setLotNumber(e.target.value)}
-                  className="h-8 w-24 text-xs"
+                  className="h-8 w-full text-xs"
                 />
               </div>
-
             </div>
 
-            <div className="flex items-center gap-2 border-t border-border pt-3">
+            <div className="flex items-center gap-1.5 border-t border-border pt-2">
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 onClick={onRedrawDraftLot}
-                className="h-8 px-2 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground"
+                className="h-7 px-2 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground"
                 title="Clear points and re-plot"
               >
                 Redraw
@@ -671,7 +665,7 @@ export function MapProjectAreaEditor({
                 variant="outline"
                 size="sm"
                 onClick={onDiscardDraftLot}
-                className="h-8 px-2 text-xs border-border text-foreground hover:bg-row-hover"
+                className="h-7 px-2 text-xs border-border text-foreground hover:bg-row-hover"
               >
                 Discard
               </Button>
@@ -679,7 +673,7 @@ export function MapProjectAreaEditor({
               <Button
                 type="submit"
                 size="sm"
-                className="ml-auto h-8 px-3 text-xs font-semibold bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
+                className="ml-auto h-7 px-3 text-xs font-semibold bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
               >
                 {activeDraft.isEditingExisting ? 'Update Lot' : 'Add to Drafts'}
               </Button>
@@ -691,48 +685,38 @@ export function MapProjectAreaEditor({
       {/* Focused activity screen: Readjust Boundary. Replaces the corner card so the activity
           feels like a dedicated screen; the map stays interactive beneath it. */}
       {readjustProjectArea && (
-        <div className="absolute top-4 left-4 z-30 flex w-full max-w-xl flex-col gap-3 rounded-2xl border border-border bg-card p-4 shadow-2xl transition-all duration-200">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border pb-3">
+        <div className="absolute top-4 left-4 z-30 flex w-[340px] max-w-[calc(100vw-2rem)] flex-col gap-2.5 rounded-2xl border border-border bg-card p-3 shadow-xl transition-all">
+          <div className="flex items-start justify-between gap-2 border-b border-border pb-2">
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <PenTool className="h-4 w-4 shrink-0 text-primary" />
-                <p className="text-sm font-bold text-foreground">Readjust Boundary</p>
-                <Badge variant="info" className="shrink-0">
-                  Editing
-                </Badge>
+              <div className="flex items-center gap-1.5">
+                <PenTool className="h-3.5 w-3.5 shrink-0 text-primary" />
+                <span className="truncate text-xs font-semibold text-foreground">Readjust Boundary</span>
               </div>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
                 {activeProjectArea?.name}
               </p>
             </div>
-            <div className="flex items-center gap-4 text-xs">
-              <div>
-                <span className="text-muted-foreground">Area: </span>
-                <span className="font-semibold text-foreground">
-                  {Math.round(readjustProjectArea.areaSize).toLocaleString()} sqm
-                </span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Corners: </span>
-                <span className="font-semibold text-foreground">
-                  {readjustProjectArea.boundary.length}
-                </span>
-              </div>
+            <div className="flex flex-col items-end text-[11px] shrink-0">
+              <span className="font-semibold text-foreground">
+                {Math.round(readjustProjectArea.areaSize).toLocaleString()} sqm
+              </span>
+              <span className="text-muted-foreground">
+                {readjustProjectArea.boundary.length} corners
+              </span>
             </div>
           </div>
 
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            💡 Drag the vertex dots on the map to reshape the project area outline. New lots must
-            still fall inside the adjusted boundary.
+            Drag the corner dots on the map to reshape the boundary.
           </p>
 
-          <div className="flex items-center gap-2 border-t border-border pt-3">
+          <div className="flex items-center gap-1.5 border-t border-border pt-2">
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={onResetReadjustProjectArea}
-              className="h-8 px-2 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground"
+              className="h-7 px-2 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground"
               title="Reset the outline to the saved boundary"
             >
               Reset
@@ -742,7 +726,7 @@ export function MapProjectAreaEditor({
               variant="outline"
               size="sm"
               onClick={onDiscardReadjustProjectArea}
-              className="h-8 px-2 text-xs border-border text-foreground hover:bg-row-hover"
+              className="h-7 px-2 text-xs border-border text-foreground hover:bg-row-hover"
             >
               Discard
             </Button>
@@ -752,7 +736,7 @@ export function MapProjectAreaEditor({
               size="sm"
               onClick={onConfirmReadjustProjectArea}
               disabled={readjustProjectArea.boundary.length < 3}
-              className="ml-auto h-8 px-3 text-xs font-semibold bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)] disabled:cursor-not-allowed disabled:opacity-50"
+              className="ml-auto h-7 px-3 text-xs font-semibold bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               Queue Update
             </Button>

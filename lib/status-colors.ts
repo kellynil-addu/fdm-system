@@ -122,13 +122,57 @@ export function titleStatusTone(
 
 /** Badge colour for account billing status */
 export const BILLING_STATUS_VARIANT: Record<
-  'Active' | 'Delinquent' | 'Matured' | 'Cleared' | 'Cancelled' | 'Forfeited',
-  'success' | 'destructive' | 'warning' | 'info' | 'muted' | 'purple'
+  string,
+  CallingCardTone
 > = {
   Active: 'success',
-  Delinquent: 'destructive',
-  Matured: 'warning',
+  'In Arrears': 'warning',
+  Delinquent: 'warning',
+  Matured: 'default',
   Cleared: 'info',
+  'Fully Paid': 'info',
+  'Fully Paid (Unclaimed)': 'purple',
+  Restructured: 'warning',
   Cancelled: 'muted',
-  Forfeited: 'purple',
+  Forfeited: 'destructive',
+  'Held (Forfeited)': 'destructive',
 };
+
+// Formats monetary values to exact Philippine Peso with two decimal places
+export function formatCentavosToPhp(amount: number): string {
+  return new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: 'PHP',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount ?? 0);
+}
+
+// Maps arbitrary status inputs to canonical billing labels without delinquent phrasing
+export function getBillingStatusLabel(status: string): string {
+  const normalized = String(status || '').toLowerCase().trim();
+  if (normalized === 'delinquent' || normalized === 'in_arrears' || normalized === 'in arrears') {
+    return 'In Arrears';
+  }
+  if (normalized === 'active') return 'Active';
+  if (normalized === 'matured') return 'Matured';
+  if (normalized === 'cleared' || normalized === 'fully_paid' || normalized === 'fully paid') return 'Cleared';
+  if (normalized === 'forfeited' || normalized === 'held (forfeited)') return 'Forfeited';
+  if (normalized === 'restructured') return 'Restructured';
+  if (normalized === 'cancelled') return 'Cancelled';
+  return status;
+}
+
+// Maps billing statuses to shadcn badge variants
+export function getBillingStatusVariant(
+  status: string
+): 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' {
+  const normalized = String(status || '').toLowerCase().trim();
+  if (normalized === 'delinquent' || normalized === 'in_arrears' || normalized === 'in arrears' || normalized === 'restructured') {
+    return 'warning';
+  }
+  if (normalized === 'forfeited') return 'destructive';
+  if (normalized === 'cleared' || normalized === 'fully_paid') return 'success';
+  if (normalized === 'matured') return 'default';
+  return 'secondary';
+}

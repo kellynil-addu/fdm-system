@@ -31,7 +31,13 @@ export function BillingAccountCard({ account }: BillingAccountCardProps) {
   const percentPaid = tcp > 0 ? Math.min(100, Math.round((paid / tcp) * 100)) : 0;
 
   const derivedStatus = useMemo(() => {
-    if (account.cleared_at) return 'Cleared';
+    const status = String(account.status).toLowerCase();
+    if (status === 'forfeited') {
+      return account.held_since && !account.reopened_at ? 'Held (Forfeited)' : 'Forfeited';
+    }
+    if (status === 'restructured') return 'Restructured';
+    if (status.includes('unclaimed')) return 'Fully Paid (Unclaimed)';
+    if (status === 'fully paid' || status === 'fully_paid' || account.cleared_at) return 'Fully Paid';
     if (
       account.contract_end_date &&
       new Date(account.contract_end_date).getTime() < Date.now() &&
@@ -39,8 +45,8 @@ export function BillingAccountCard({ account }: BillingAccountCardProps) {
     ) {
       return 'Matured';
     }
-    if (account.notices.length > 0 || Number(account.baseline_penalties_accrued) > 0) {
-      return 'Delinquent';
+    if (account.notices.length > 0 || Number(account.baseline_penalties_accrued) > 0 || (account.installments_behind ?? 0) > 0) {
+      return 'In Arrears';
     }
     return 'Active';
   }, [account, remaining]);
@@ -56,7 +62,7 @@ export function BillingAccountCard({ account }: BillingAccountCardProps) {
    * the number that is true of every account and therefore the least
    * informative.
    *
-   * The old card stacked all three as separate rows, so a delinquent account on
+   * The old card stacked all three as separate rows, so an account in arrears on
    * an amnesty with a notice spent four rows saying what the bar says in one,
    * and still had nowhere to put the remaining balance.
    */

@@ -139,4 +139,108 @@ test.describe('Map editor: active vs archived project areas', () => {
       'true'
     );
   });
+
+  test('the view switch tablist is hidden when a project area is selected and returns when leaving', async ({
+    page,
+  }) => {
+    await enterEditor(page);
+
+    const tablist = page.getByRole('tablist', { name: 'Project area view' });
+    await expect(tablist).toBeVisible();
+
+    const pickerButtons = page.getByRole('group', { name: 'Project areas to edit' }).getByRole('button');
+    const count = await pickerButtons.count();
+    test.skip(count === 0, 'No project area available to select');
+
+    await pickerButtons.first().click();
+
+    await expect(tablist).not.toBeVisible();
+    await expect(page.getByRole('button', { name: 'Leave Project Area' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Leave Project Area' }).click();
+    await expect(tablist).toBeVisible();
+  });
+
+  test('the editor card maintains stable bounding width (340px) across states', async ({
+    page,
+  }) => {
+    await enterEditor(page);
+
+    const card = page.locator('[data-testid="map-editor-card"]');
+    await expect(card).toBeVisible();
+
+    const chooserBox = await card.boundingBox();
+    expect(chooserBox).not.toBeNull();
+    expect(chooserBox!.width).toBeGreaterThanOrEqual(336);
+    expect(chooserBox!.width).toBeLessThanOrEqual(344);
+
+    const pickerButtons = page.getByRole('group', { name: 'Project areas to edit' }).getByRole('button');
+    const count = await pickerButtons.count();
+    test.skip(count === 0, 'No project area available to select');
+
+    await pickerButtons.first().click();
+    await expect(page.getByRole('button', { name: 'Leave Project Area' })).toBeVisible();
+
+    const focusedBox = await card.boundingBox();
+    expect(focusedBox).not.toBeNull();
+    expect(focusedBox!.width).toBeGreaterThanOrEqual(336);
+    expect(focusedBox!.width).toBeLessThanOrEqual(344);
+
+    const plotLotBtn = page.getByRole('button', { name: '+ Plot Lot' });
+    if (await plotLotBtn.isEnabled()) {
+      await plotLotBtn.click();
+      await expect(page.getByRole('button', { name: 'Cancel' })).toBeVisible();
+
+      const plottingBox = await card.boundingBox();
+      expect(plottingBox).not.toBeNull();
+      expect(plottingBox!.width).toBeGreaterThanOrEqual(336);
+      expect(plottingBox!.width).toBeLessThanOrEqual(344);
+
+      await page.getByRole('button', { name: 'Cancel' }).click();
+    }
+  });
+
+  test('lot detail entry form maintains bounded width matching editor card', async ({
+    page,
+  }) => {
+    await enterEditor(page);
+
+    const pickerButtons = page.getByRole('group', { name: 'Project areas to edit' }).getByRole('button');
+    const count = await pickerButtons.count();
+    test.skip(count === 0, 'No project area available to select');
+
+    await pickerButtons.first().click();
+
+    const plotLotBtn = page.getByRole('button', { name: '+ Plot Lot' });
+    if (await plotLotBtn.isEnabled()) {
+      await plotLotBtn.click();
+
+      const mapCanvas = page.locator('.maplibregl-canvas');
+      const box = await mapCanvas.boundingBox();
+      if (box) {
+        const cx = box.x + box.width / 2;
+        const cy = box.y + box.height / 2;
+        await page.mouse.click(cx, cy);
+        await page.mouse.click(cx + 40, cy);
+        await page.mouse.click(cx + 20, cy - 30);
+      }
+
+      const finishBtn = page.getByRole('button', { name: 'Finish Shape' });
+      if (await finishBtn.isEnabled()) {
+        await finishBtn.click();
+
+        const draftCard = page.locator('[data-testid="map-editor-draft-card"]');
+        await expect(draftCard).toBeVisible();
+
+        const draftBox = await draftCard.boundingBox();
+        expect(draftBox).not.toBeNull();
+        expect(draftBox!.width).toBeGreaterThanOrEqual(336);
+        expect(draftBox!.width).toBeLessThanOrEqual(350);
+
+        await page.getByRole('button', { name: 'Discard' }).click();
+      } else {
+        await page.getByRole('button', { name: 'Cancel' }).click();
+      }
+    }
+  });
 });

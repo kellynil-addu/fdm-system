@@ -19,8 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { SectionCard, SectionHeader } from '@/components/ui/section-card';
-import { StepChecklist, type StepItem } from '@/components/ui/step-checklist';
+import { SectionCard } from '@/components/ui/section-card';
 import { GenerateDeedModal } from './generate-deed-modal';
 import {
   AlertDialog,
@@ -36,7 +35,7 @@ import { formatDocumentName } from '@/lib/format-document-name';
 import { formatMediumDate } from '@/lib/format-date';
 import { useLandTitles, lotRefLabel } from '@/lib/hooks/use-land-titles';
 import { useMutation } from '@/lib/hooks/use-mutation';
-import { getDocPrepState, getDocPrepSteps, getReleasedDate } from '@/lib/title-progress';
+import { getDocPrepState, getReleasedDate } from '@/lib/title-progress';
 import { DOCUMENT_FILE_ACCEPT } from '@/lib/validations/document';
 import { DOC_TYPE_LABEL, type ClientDocument } from '@/lib/types/client';
 import {
@@ -90,8 +89,6 @@ export function TitlePacketTab({
   const [isEditingTct, setIsEditingTct] = useState(false);
 
   const isReleased = title.status === 'Released';
-  // The released date comes from the shared derivation, so this tab and the
-  // rail cannot disagree about when the packet was handed over.
   const releasedAt = getReleasedDate(title);
   const releasedDateStr = releasedAt ? formatMediumDate(releasedAt) : '';
 
@@ -181,26 +178,9 @@ export function TitlePacketTab({
   }
 
   const propertyRef = lotRefLabel(title.property);
-  const propertyLocation = title.property?.location ?? '';
-
-  const missingDetail = [
-    missingDocsCount > 0
-      ? `${missingDocsCount} file${missingDocsCount > 1 ? 's' : ''} missing`
-      : '',
-    !hasRecordedTct ? 'title number missing' : '',
-  ]
-    .filter(Boolean)
-    .join(' • ');
-
-  const prepSteps: StepItem[] = getDocPrepSteps(
-    title,
-    documents,
-    isExecutiveSigned,
-    missingDetail
-  );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Release Status Banner */}
       {isReleased && (
         <div className="flex items-center gap-2.5 rounded-lg border border-border bg-[color-mix(in_srgb,var(--success)_8%,var(--card))] px-3.5 py-2.5 text-sm text-foreground">
@@ -209,31 +189,23 @@ export function TitlePacketTab({
         </div>
       )}
 
-      {/* Stage Management Section */}
+      {/* Top-Docked Stage Management Action Strip */}
       {!isReleased && canEdit && (
-        <SectionCard className="space-y-3">
-          <SectionHeader
-            title="Stage Management"
-            action={
-              <Badge variant="outline">
-                Current: {title.status}
-              </Badge>
-            }
-          />
-
+        <div className="rounded-lg border border-border bg-card p-3">
           {/* Stage: Cleared by Billing */}
           {title.status === 'Cleared by Billing' && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-              <p className="text-sm text-muted-foreground">
-                Account cleared by Billing. Begin document preparation to start collecting turnover requirements.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" shape="pill">Cleared by Billing</Badge>
+                <span className="text-xs text-muted-foreground">Ready to start collecting requirements</span>
+              </div>
               <Button
                 size="sm"
                 disabled={isUpdatingStatus}
                 onClick={() => onStatusChange('Document Preparation')}
-                className="text-sm gap-2 h-9 px-4 shrink-0 font-medium"
+                className="text-xs gap-1.5 h-8 px-3 font-medium shrink-0 self-end sm:self-center"
               >
-                {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                {isUpdatingStatus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
                 Begin Document Preparation
               </Button>
             </div>
@@ -241,19 +213,22 @@ export function TitlePacketTab({
 
           {/* Stage: Document Preparation */}
           {title.status === 'Document Preparation' && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-              <p className="text-sm text-muted-foreground">
-                {step1Done
-                  ? 'All release documents and title number are recorded. Ready to submit for review.'
-                  : 'Upload all required release documents and record the title number to submit for review.'}
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="info" shape="pill" dot>Document Preparation</Badge>
+                <span className="text-xs text-muted-foreground">
+                  {step1Done
+                    ? 'All requirements recorded. Ready for supervisor review.'
+                    : `${missingDocsCount > 0 ? `${missingDocsCount} file${missingDocsCount > 1 ? 's' : ''} missing` : ''}${!hasRecordedTct ? `${missingDocsCount > 0 ? ' • ' : ''}TCT number required` : ''}`}
+                </span>
+              </div>
               <Button
                 size="sm"
                 disabled={!step1Done || isUpdatingStatus}
                 onClick={() => onStatusChange('For Review')}
-                className="text-sm gap-2 h-9 px-4 shrink-0 font-medium"
+                className="text-xs gap-1.5 h-8 px-3 font-medium shrink-0 self-end sm:self-center"
               >
-                {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                {isUpdatingStatus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ArrowRight className="h-3.5 w-3.5" />}
                 Submit for Review
               </Button>
             </div>
@@ -261,11 +236,12 @@ export function TitlePacketTab({
 
           {/* Stage: For Review */}
           {title.status === 'For Review' && (
-            <div className="space-y-3 pt-1">
-              <p className="text-sm text-muted-foreground">
-                Packet is under supervisor review. Verify technical description and required turnover documents.
-              </p>
-              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 border-t border-border">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Badge variant="warning" shape="pill" dot>Supervisor Review</Badge>
+                <span className="text-xs text-muted-foreground">Verify parcel technical description &amp; files</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                 <Button
                   type="button"
                   variant="quiet"
@@ -275,20 +251,20 @@ export function TitlePacketTab({
                     setRevertTarget('Document Preparation');
                     setRevertReason('');
                   }}
-                  className="text-sm gap-2 h-9 px-4 font-medium text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_15%,transparent)]"
+                  className="text-xs gap-1.5 h-8 px-3 font-medium text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_15%,transparent)]"
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  Revert to Preparation
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Revert
                 </Button>
                 <Button
                   type="button"
                   size="sm"
                   disabled={isUpdatingStatus}
                   onClick={() => onStatusChange('For Signature')}
-                  className="text-sm gap-2 h-9 px-4 font-medium"
+                  className="text-xs gap-1.5 h-8 px-3 font-medium"
                 >
-                  {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
-                  Approve Review & Advance
+                  {isUpdatingStatus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                  Approve Review &amp; Advance
                 </Button>
               </div>
             </div>
@@ -296,166 +272,133 @@ export function TitlePacketTab({
 
           {/* Stage: For Signature */}
           {title.status === 'For Signature' && (
-            <div className="space-y-3 pt-1">
-              <div className="flex items-start gap-2.5 p-3 rounded-lg border border-border bg-row-hover">
-                <Checkbox
-                  id="stage-exec-signed"
-                  checked={isExecutiveSigned}
-                  disabled={isUpdatingStatus}
-                  onCheckedChange={(checked) => setIsExecutiveSigned(Boolean(checked))}
-                  className="h-4 w-4 mt-0.5"
-                />
-                <label
-                  htmlFor="stage-exec-signed"
-                  className="text-sm font-medium text-foreground cursor-pointer select-none leading-tight"
-                >
-                  Executive Management Signature & Notarization Confirmed
-                  <span className="block text-xs text-muted-foreground mt-0.5 font-normal">
-                    Confirm when Deed of Absolute Sale is signed by executive management and notarized.
-                  </span>
-                </label>
-              </div>
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <Checkbox
+                    id="stage-exec-signed"
+                    checked={isExecutiveSigned}
+                    disabled={isUpdatingStatus}
+                    onCheckedChange={(checked) => setIsExecutiveSigned(Boolean(checked))}
+                    className="h-4 w-4"
+                  />
+                  <label
+                    htmlFor="stage-exec-signed"
+                    className="text-xs font-medium text-foreground cursor-pointer select-none"
+                  >
+                    Executive Management Signature &amp; Notarization Confirmed
+                  </label>
+                </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1 border-t border-border">
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <Button
+                    type="button"
+                    variant="quiet"
+                    size="sm"
+                    disabled={isUpdatingStatus}
+                    onClick={() => {
+                      setRevertTarget('For Review');
+                      setRevertReason('');
+                    }}
+                    className="text-xs gap-1.5 h-8 px-3 font-medium text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_15%,transparent)]"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    Revert
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!isExecutiveSigned || isUpdatingStatus}
+                    onClick={() => onStatusChange('Clearance Period')}
+                    className="text-xs gap-1.5 h-8 px-3 font-medium"
+                  >
+                    {isUpdatingStatus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Calendar className="h-3.5 w-3.5" />}
+                    Start 30-Day Clearance
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Release Packet Workbench Card */}
+      <SectionCard className="space-y-4">
+        {/* Header Toolbar: Document count + Integrated TCT quick-edit */}
+        <div className="flex flex-col gap-3 pb-2 border-b border-border sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h4 className="text-sm font-semibold text-foreground">Turnover Packet Requirements</h4>
+            <Badge variant="outline" shape="pill" className="text-xs font-normal">
+              {isLoadingDocs && <Loader2 className="h-3 w-3 animate-spin mr-1" />}
+              {requiredDocsCount - missingDocsCount} of {requiredDocsCount} files uploaded
+            </Badge>
+          </div>
+
+          {/* Integrated TCT Editor in Toolbar */}
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            <span className="text-xs text-muted-foreground">TCT:</span>
+            {!isEditingTct ? (
+              <div className="flex items-center gap-1.5">
+                {title.property?.title_number ? (
+                  <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-muted border border-border text-foreground">
+                    {title.property.title_number}
+                  </span>
+                ) : (
+                  <Badge variant="warning" shape="pill" dot className="text-xs">
+                    Missing TCT
+                  </Badge>
+                )}
+                {canEdit && !isReleased && (
+                  <Button
+                    type="button"
+                    variant="quiet"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setTitleNumberInput(currentTct);
+                      setIsEditingTct(true);
+                    }}
+                    title="Edit TCT Number"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <form onSubmit={handleSaveTct} className="flex items-center gap-1.5">
+                <Input
+                  value={titleNumberInput}
+                  onChange={(e) => setTitleNumberInput(e.target.value)}
+                  placeholder="e.g. T-123456"
+                  className="h-7 w-28 font-mono text-xs px-2"
+                  autoFocus
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs font-medium"
+                  disabled={isSavingTct || !titleNumberInput.trim()}
+                >
+                  {isSavingTct ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Save'}
+                </Button>
                 <Button
                   type="button"
                   variant="quiet"
                   size="sm"
-                  disabled={isUpdatingStatus}
+                  className="h-7 px-2 text-xs"
                   onClick={() => {
-                    setRevertTarget('For Review');
-                    setRevertReason('');
+                    setTitleNumberInput(currentTct);
+                    setIsEditingTct(false);
                   }}
-                  className="text-sm gap-2 h-9 px-4 font-medium text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_15%,transparent)]"
                 >
-                  <RotateCcw className="h-4 w-4" />
-                  Revert to Review
+                  Cancel
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={!isExecutiveSigned || isUpdatingStatus}
-                  onClick={() => onStatusChange('Clearance Period')}
-                  className="text-sm gap-2 h-9 px-4 font-medium"
-                >
-                  {isUpdatingStatus ? <Loader2 className="h-4 w-4 animate-spin" /> : <Calendar className="h-4 w-4" />}
-                  Start 30-Day Clearance
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Past Document Prep stages */}
-          {title.status !== 'Document Preparation' && title.status !== 'For Review' && title.status !== 'For Signature' && (
-            <p className="text-sm text-muted-foreground pt-1">
-              Document preparation and executive sign-off are complete for this title.
-            </p>
-          )}
-        </SectionCard>
-      )}
-
-      {/* Document Preparation Workflow Checklist */}
-      <SectionCard className="space-y-3">
-        <SectionHeader
-          title="Document Preparation & Verification Workflow"
-          description="Track packet readiness, supervisor review, and executive sign-off."
-          action={
-            isUpdatingStatus ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            ) : undefined
-          }
-        />
-
-        {/*
-          The four rows below were 130 lines of near-identical markup — the same
-          border, the same icon slot, the same title/detail/badge arrangement
-          written out once per step. They are one `StepChecklist` now, which is
-          what makes a completed step look the same here as it does in the rail.
-        */}
-        <StepChecklist
-          ariaLabel="Document preparation and verification steps"
-          items={prepSteps}
-        />
-      </SectionCard>
-
-      {/* Title Number Card */}
-      <SectionCard className="space-y-2">
-        <SectionHeader
-          title={`Title number on ${[propertyRef, propertyLocation].filter(Boolean).join(', ')}`}
-          action={
-            canEdit && !isReleased && !isEditingTct ? (
-              <Button
-                type="button"
-                variant="quiet"
-                size="sm"
-                onClick={() => {
-                  setTitleNumberInput(currentTct);
-                  setIsEditingTct(true);
-                }}
-                className="gap-1.5 text-sm h-9 px-3.5"
-              >
-                <Pencil className="h-3.5 w-3.5" /> Edit
-              </Button>
-            ) : undefined
-          }
-        />
-        <div>
-          {!isEditingTct && title.property?.title_number ? (
-            <p className="font-mono text-sm font-semibold text-foreground">
-              {title.property.title_number}
-            </p>
-          ) : !isEditingTct ? (
-            <p className="text-sm text-warning font-medium">
-              No title number recorded on lot (Required to submit for review)
-            </p>
-          ) : null}
+              </form>
+            )}
+          </div>
         </div>
 
-        {isEditingTct && (
-          <form onSubmit={handleSaveTct} className="mt-2 flex items-center gap-2">
-            <Input
-              value={titleNumberInput}
-              onChange={(e) => setTitleNumberInput(e.target.value)}
-              placeholder="e.g. T-123456"
-              className="h-9 font-mono text-sm flex-1"
-              autoFocus
-            />
-            <Button
-              type="submit"
-              size="sm"
-              className="h-9 px-4 text-sm"
-              disabled={isSavingTct || !titleNumberInput.trim()}
-            >
-              {isSavingTct ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
-            </Button>
-            <Button
-              type="button"
-              variant="quiet"
-              size="sm"
-              className="h-9 px-4 text-sm"
-              onClick={() => {
-                setTitleNumberInput(currentTct);
-                setIsEditingTct(false);
-              }}
-            >
-              Cancel
-            </Button>
-          </form>
-        )}
-      </SectionCard>
-
-      {/* Release Packet Checklist */}
-      <div className="space-y-3">
-        <SectionHeader
-          title="Release Packet Documents"
-          action={
-            <span className="flex items-center gap-2 text-sm text-muted-foreground">
-              {isLoadingDocs && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {requiredDocsCount - missingDocsCount} of {requiredDocsCount} uploaded
-            </span>
-          }
-        />
-
+        {/* Dense Document Rows */}
         <div className="divide-y divide-border rounded-lg border border-border bg-card">
           {RELEASE_DOCUMENT_TYPES.map((type) => {
             const isSkipped = type === 'Deed of Sale' && title.is_legacy_transferred;
@@ -465,7 +408,7 @@ export function TitlePacketTab({
             return (
               <div
                 key={type}
-                className="flex items-center justify-between gap-3 p-4 text-sm hover:bg-row-hover transition-colors"
+                className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm hover:bg-row-hover transition-colors"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   {isSkipped ? (
@@ -476,46 +419,49 @@ export function TitlePacketTab({
                     <CircleDashed className="h-4 w-4 shrink-0 text-muted-foreground" />
                   )}
                   <div className="min-w-0">
-                    <p className="font-medium text-foreground truncate">
-                      {DOC_TYPE_LABEL[type]}
-                    </p>
-                    {isSkipped ? (
-                      <p className="text-xs text-muted-foreground italic">
-                        Omitted — Title already in client name
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-xs text-foreground truncate">
+                        {DOC_TYPE_LABEL[type]}
                       </p>
-                    ) : doc ? (
-                      <p className="text-xs text-muted-foreground truncate">
+                      {isSkipped ? (
+                        <Badge variant="muted" shape="pill" className="text-[10px] py-0">Omitted - Prior Transfer</Badge>
+                      ) : doc ? (
+                        <Badge variant="success" shape="pill" dot className="text-[10px] py-0">Complete</Badge>
+                      ) : (
+                        <Badge variant="warning" shape="pill" dot className="text-[10px] py-0">Missing</Badge>
+                      )}
+                    </div>
+                    {doc && (
+                      <p className="text-[11px] text-muted-foreground truncate mt-0.5 font-mono">
                         {formatDocumentName(doc.file_path)} • {formatMediumDate(doc.uploaded_at)}
                       </p>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">Required for turnover</p>
                     )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   {doc && (
                     <>
                       <Button
                         type="button"
                         variant="quiet"
                         size="icon"
-                        className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
                         onClick={() => void handleViewDoc(doc)}
                         title="View document"
                       >
-                        <ExternalLink className="h-4 w-4" />
+                        <ExternalLink className="h-3.5 w-3.5" />
                       </Button>
                       {canEdit && !isReleased && (
                         <Button
                           type="button"
                           variant="quiet"
                           size="icon"
-                          className="h-9 w-9 text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_15%,transparent)]"
+                          className="h-7 w-7 text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_15%,transparent)]"
                           onClick={() => setDocToRemove(doc)}
                           title="Remove document"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       )}
                     </>
@@ -525,12 +471,12 @@ export function TitlePacketTab({
                       type="button"
                       variant="quiet"
                       size="sm"
-                      className="h-9 px-3.5 text-sm gap-2"
+                      className="h-7 px-2.5 text-xs gap-1"
                       onClick={() => setIsGenerateDeedOpen(true)}
                       title="Generate editable Word Deed of Sale (.docx)"
                     >
-                      <FileText className="h-3.5 w-3.5" />
-                      Generate
+                      <FileText className="h-3 w-3" />
+                      Generate (.docx)
                     </Button>
                   )}
                   {!isSkipped && canEdit && !isReleased && (
@@ -538,14 +484,14 @@ export function TitlePacketTab({
                       type="button"
                       variant="quiet"
                       size="sm"
-                      className="h-9 px-4 text-sm gap-2"
+                      className="h-7 px-2.5 text-xs gap-1"
                       disabled={isBusy}
                       onClick={() => pickFile(type)}
                     >
                       {isBusy ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <Loader2 className="h-3 w-3 animate-spin" />
                       ) : (
-                        <Upload className="h-3.5 w-3.5" />
+                        <Upload className="h-3 w-3" />
                       )}
                       {doc ? 'Replace' : 'Upload'}
                     </Button>
@@ -555,7 +501,7 @@ export function TitlePacketTab({
             );
           })}
         </div>
-      </div>
+      </SectionCard>
 
       <input
         ref={fileInputRef}

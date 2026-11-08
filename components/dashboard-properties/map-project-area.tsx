@@ -574,8 +574,8 @@ export function ProjectAreaMap({
         projectAreaId: p.projectAreaId,
         block: p.block,
         lot: p.lot,
-        areaSize: p.areaSize > 0 ? p.areaSize : undefined,
-        pricePerSqm: p.pricePerSqm > 0 ? p.pricePerSqm : undefined,
+        areaSize: p.areaSize && p.areaSize > 0 ? p.areaSize : undefined,
+        pricePerSqm: p.pricePerSqm && p.pricePerSqm > 0 ? p.pricePerSqm : undefined,
       });
     },
     [handleClosePopup]

@@ -156,9 +156,7 @@ export type ResolveDiscrepancyInput = z.infer<typeof resolveDiscrepancyInputSche
  */
 export const reopenForfeitedLotInputSchema = z.object({
   accountId: z.string().uuid(),
-  checklistConfirmed: z.literal(true, {
-    errorMap: () => ({ message: "Must confirm all required documents are complete" }),
-  }),
+  checklistConfirmed: z.literal(true),
   remarks: z.string().optional().nullable(),
 });
 export type ReopenForfeitedLotInput = z.infer<typeof reopenForfeitedLotInputSchema>;

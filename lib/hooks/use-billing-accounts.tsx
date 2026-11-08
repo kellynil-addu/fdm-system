@@ -29,6 +29,9 @@ import type {
   BillingAccountSummary,
   CompromiseStatus,
   CsvImportSummary,
+  BillingTopTab,
+  BillingTransaction,
+  BillingImportDiscrepancy,
 } from '@/lib/types/billing';
 import type {
   RecordPaymentInput,
@@ -38,10 +41,17 @@ import type {
   ImportCsvInput,
 } from '@/lib/validations/billing';
 
-export type BillingTab = 'all' | 'active' | 'delinquent' | 'matured' | 'cleared';
+export type BillingTab = 'all' | 'active' | 'in_arrears' | 'delinquent' | 'matured' | 'cleared' | 'forfeited';
 
 export type BillingModalState =
   | { type: 'payment'; account: BillingAccountSummary }
+  | { type: 'reversal'; account: BillingAccountSummary; transaction: BillingTransaction }
+  | { type: 'restructure'; account: BillingAccountSummary }
+  | { type: 'record-pdc'; account: BillingAccountSummary }
+  | { type: 'penalty-policy'; account: BillingAccountSummary }
+  | { type: 'excel-import' }
+  | { type: 'resolve-discrepancy'; discrepancy: BillingImportDiscrepancy }
+  | { type: 'lot-hold-release'; account: BillingAccountSummary }
   | { type: 'csv-import' }
   | { type: 'compromise'; account: BillingAccountSummary }
   | { type: 'notice'; account: BillingAccountSummary }
@@ -56,7 +66,11 @@ export interface BillingAccountsContextValue {
   setSearch: (search: string) => void;
   tab: BillingTab;
   setTab: (tab: BillingTab) => void;
-  counts: Record<BillingTab, number>;
+  topTab: BillingTopTab;
+  setTopTab: (topTab: BillingTopTab) => void;
+  viewMode: 'table' | 'cards';
+  setViewMode: (mode: 'table' | 'cards') => void;
+  counts: Record<string, number>;
   activeAccount: BillingAccountSummary | null;
   setActiveAccount: (account: BillingAccountSummary | null) => void;
   /**
@@ -104,6 +118,8 @@ export function BillingAccountsProvider({
   const [accounts, setAccounts] = useState<BillingAccountSummary[]>(initialAccounts);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<BillingTab>('active');
+  const [topTab, setTopTab] = useState<BillingTopTab>('accounts');
+  const [viewMode, setViewMode] = useState<'table' | 'cards'>('table');
   const [activeAccount, setActiveAccount] = useState<BillingAccountSummary | null>(() =>
     accountIdParam
       ? (initialAccounts.find((a) => a.account_id === accountIdParam) ?? null)
@@ -146,7 +162,10 @@ export function BillingAccountsProvider({
     onSuccess: async (data) => {
       toast.success(`Payment recorded under OR# ${data.or_number}`);
       setActiveModal(null);
-      await refreshAccount(data.account_id);
+      const targetAccountId = data.account_id ?? activeAccount?.account_id;
+      if (targetAccountId) {
+        await refreshAccount(targetAccountId);
+      }
     },
     onError: (err) => {
       toast.error(err || 'Failed to record payment');
@@ -157,7 +176,10 @@ export function BillingAccountsProvider({
     onSuccess: async (data) => {
       toast.success('Executive compromise agreement approved');
       setActiveModal(null);
-      await refreshAccount(data.account_id);
+      const targetAccountId = data.account_id ?? activeAccount?.account_id;
+      if (targetAccountId) {
+        await refreshAccount(targetAccountId);
+      }
     },
     onError: (err) => {
       toast.error(err || 'Failed to create compromise');
@@ -184,7 +206,10 @@ export function BillingAccountsProvider({
     onSuccess: async (data) => {
       toast.success(`${data.notice_type} recorded successfully`);
       setActiveModal(null);
-      await refreshAccount(data.account_id);
+      const targetAccountId = data.account_id ?? activeAccount?.account_id;
+      if (targetAccountId) {
+        await refreshAccount(targetAccountId);
+      }
     },
     onError: (err) => {
       toast.error(err || 'Failed to record notice');
@@ -222,7 +247,10 @@ export function BillingAccountsProvider({
       onSuccess: async (data) => {
         toast.success('Account cleared by Billing. Lot status updated to Sold.');
         setActiveModal(null);
-        await refreshAccount(data.account_id);
+        const targetAccountId = data.account_id ?? activeAccount?.account_id;
+      if (targetAccountId) {
+        await refreshAccount(targetAccountId);
+      }
       },
       onError: (err) => {
         toast.error(err || 'Failed to attest clearance');
@@ -248,17 +276,26 @@ export function BillingAccountsProvider({
 
   const counts = useMemo(() => {
     let active = 0;
-    let delinquent = 0;
+    let inArrears = 0;
     let matured = 0;
     let cleared = 0;
+    let forfeited = 0;
 
     for (const a of accounts) {
-      if (a.cleared_at) {
+      const status = String(a.status || '').toLowerCase();
+      if (status === 'forfeited') {
+        forfeited++;
+      } else if (a.cleared_at) {
         cleared++;
-      } else if (a.contract_end_date && new Date(a.contract_end_date).getTime() < Date.now() && Number(a.remaining_balance) > 0) {
+      } else if (status === 'matured' || (a.contract_end_date && new Date(a.contract_end_date).getTime() < Date.now() && Number(a.remaining_balance) > 0)) {
         matured++;
-      } else if (a.notices.length > 0 || Number(a.baseline_penalties_accrued) > 0) {
-        delinquent++;
+      } else if (
+        (a.installments_behind && a.installments_behind > 0) ||
+        (a.penalties_due && a.penalties_due > 0) ||
+        a.notices.length > 0 ||
+        Number(a.baseline_penalties_accrued) > 0
+      ) {
+        inArrears++;
       } else {
         active++;
       }
@@ -267,9 +304,11 @@ export function BillingAccountsProvider({
     return {
       all: accounts.length,
       active,
-      delinquent,
+      in_arrears: inArrears,
+      delinquent: inArrears,
       matured,
       cleared,
+      forfeited,
     };
   }, [accounts]);
 
@@ -280,18 +319,37 @@ export function BillingAccountsProvider({
       result = result.filter(
         (a) =>
           !a.cleared_at &&
+          String(a.status || '').toLowerCase() !== 'forfeited' &&
           (!a.contract_end_date ||
             new Date(a.contract_end_date).getTime() >= Date.now() ||
             Number(a.remaining_balance) <= 0) &&
+          !(a.installments_behind && a.installments_behind > 0) &&
+          !(a.penalties_due && a.penalties_due > 0) &&
           a.notices.length === 0 &&
           Number(a.baseline_penalties_accrued || 0) <= 0
       );
-    } else if (tab === 'delinquent') {
-      result = result.filter((a) => !a.cleared_at && (a.notices.length > 0 || Number(a.baseline_penalties_accrued) > 0));
+    } else if (tab === 'in_arrears' || tab === 'delinquent') {
+      result = result.filter(
+        (a) =>
+          !a.cleared_at &&
+          String(a.status || '').toLowerCase() !== 'forfeited' &&
+          ((a.installments_behind && a.installments_behind > 0) ||
+            (a.penalties_due && a.penalties_due > 0) ||
+            a.notices.length > 0 ||
+            Number(a.baseline_penalties_accrued) > 0)
+      );
     } else if (tab === 'matured') {
-      result = result.filter((a) => !a.cleared_at && a.contract_end_date && new Date(a.contract_end_date).getTime() < Date.now() && Number(a.remaining_balance) > 0);
+      result = result.filter(
+        (a) =>
+          !a.cleared_at &&
+          String(a.status || '').toLowerCase() !== 'forfeited' &&
+          (String(a.status || '').toLowerCase() === 'matured' ||
+            (a.contract_end_date && new Date(a.contract_end_date).getTime() < Date.now() && Number(a.remaining_balance) > 0))
+      );
     } else if (tab === 'cleared') {
       result = result.filter((a) => Boolean(a.cleared_at));
+    } else if (tab === 'forfeited') {
+      result = result.filter((a) => String(a.status || '').toLowerCase() === 'forfeited');
     }
 
     const q = search.trim().toLowerCase();
@@ -302,7 +360,7 @@ export function BillingAccountsProvider({
         const block = `block ${a.property.block_number}`.toLowerCase();
         const lot = `lot ${a.property.lot_number}`.toLowerCase();
         const blkLot = `b${a.property.block_number} l${a.property.lot_number}`.toLowerCase();
-        const orNumbers = a.payments.map((p) => p.or_number.toLowerCase()).join(' ');
+        const orNumbers = a.payments.map((p) => (p.or_number || '').toLowerCase()).join(' ');
 
         return (
           clientName.includes(q) ||
@@ -325,6 +383,10 @@ export function BillingAccountsProvider({
     setSearch,
     tab,
     setTab,
+    topTab,
+    setTopTab,
+    viewMode,
+    setViewMode,
     counts,
     activeAccount,
     setActiveAccount,
