@@ -1,13 +1,25 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as XLSX from "xlsx";
 import { parseLegacyExcelWorkbook } from "@/lib/billing/excel-importer";
-import { importLegacyStatements, resolveDiscrepancy } from "@/lib/actions/billing";
-import { loginAsAdmin } from "../framework/session";
+import { importLegacyStatements } from "@/lib/actions/billing";
+import { loginAsAdmin, getTestAdminClient } from "../framework/session";
 import { unwrap } from "../framework/action-helper";
 
 describe("Legacy Excel Import & Review Queue Suite (US7)", () => {
   beforeAll(async () => {
     await loginAsAdmin();
+  });
+
+  afterAll(async () => {
+    try {
+      const admin = getTestAdminClient();
+      await admin
+        .from("billing_import_discrepancy")
+        .delete()
+        .eq("source_filename", "test-soa-2004.xlsx");
+    } catch {
+      // Ignore cleanup error
+    }
   });
 
   function createTestWorkbookBuffer(): Buffer {

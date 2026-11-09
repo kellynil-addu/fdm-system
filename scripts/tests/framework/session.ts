@@ -49,6 +49,59 @@ export async function hardDeleteTestClient(clientId: string) {
   return hardDeleteTestClients([clientId]);
 }
 
+export async function hardDeleteTestLedgerAccounts(accountIds: string[]) {
+  if (accountIds.length === 0) return;
+  const admin = getTestAdminClient();
+
+  await admin.from("billing_import_discrepancy").delete().in("account_id", accountIds);
+  await admin.from("billing_holding_charge").delete().in("account_id", accountIds);
+  await admin.from("billing_account_penalty_arrangement").delete().in("account_id", accountIds);
+  await admin.from("billing_post_dated_check").delete().in("account_id", accountIds);
+
+  const { data: txns } = await admin
+    .from("billing_transaction")
+    .select("transaction_id")
+    .in("account_id", accountIds);
+
+  if (txns && txns.length > 0) {
+    const txnIds = txns.map((t) => t.transaction_id);
+    const { data: payments } = await admin
+      .from("billing_payment")
+      .select("payment_id")
+      .in("transaction_id", txnIds);
+
+    if (payments && payments.length > 0) {
+      const paymentIds = payments.map((p) => p.payment_id);
+      await admin.from("billing_payment_application").delete().in("payment_id", paymentIds);
+      await admin.from("billing_payment").delete().in("payment_id", paymentIds);
+    }
+
+    await admin
+      .from("billing_transaction")
+      .update({ reverses_transaction_id: null })
+      .in("account_id", accountIds);
+
+    await admin.from("billing_transaction").delete().in("account_id", accountIds);
+  }
+
+  const { data: schedules } = await admin
+    .from("billing_schedule")
+    .select("schedule_id")
+    .in("account_id", accountIds);
+
+  if (schedules && schedules.length > 0) {
+    const scheduleIds = schedules.map((s) => s.schedule_id);
+    await admin.from("billing_schedule_installment").delete().in("schedule_id", scheduleIds);
+    await admin.from("billing_schedule").delete().in("account_id", accountIds);
+  }
+
+  await admin.from("ledger_payment").delete().in("account_id", accountIds);
+  await admin.from("ledger_compromise").delete().in("account_id", accountIds);
+  await admin.from("ledger_account_notice").delete().in("account_id", accountIds);
+  await admin.from("account_party").delete().in("account_id", accountIds);
+  await admin.from("ledger_account").delete().in("account_id", accountIds);
+}
+
 export async function hardDeleteTestProperties(propertyIds: string[]) {
   if (propertyIds.length === 0) return;
   const admin = getTestAdminClient();
@@ -56,11 +109,7 @@ export async function hardDeleteTestProperties(propertyIds: string[]) {
   const { data: accounts } = await admin.from("ledger_account").select("account_id").in("property_id", propertyIds);
   if (accounts && accounts.length > 0) {
     const accountIds = accounts.map((a) => a.account_id);
-    await admin.from("ledger_payment").delete().in("account_id", accountIds);
-    await admin.from("ledger_compromise").delete().in("account_id", accountIds);
-    await admin.from("ledger_account_notice").delete().in("account_id", accountIds);
-    await admin.from("account_party").delete().in("account_id", accountIds);
-    await admin.from("ledger_account").delete().in("property_id", propertyIds);
+    await hardDeleteTestLedgerAccounts(accountIds);
   }
   await admin.from("property_lot").delete().in("property_id", propertyIds);
 }
@@ -73,7 +122,10 @@ export async function hardDeleteTestProjectArea(projectAreaId: string) {
   const admin = getTestAdminClient();
   // Clean subdivisions and detached lots before projectArea deletion
   await admin.from("project_area_subdivision").delete().eq("project_area_id", projectAreaId);
-  await admin.from("property_lot").delete().eq("project_area_id", projectAreaId);
+  const { data: lots } = await admin.from("property_lot").select("property_id").eq("project_area_id", projectAreaId);
+  if (lots && lots.length > 0) {
+    await hardDeleteTestProperties(lots.map((l) => l.property_id));
+  }
   await admin.from("project_area").delete().eq("project_area_id", projectAreaId);
 }
 
