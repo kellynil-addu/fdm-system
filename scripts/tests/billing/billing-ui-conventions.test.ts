@@ -45,4 +45,17 @@ describe('Billing UI Conventions & Design System Invariants', () => {
       expect(match, `Found invalid slash-opacity token in ${file}: ${match?.[0]}`).toBeNull();
     }
   });
+
+  it('guarantees billing-payment-modal does not require an unconditional BillingAccountsProvider', () => {
+    const paymentModalPath = path.resolve(
+      process.cwd(),
+      'components/dashboard-billing/billing-payment-modal.tsx'
+    );
+    const content = fs.readFileSync(paymentModalPath, 'utf-8');
+
+    // Must not call useBillingAccounts directly, as it crashes on the standalone account detail route
+    expect(content).not.toMatch(/\buseBillingAccounts\s*\(/);
+    expect(content).toContain('useOptionalBillingAccounts');
+    expect(content).toContain('recordLedgerPayment');
+  });
 });

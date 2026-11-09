@@ -100,7 +100,11 @@ export interface BillingAccountsContextValue {
   canEdit: boolean;
 }
 
-const BillingAccountsContext = createContext<BillingAccountsContextValue | null>(null);
+export const BillingAccountsContext = createContext<BillingAccountsContextValue | null>(null);
+
+export function useOptionalBillingAccounts() {
+  return useContext(BillingAccountsContext);
+}
 
 export function BillingAccountsProvider({
   initialAccounts,

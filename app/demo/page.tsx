@@ -16,14 +16,75 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, ChevronDown, Layers, Receipt, Shield } from "lucide-react";
 
 export default function Page() {
     const [checked, setChecked] = useState(false);
     const [notifChecked, setNotifChecked] = useState(true);
 
     return (
-        <div>
+        <div className="space-y-6 max-w-4xl">
+            {/* Design Concept Labs */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <Link
+                    href="/demo/billing"
+                    className="p-4 rounded-xl border border-primary/40 bg-card hover:bg-muted/30 transition-all flex flex-col justify-between"
+                >
+                    <div>
+                        <div className="flex items-center justify-between mb-1">
+                            <Badge variant="default" className="text-[10px]">Feature 005</Badge>
+                            <Receipt className="h-4 w-4 text-primary" />
+                        </div>
+                        <h3 className="font-bold text-sm text-foreground">Billing Cashier &amp; Waterfall</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Interactive concepts: D1 Split-Pane, D2 Stepper, D3 Compact Accordion.
+                        </p>
+                    </div>
+                    <span className="text-xs font-semibold text-primary flex items-center gap-1 mt-3">
+                        Open Billing Lab <ArrowRight className="h-3 w-3" />
+                    </span>
+                </Link>
+
+                <Link
+                    href="/demo/title-dialog"
+                    className="p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-all flex flex-col justify-between"
+                >
+                    <div>
+                        <div className="flex items-center justify-between mb-1">
+                            <Badge variant="outline" className="text-[10px]">Titles</Badge>
+                            <Shield className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <h3 className="font-bold text-sm text-foreground">Title Dialog Layouts</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Header, rail &amp; timeline variants for the land titles dialog.
+                        </p>
+                    </div>
+                    <span className="text-xs font-semibold text-foreground flex items-center gap-1 mt-3">
+                        Open Title Lab <ArrowRight className="h-3 w-3" />
+                    </span>
+                </Link>
+
+                <Link
+                    href="/demo/calling-cards"
+                    className="p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-all flex flex-col justify-between"
+                >
+                    <div>
+                        <div className="flex items-center justify-between mb-1">
+                            <Badge variant="outline" className="text-[10px]">Calling Cards</Badge>
+                            <Layers className="h-4 w-4 text-muted-foreground" />
+                        </div>
+                        <h3 className="font-bold text-sm text-foreground">Calling Cards Showcase</h3>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            Client and property calling cards in varied contexts.
+                        </p>
+                    </div>
+                    <span className="text-xs font-semibold text-foreground flex items-center gap-1 mt-3">
+                        Open Cards Lab <ArrowRight className="h-3 w-3" />
+                    </span>
+                </Link>
+            </div>
+
             <Card className="w-full min-w-0 max-w-2xl">
                 <CardHeader>
                     <CardTitle size="lg">Shadcn Components</CardTitle>

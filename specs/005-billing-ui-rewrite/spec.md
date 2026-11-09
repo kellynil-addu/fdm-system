@@ -16,6 +16,10 @@
 - Q: Which tab in the right panel should be loaded as the default view when staff opens an account workspace? → A: Option A (Transaction Journal: Defaults to the append-only ledger showing recent payment history, sequence numbers, and receipt records).
 - Q: How should the two-column Account Workspace adapt on tablet and mobile screen widths (under 1024px)? → A: Option A (Responsive vertical stack: Left summary panel collapses into a top summary card with quick actions; tabbed tables take full width below).
 
+### Session 2026-11-09
+
+- Q: Which design architecture should be adopted for the cashier Payment Posting & Waterfall Allocation modal (`/dashboard/billing`) to balance cashier posting speed with centavo allocation integrity? → A: Option B (Guided 3-Step Cashier Wizard: Sequential 3-step progressive modal featuring Step 1: Tender & Official Receipt entry, Step 2: Chronological Waterfall Allocation review against account aging with optional line-item overrides, and Step 3: Receipt confirmation and voucher preview before permanent ledger commit).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Dense Operational Accounts Ledger & Filtering (Priority: P1)
@@ -126,7 +130,7 @@ When an installment buyer exhausts all notice cure periods without payment, staf
   - Penalties, Arrangements & Waivers
   - Historical Notices & Legal / Forfeiture
   - Printable Statement of Account (live print preview)
-- **FR-004**: The system MUST provide an intuitive Payment Posting modal supporting cash, check, and bank transfer tender, automatic waterfall allocation, and optional custom itemized overrides.
+- **FR-004**: The system MUST provide a guided 3-step Payment Posting modal (Step 1: Tender metadata and official receipt details; Step 2: Chronological waterfall allocation review across accrued penalties and overdue installments with strict centavo balance validation and optional line-item overrides; Step 3: Receipt voucher confirmation and print preview before permanent append-only ledger write).
 - **FR-005**: The system MUST enforce non-destructive transaction reversals with mandatory audit remarks; original transaction rows MUST remain visible with explicit reversal indicator badges.
 - **FR-006**: The system MUST display an interactive Post-Dated Check (PDC) portfolio view tracking maturing checks with visual badges for Pending, Cleared, Bounced, and Replaced statuses.
 - **FR-007**: The system MUST feature a dedicated Discrepancy Review Queue tab alerting staff to imported legacy Excel discrepancies and providing a structured audit resolution workflow.
@@ -151,7 +155,7 @@ When an installment buyer exhausts all notice cure periods without payment, staf
 ### Measurable Outcomes
 
 - **SC-001**: Staff can search, filter, and locate any buyer account or lot in under 2 seconds on a portfolio of 500+ accounts.
-- **SC-002**: Recording a standard monthly payment with automatic waterfall allocation takes less than 15 seconds from dashboard click to receipt confirmation.
+- **SC-002**: Recording a standard monthly payment through the guided 3-step cashier wizard takes under 25 seconds from dashboard click to receipt confirmation, ensuring 100% review of chronological installment coverage and zero centavo allocation mismatch.
 - **SC-003**: 100% of displayed monetary values match backend centavo ledger balances with zero centavo discrepancy across all screens.
 - **SC-004**: Generation and print preview of an official Statement of Account completes in under 1 second.
 - **SC-005**: All legacy workbook discrepancies are surfaced in the Review Queue within 1 click from the main billing dashboard, with zero unresolved items lost.

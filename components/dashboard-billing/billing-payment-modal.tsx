@@ -23,8 +23,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from 'sonner';
 import { recordPaymentSchema, type RecordPaymentInput } from '@/lib/validations/billing';
-import { useBillingAccounts } from '@/lib/hooks/use-billing-accounts';
+import { recordLedgerPayment } from '@/lib/actions/billing';
+import { useMutation } from '@/lib/hooks/use-mutation';
+import { useOptionalBillingAccounts } from '@/lib/hooks/use-billing-accounts';
 import type { BillingAccountSummary, PaymentMode } from '@/lib/types/billing';
 
 const CURRENCY = new Intl.NumberFormat('en-PH', {
@@ -46,7 +49,7 @@ export function BillingPaymentModal({
   onOpenChange,
   onSuccess,
 }: BillingPaymentModalProps) {
-  const { recordPayment, isRecordingPayment } = useBillingAccounts();
+  const billingAccounts = useOptionalBillingAccounts();
 
   const today = new Date().toISOString().split('T')[0];
 
@@ -62,6 +65,7 @@ export function BillingPaymentModal({
     handleSubmit,
     setValue,
     watch,
+    reset,
     formState: { errors },
   } = useForm<RecordPaymentInput>({
     resolver: zodResolver(recordPaymentSchema),
@@ -78,6 +82,27 @@ export function BillingPaymentModal({
     },
   });
 
+  const { execute, state } = useMutation(recordLedgerPayment, {
+    onSuccess: async (data) => {
+      toast.success(`Payment recorded under OR# ${data.or_number}`);
+      reset();
+      onOpenChange(false);
+      if (billingAccounts) {
+        billingAccounts.setActiveModal(null);
+        const targetAccountId = data.account_id ?? account.account_id;
+        if (targetAccountId) {
+          await billingAccounts.refreshAccount(targetAccountId);
+        }
+      }
+      onSuccess?.();
+    },
+    onError: (err) => {
+      toast.error(err || 'Failed to record payment');
+    },
+  });
+
+  const isRecordingPayment = state.status === 'pending';
+
   const principal = watch('principal_amount') || 0;
   const penalty = watch('penalty_amount') || 0;
   const titling = watch('titling_fee_amount') || 0;
@@ -85,8 +110,7 @@ export function BillingPaymentModal({
   const total = Number(principal) + Number(penalty) + Number(titling) + Number(storage);
 
   const onSubmit = async (data: RecordPaymentInput) => {
-    await recordPayment(data);
-    onSuccess?.();
+    await execute(data);
   };
 
   const clientName = account.client?.full_name ?? 'Buyer';
