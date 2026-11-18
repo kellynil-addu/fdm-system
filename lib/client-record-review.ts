@@ -4,7 +4,8 @@ export interface ReviewableClient {
   client_id: string;
   full_name: string;
   contact_info: { value: string }[];
-  client_document: { document_type: DocType }[];
+  /** Client documents, read from `file_attachment` as `file_category`. */
+  documents: { file_category: string }[];
 }
 
 export interface ClientFollowUp {
@@ -16,7 +17,7 @@ export interface ClientFollowUp {
 
 /** Presence checks only: an existing contact is not proof it is current. */
 export function reviewClientRecord(client: ReviewableClient): ClientFollowUp {
-  const present = new Set(client.client_document.map(doc => doc.document_type));
+  const present = new Set(client.documents.map(doc => doc.file_category as DocType));
   return {
     clientId: client.client_id,
     name: client.full_name,

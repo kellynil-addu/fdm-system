@@ -3,17 +3,16 @@
 import { useRef, useState } from 'react';
 import {
   CheckCircle2,
-  Coins,
   Download,
   ExternalLink,
   Loader2,
-  Mail,
   MoreVertical,
   Paperclip,
   RotateCcw,
   Send,
   ShieldAlert,
   Upload,
+  Vault,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -43,16 +42,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { formatActivityTime } from '@/lib/format-activity-time';
+import { SectionCard } from '@/components/ui/section-card';
+import { formatMediumDate } from '@/lib/format-date';
 import { useLandTitles, lotRefLabel } from '@/lib/hooks/use-land-titles';
+import { useOcrQueue } from '@/lib/hooks/use-ocr-queue';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { TitleReleaseDialog } from './title-release-dialog';
 import { generateNoticePdf } from '@/lib/reports/pdf-notice-letter';
 import { calculateStorageFee } from '@/lib/storage-fee';
+import { getReleasedDate, noticeOrdinal } from '@/lib/title-progress';
 import { DOCUMENT_FILE_ACCEPT } from '@/lib/validations/document';
 import type { LandTitle, LandTitleNotice, TitleStatus } from '@/lib/types/title';
-
-const DATE_FORMAT = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' });
 
 interface TitleNoticesTabProps {
   title: LandTitle;
@@ -83,6 +83,7 @@ export function TitleNoticesTab({
     deleteNoticeRts,
     canEdit,
   } = useLandTitles();
+  const { enqueueFile } = useOcrQueue();
 
   const statusFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -98,13 +99,8 @@ export function TitleNoticesTab({
 
   const storageFee = calculateStorageFee(title);
   const isReleased = title.status === 'Released';
-  const releasedEntry = title.history?.slice().reverse().find((h) => h.status === 'Released');
-  const releasedDate = releasedEntry
-    ? new Date(releasedEntry.changed_at)
-    : title.updated_at
-    ? new Date(title.updated_at)
-    : null;
-  const releasedDateStr = releasedDate ? DATE_FORMAT.format(releasedDate) : '';
+  const releasedDate = getReleasedDate(title);
+  const releasedDateStr = releasedDate ? formatMediumDate(releasedDate) : '';
 
   const canEditNotices = canEdit && !isReleased;
 
@@ -113,15 +109,7 @@ export function TitleNoticesTab({
   const propertyLocation = title.property?.location ?? '';
 
   function getNoticeTitle(num: number): string {
-    if (num === 1) return '1st Notice';
-    if (num === 2) return '2nd Notice';
-    return 'Final Notice';
-  }
-
-  function formatStageTime(timestamp?: string | null): string | null {
-    if (!timestamp) return null;
-    const d = new Date(timestamp);
-    return Number.isNaN(d.getTime()) ? null : formatActivityTime(d);
+    return `${noticeOrdinal(num)} Notice`;
   }
 
   async function handleGenerateNotice(noticeNumber: 1 | 2 | 3) {
@@ -177,20 +165,21 @@ export function TitleNoticesTab({
   const { state: resolveState, execute: runResolveNotice } = useMutation(
     async (noticeNumber: 1 | 2 | 3) => {
       if (!statusFileInput) return;
+      const fileToUpload = statusFileInput;
       let updated: LandTitleNotice;
       if (resolveNotice) {
         updated = await resolveNotice(
           title.title_id,
           noticeNumber,
           noticeStatusChoice,
-          statusFileInput,
+          fileToUpload,
           statusNotesInput.trim() || null
         );
       } else {
         updated = await uploadNoticeRts(
           title.title_id,
           noticeNumber,
-          statusFileInput,
+          fileToUpload,
           statusNotesInput.trim() || null
         );
       }
@@ -200,6 +189,18 @@ export function TitleNoticesTab({
       ]);
       setStatusFileInput(null);
       setStatusNotesInput('');
+
+      // Enqueue notice attachment into background OCR worker for search indexing.
+      if (updated.rts_attachment_id) {
+        enqueueFile({
+          attachmentId: updated.rts_attachment_id,
+          file: fileToUpload,
+          fileName: fileToUpload.name,
+          entityType: 'land_title_notice',
+          keywords: [`Notice ${noticeNumber} RTS`, title.client?.full_name].filter(Boolean).join(' '),
+        });
+      }
+
       return updated;
     },
     {
@@ -271,377 +272,306 @@ export function TitleNoticesTab({
     <div className="space-y-4">
       {/* Release Status Banner */}
       {isReleased && (
-        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-row-hover px-3.5 py-2.5 text-sm text-foreground">
+        <div className="flex items-center gap-2.5 rounded-lg border border-border bg-[color-mix(in_srgb,var(--success)_8%,var(--card))] px-3.5 py-2.5 text-sm text-foreground">
           <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
           <span>Title released{releasedDateStr ? ` on ${releasedDateStr}` : ''}.</span>
         </div>
       )}
 
-      <div className="space-y-4">
-        {/* Ready for Claim Header & Turnover Release Button */}
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5 bg-card">
-          <div className="flex items-center gap-2">
-            <Mail className="h-4 w-4 text-primary shrink-0" />
-            <span className="text-sm font-semibold text-foreground">Client Outreach &amp; Notice Letters</span>
+      {/* Top-Docked Primary Milestone Bar: Vault Status & Record Release CTA */}
+      {title.status === 'Ready for Claim' && (
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-1.5 text-primary font-medium text-xs">
+              <Vault className="h-4 w-4" />
+              <span>Title Ready in Vault</span>
+            </div>
+            <Badge variant="success" shape="pill" dot className="text-xs">
+              Eligible for Release
+            </Badge>
+
+            {/* Inline Storage Fee Summary Chip */}
+            {storageFee && storageFee.isApplicable && (
+              storageFee.isOverdue ? (
+                <Badge variant="warning" shape="pill" dot className="text-xs">
+                  Storage Overdue: ₱{storageFee.accruedFee.toLocaleString('en-PH', { minimumFractionDigits: 2 })} ({storageFee.monthsOverdue} mo)
+                </Badge>
+              ) : (
+                <Badge variant="info" shape="pill" dot className="text-xs">
+                  Grace Period Active {storageFee.daysRemainingInGrace !== null ? `(${storageFee.daysRemainingInGrace}d remaining)` : ''}
+                </Badge>
+              )
+            )}
           </div>
-          {title.status === 'Ready for Claim' && canEditNotices && (
+
+          {canEditNotices && (
             <Button
               size="sm"
               disabled={isUpdatingStatus}
               onClick={() => setConfirmReleaseOpen(true)}
-              className="text-sm gap-2 h-9 px-4 shrink-0"
+              className="text-xs gap-1.5 h-8 px-3.5 font-medium shrink-0 self-end sm:self-center"
             >
-              <CheckCircle2 className="h-4 w-4" />
+              <CheckCircle2 className="h-3.5 w-3.5" />
               Record Release to Buyer
             </Button>
           )}
         </div>
+      )}
 
-        {/* Storage Fee Assessment */}
-        {storageFee && storageFee.isApplicable && (
-          <div
-            className={`rounded-lg border p-3.5 space-y-2 ${
-              storageFee.isOverdue
-                ? 'border-warning bg-[color-mix(in_srgb,var(--warning)_8%,var(--card))]'
-                : 'border-border bg-card'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <Coins className={`h-4 w-4 ${storageFee.isOverdue ? 'text-warning' : 'text-primary'}`} />
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Storage Fee
-                </span>
-              </div>
-              {storageFee.isOverdue ? (
-                <Badge variant="warning" shape="pill" dot className="text-xs">
-                  {storageFee.monthsOverdue} {storageFee.monthsOverdue === 1 ? 'month' : 'months'} overdue
-                </Badge>
-              ) : (
-                <Badge variant="info" shape="pill" dot className="text-xs">
-                  Within 1-year grace period
-                </Badge>
-              )}
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 pt-0.5">
-              <div>
-                <p className="text-base font-semibold text-foreground">
-                  {storageFee.isOverdue
-                    ? `₱${storageFee.accruedFee.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
-                    : '₱0.00'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {storageFee.isOverdue
-                    ? `1-year grace period ended on ${storageFee.gracePeriodEndDate ? DATE_FORMAT.format(storageFee.gracePeriodEndDate) : 'N/A'}. Rate: ₱540.00/month.`
-                    : storageFee.gracePeriodEndDate
-                    ? `Grace period ends on ${DATE_FORMAT.format(storageFee.gracePeriodEndDate)} (${storageFee.daysRemainingInGrace} days remaining).`
-                    : '1-year grace period active.'}
-                </p>
-              </div>
-              {storageFee.readyForClaimDate && (
-                <div className="text-[11px] text-muted-foreground shrink-0 sm:text-right">
-                  Ready since {DATE_FORMAT.format(storageFee.readyForClaimDate)}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Notices Stack */}
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between pb-0.5">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-              Notice Escalation
-              {isLoadingNotices && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-            </h4>
+      {/* Notices Escalation Section */}
+      <SectionCard className="space-y-3">
+        <div className="flex items-center justify-between pb-2 border-b border-border">
+          <div className="flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-foreground">Formal Notice Escalation</h4>
             <span className="text-xs text-muted-foreground font-medium">
+              {isLoadingNotices && <Loader2 className="h-3 w-3 animate-spin inline mr-1" />}
               {sortedNotices.length === 0
-                ? 'Not started'
+                ? 'No notices issued'
                 : ongoingNotice
-                ? `Notice ${ongoingNotice.notice_number} ongoing`
-                : latestNoticeNumber === 3
-                ? 'Cycle complete'
-                : `Notice ${latestNoticeNumber} resolved`}
+                  ? `Notice ${ongoingNotice.notice_number} ongoing`
+                  : latestNoticeNumber === 3
+                    ? '3 of 3 notices complete'
+                    : `${latestNoticeNumber} of 3 resolved`}
             </span>
           </div>
 
-          {/* 1. Resolved notices rendered chronologically */}
-          {resolvedNotices.map((n) => {
-            const isReceived = n.status === 'received';
-            const hasSubsequentNotice = sortedNotices.some(
-              (other) => other.notice_number > n.notice_number
-            );
-            const nthLabel = n.notice_number === 1 ? '1st' : n.notice_number === 2 ? '2nd' : 'Final';
-            const startedStr = formatStageTime(n.generated_at);
-            const resolvedStr = formatStageTime(n.status_updated_at ?? n.updated_at);
-            const noteText = n.tracking_number ?? n.rts_reason;
-
-            return (
-              <div
-                key={n.notice_id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border bg-card shadow-2xs"
-              >
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-foreground">
-                      {getNoticeTitle(n.notice_number)}
-                    </span>
-                    {isReceived ? (
-                      <Badge variant="success" shape="pill" dot className="text-xs">
-                        Received
-                      </Badge>
-                    ) : (
-                      <Badge variant="warning" shape="pill" dot className="text-xs">
-                        Returned to Sender
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <span>Started {startedStr ?? DATE_FORMAT.format(new Date(n.generated_at))}</span>
-                    <span>•</span>
-                    <span className={isReceived ? 'text-success font-medium' : 'text-warning font-medium'}>
-                      Marked {isReceived ? 'Received' : 'RTS'} {resolvedStr ?? DATE_FORMAT.format(new Date(n.status_updated_at ?? n.updated_at))}
-                    </span>
-                    {noteText && (
-                      <>
-                        <span>•</span>
-                        <span className="truncate max-w-xs text-foreground font-mono">
-                          {noteText}
-                        </span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-                  {n.rts_attachment_id ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="text-sm gap-2 h-9 px-3.5"
-                      onClick={() => void handleViewNoticeProof(n.rts_attachment_id!)}
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      View {isReceived ? 'Waybill' : 'RTS Scan'}
-                    </Button>
-                  ) : null}
-
-                  {canEditNotices && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-9 w-9 p-0">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="text-xs">
-                        <DropdownMenuItem
-                          disabled={hasSubsequentNotice}
-                          onClick={() => setConfirmUndoNotice(n.notice_number as 1 | 2 | 3)}
-                          className="gap-2 cursor-pointer"
-                        >
-                          <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
-                          Undo this status
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={() => void handleGenerateNotice(n.notice_number as 1 | 2 | 3)}
-                          className="gap-2 cursor-pointer"
-                        >
-                          <Download className="h-3.5 w-3.5 text-muted-foreground" />
-                          Generate {nthLabel} notice again
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-
-          {/* 2. Ongoing notice */}
-          {ongoingNotice && (
-            <>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border bg-card shadow-2xs">
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-foreground">
-                      {getNoticeTitle(ongoingNotice.notice_number)}
-                    </span>
-                    <Badge variant="info" shape="pill" dot className="text-xs">
-                      Ongoing
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Started {formatStageTime(ongoingNotice.generated_at) ?? DATE_FORMAT.format(new Date(ongoingNotice.generated_at))}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                  <Button
-                    size="sm"
-                    className="text-sm gap-2 h-9 px-4"
-                    disabled={isGeneratingNotice === ongoingNotice.notice_number}
-                    onClick={() => void handleGenerateNotice(ongoingNotice.notice_number as 1 | 2 | 3)}
-                  >
-                    {isGeneratingNotice === ongoingNotice.notice_number ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Send className="h-3.5 w-3.5" />
-                    )}
-                    Generate PDF
-                  </Button>
-                </div>
-              </div>
-
-              {/* Status update to ongoing notice */}
-              {canEditNotices && (
-                <div className="rounded-lg border border-dashed border-border p-3 bg-card flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 shadow-2xs">
-                  <div className="w-full sm:w-48 shrink-0">
-                    <Select
-                      value={noticeStatusChoice}
-                      onValueChange={(val) => {
-                        setNoticeStatusChoice(val as 'received' | 'returned_to_sender');
-                        setStatusFileInput(null);
-                      }}
-                    >
-                      <SelectTrigger className="h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="received">Received (Waybill)</SelectItem>
-                        <SelectItem value="returned_to_sender">Returned to Sender</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <input
-                    ref={statusFileInputRef}
-                    type="file"
-                    accept={DOCUMENT_FILE_ACCEPT}
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] ?? null;
-                      setStatusFileInput(file);
-                      e.target.value = '';
-                    }}
-                  />
-
-                  {!statusFileInput ? (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => statusFileInputRef.current?.click()}
-                      className="h-9 text-sm gap-2 px-3.5 shrink-0"
-                    >
-                      <Upload className="h-3.5 w-3.5" />
-                      Upload {noticeStatusChoice === 'received' ? 'Waybill' : 'RTS Scan'}
-                    </Button>
-                  ) : (
-                    <div className="flex items-center gap-1.5 h-9 px-2.5 rounded-md border border-border bg-muted text-xs shrink-0 max-w-[200px]">
-                      <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
-                      <span className="truncate text-foreground font-mono text-xs" title={statusFileInput.name}>
-                        {statusFileInput.name}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setStatusFileInput(null)}
-                        className="text-muted-foreground hover:text-foreground p-0.5 rounded-xs"
-                        title="Remove file"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </div>
-                  )}
-
-                  <Input
-                    placeholder={
-                      noticeStatusChoice === 'received'
-                        ? 'Waybill # / Notes (Optional)'
-                        : 'RTS Reason (Optional)'
-                    }
-                    value={statusNotesInput}
-                    onChange={(e) => setStatusNotesInput(e.target.value)}
-                    className="h-9 text-sm flex-1 min-w-[140px]"
-                  />
-
-                  <Button
-                    size="sm"
-                    disabled={!statusFileInput || isResolvingNotice}
-                    onClick={() => void runResolveNotice(ongoingNotice.notice_number as 1 | 2 | 3)}
-                    className="h-9 text-sm gap-2 px-4 shrink-0"
-                  >
-                    {isResolvingNotice ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                    )}
-                    Save Status
-                  </Button>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* 3. If there is no ongoing notice */}
-          {!ongoingNotice && (
-            <>
-              {sortedNotices.length === 0 ? (
-                isReleased ? (
-                  <div className="rounded-lg border border-border p-3.5 bg-row-hover text-xs text-muted-foreground">
-                    No notice letters dispatched. Title was claimed directly.
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-border p-3.5 bg-card flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">Start 1st Notice</span>
-                      <Badge variant="muted" shape="pill" className="text-xs">
-                        Pending
-                      </Badge>
-                    </div>
-                    {canEditNotices && (
-                      <Button
-                        size="sm"
-                        className="text-sm gap-2 h-9 px-4 shrink-0"
-                        onClick={() => setConfirmStartNotice(1)}
-                      >
-                        <Send className="h-3.5 w-3.5" />
-                        Start 1st Notice
-                      </Button>
-                    )}
-                  </div>
-                )
-              ) : latestNoticeNumber < 3 ? (
-                canEditNotices && (
-                  <div className="rounded-lg border border-dashed border-border p-3.5 bg-card flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-foreground">
-                        Start {nextNoticeNumber === 2 ? '2nd' : 'Final'} Notice
-                      </span>
-                      <Badge variant="muted" shape="pill" className="text-xs">
-                        Pending
-                      </Badge>
-                    </div>
-                    <Button
-                      size="sm"
-                      className="text-sm gap-2 h-9 px-4 shrink-0"
-                      onClick={() => setConfirmStartNotice(nextNoticeNumber)}
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                      Start {nextNoticeNumber === 2 ? '2nd' : 'Final'} Notice
-                    </Button>
-                  </div>
-                )
-              ) : (
-                <div className="rounded-lg border border-border p-3.5 bg-[color-mix(in_srgb,var(--card)_70%,var(--background))] flex items-center gap-2.5 text-sm text-muted-foreground">
-                  <ShieldAlert className="h-4 w-4 text-warning shrink-0" />
-                  <span>Notice cycle concluded. Title packet queued for legal counsel referral.</span>
-                </div>
-              )}
-            </>
+          {!ongoingNotice && latestNoticeNumber < 3 && canEditNotices && (
+            <Button
+              size="sm"
+              variant="quiet"
+              className="text-xs gap-1.5 h-7 px-2.5 font-medium"
+              onClick={() => setConfirmStartNotice(nextNoticeNumber)}
+            >
+              <Send className="h-3 w-3" />
+              Start {nextNoticeNumber === 1 ? '1st' : nextNoticeNumber === 2 ? '2nd' : 'Final'} Notice
+            </Button>
           )}
         </div>
-      </div>
+
+        {/* Chronological Resolved Notices Audit Log */}
+        {resolvedNotices.length > 0 && (
+          <div className="divide-y divide-border rounded-lg border border-border bg-card">
+            {resolvedNotices.map((n) => {
+              const isReceived = n.status === 'received';
+              const hasSubsequentNotice = sortedNotices.some(
+                (other) => other.notice_number > n.notice_number
+              );
+              const nthLabel = n.notice_number === 1 ? '1st' : n.notice_number === 2 ? '2nd' : 'Final';
+              const resolvedDate = n.status_updated_at ?? n.updated_at;
+              const noteText = n.tracking_number ?? n.rts_reason;
+
+              return (
+                <div
+                  key={n.notice_id}
+                  className="flex items-center justify-between gap-3 px-3 py-2 text-xs hover:bg-row-hover transition-colors"
+                >
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-foreground">
+                        {getNoticeTitle(n.notice_number)}
+                      </span>
+                      {isReceived ? (
+                        <Badge variant="success" shape="pill" dot className="text-[10px] py-0">
+                          Received
+                        </Badge>
+                      ) : (
+                        <Badge variant="warning" shape="pill" dot className="text-[10px] py-0">
+                          Returned to Sender
+                        </Badge>
+                      )}
+                      {resolvedDate && (
+                        <span className="text-muted-foreground text-[11px]">
+                          • {formatMediumDate(resolvedDate)}
+                        </span>
+                      )}
+                    </div>
+                    {noteText && (
+                      <p className="text-muted-foreground font-mono text-[11px] truncate max-w-sm">
+                        {noteText}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {n.rts_attachment_id ? (
+                      <Button
+                        size="sm"
+                        variant="quiet"
+                        className="text-xs gap-1 h-7 px-2"
+                        onClick={() => void handleViewNoticeProof(n.rts_attachment_id!)}
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Proof
+                      </Button>
+                    ) : null}
+
+                    {canEditNotices && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="quiet" size="icon" className="h-7 w-7 p-0">
+                            <MoreVertical className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="text-xs">
+                          <DropdownMenuItem
+                            disabled={hasSubsequentNotice}
+                            onClick={() => setConfirmUndoNotice(n.notice_number as 1 | 2 | 3)}
+                            className="gap-2 cursor-pointer"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
+                            Undo status
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => void handleGenerateNotice(n.notice_number as 1 | 2 | 3)}
+                            className="gap-2 cursor-pointer"
+                          >
+                            <Download className="h-3.5 w-3.5 text-muted-foreground" />
+                            Re-download {nthLabel} notice PDF
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Ongoing Notice Resolution Panel */}
+        {ongoingNotice && (
+          <div className="rounded-lg border border-border bg-card p-3 space-y-2.5">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-foreground">
+                  {getNoticeTitle(ongoingNotice.notice_number)} Dispatched
+                </span>
+                <Badge variant="info" shape="pill" dot className="text-[10px] py-0">Ongoing</Badge>
+                {ongoingNotice.generated_at && (
+                  <span className="text-xs text-muted-foreground">
+                    • {formatMediumDate(ongoingNotice.generated_at)}
+                  </span>
+                )}
+              </div>
+              <Button
+                size="sm"
+                variant="quiet"
+                className="text-xs gap-1 h-7 px-2 shrink-0"
+                disabled={isGeneratingNotice === ongoingNotice.notice_number}
+                onClick={() => void handleGenerateNotice(ongoingNotice.notice_number as 1 | 2 | 3)}
+              >
+                {isGeneratingNotice === ongoingNotice.notice_number ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Download className="h-3 w-3" />
+                )}
+                Download PDF
+              </Button>
+            </div>
+
+            {canEditNotices && (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center pt-0.5">
+                <div className="w-full sm:w-44 shrink-0">
+                  <Select
+                    value={noticeStatusChoice}
+                    onValueChange={(val) => {
+                      setNoticeStatusChoice(val as 'received' | 'returned_to_sender');
+                      setStatusFileInput(null);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="received">Received (Waybill)</SelectItem>
+                      <SelectItem value="returned_to_sender">Returned to Sender</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <input
+                  ref={statusFileInputRef}
+                  type="file"
+                  accept={DOCUMENT_FILE_ACCEPT}
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] ?? null;
+                    setStatusFileInput(file);
+                    e.target.value = '';
+                  }}
+                />
+
+                {!statusFileInput ? (
+                  <Button
+                    type="button"
+                    variant="quiet"
+                    size="sm"
+                    onClick={() => statusFileInputRef.current?.click()}
+                    className="h-8 text-xs gap-1 px-2.5 shrink-0 border border-border"
+                  >
+                    <Upload className="h-3 w-3" />
+                    Upload {noticeStatusChoice === 'received' ? 'Waybill' : 'RTS Scan'}
+                  </Button>
+                ) : (
+                  <div className="flex items-center gap-1.5 h-8 px-2 rounded-md border border-border bg-muted text-xs shrink-0 max-w-[180px]">
+                    <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="truncate text-foreground font-mono text-[11px]" title={statusFileInput.name}>
+                      {statusFileInput.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setStatusFileInput(null)}
+                      className="text-muted-foreground hover:text-foreground p-0.5 rounded-xs"
+                      title="Remove file"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )}
+
+                <Input
+                  placeholder={
+                    noticeStatusChoice === 'received'
+                      ? 'Waybill # / remarks'
+                      : 'RTS reason / remarks'
+                  }
+                  value={statusNotesInput}
+                  onChange={(e) => setStatusNotesInput(e.target.value)}
+                  className="h-8 text-xs flex-1 min-w-[120px]"
+                />
+
+                <Button
+                  size="sm"
+                  disabled={!statusFileInput || isResolvingNotice}
+                  onClick={() => void runResolveNotice(ongoingNotice.notice_number as 1 | 2 | 3)}
+                  className="h-8 text-xs gap-1.5 px-3 shrink-0 font-medium"
+                >
+                  {isResolvingNotice ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-3 w-3" />
+                  )}
+                  Save Status
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Empty state when no notices and cycle concluded */}
+        {sortedNotices.length === 0 && !ongoingNotice && (
+          <p className="text-xs text-muted-foreground italic py-2 text-center">
+            {isReleased ? 'Title was claimed directly without formal notice escalation.' : 'No notices dispatched yet.'}
+          </p>
+        )}
+
+        {latestNoticeNumber === 3 && !ongoingNotice && (
+          <div className="flex items-center gap-2 p-2.5 rounded-md border border-border bg-muted/30 text-xs text-muted-foreground">
+            <ShieldAlert className="h-4 w-4 shrink-0 text-warning" />
+            <span>Notice cycle complete (Final Demand issued).</span>
+          </div>
+        )}
+      </SectionCard>
 
       {/* Dialog to Record Release to Buyer */}
       <TitleReleaseDialog
@@ -668,9 +598,7 @@ export function TitleNoticesTab({
               Start {confirmStartNotice === 1 ? '1st' : confirmStartNotice === 2 ? '2nd' : 'Final Demand'} Notice?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
-              This will mark the title claim with the{' '}
-              {confirmStartNotice === 1 ? 'first' : confirmStartNotice === 2 ? 'second' : 'final demand'}{' '}
-              notice and start the outreach tracking cycle. Are you sure you want to proceed?
+              This will record the {confirmStartNotice === 1 ? 'first' : confirmStartNotice === 2 ? 'second' : 'final demand'} notice and begin courier tracking.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -702,7 +630,7 @@ export function TitleNoticesTab({
           <AlertDialogHeader>
             <AlertDialogTitle>Undo Notice {confirmUndoNotice} Status?</AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
-              This will revert Notice {confirmUndoNotice} status back to Ongoing and remove the uploaded proof document. Are you sure you want to proceed?
+              This will revert Notice {confirmUndoNotice} status back to Ongoing and remove the uploaded proof document.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

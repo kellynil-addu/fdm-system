@@ -12,6 +12,7 @@ import {
   updateContactInfo,
   deleteContactInfo,
   createClientDocument,
+  updateClientDocumentLabel,
   deleteClientDocument,
   createClientLog,
   getClientLogs,
@@ -232,6 +233,73 @@ describe("Client Management Actions", () => {
 
     const afterDelete = await getClientById(client.client_id);
     expect(afterDelete.client_document.some((d) => d.document_id === doc.document_id)).toBe(false);
+  });
+
+  it("supports custom document types with user-defined names", async () => {
+    const client = unwrap(await createClient({ full_name: faker.person.fullName() }));
+    testClientIds.push(client.client_id);
+
+    const docName = faker.system.commonFileName("pdf");
+    const customType = "Barangay Clearance Certificate";
+    const doc = await createClientDocument(client.client_id, {
+      document_type: customType,
+      file_path: `/uploads/clients/${docName}`,
+    });
+
+    expect(doc.document_id).toBeDefined();
+    expect(doc.document_type).toBe(customType);
+
+    const withDoc = await getClientById(client.client_id);
+    const found = withDoc.client_document.find((d) => d.document_id === doc.document_id);
+    expect(found).toBeDefined();
+    expect(found?.document_type).toBe(customType);
+
+    unwrap(await deleteClientDocument(doc.document_id));
+  });
+
+  it("updateClientDocumentLabel sets and clears a document label", async () => {
+    const client = unwrap(await createClient({ full_name: faker.person.fullName() }));
+    testClientIds.push(client.client_id);
+
+    const doc = await createClientDocument(client.client_id, {
+      document_type: "Valid ID",
+      file_path: `/uploads/clients/${faker.system.commonFileName("pdf")}`,
+    });
+    expect(doc.label).toBeNull();
+
+    const labeled = unwrap(await updateClientDocumentLabel(doc.document_id, "Driver's License"));
+    expect(labeled.label).toBe("Driver's License");
+
+    const loaded = await getClientById(client.client_id);
+    expect(loaded.client_document.find((d) => d.document_id === doc.document_id)?.label).toBe(
+      "Driver's License"
+    );
+
+    const cleared = unwrap(await updateClientDocumentLabel(doc.document_id, "   "));
+    expect(cleared.label).toBeNull();
+  });
+
+  it("enforces document placement: personal allows only Valid ID and custom types, property requires property_id", async () => {
+    const client = unwrap(await createClient({ full_name: faker.person.fullName() }));
+    testClientIds.push(client.client_id);
+
+    // Property document type under personal (no property_id) must be rejected
+    await expect(
+      createClientDocument(client.client_id, {
+        document_type: "Contract",
+        file_path: "/uploads/clients/contract.pdf",
+      })
+    ).rejects.toThrow(/assigned to a property folder/i);
+
+    // Valid ID with a property_id must be rejected
+    const dummyLotId = faker.string.uuid();
+    await expect(
+      createClientDocument(client.client_id, {
+        document_type: "Valid ID",
+        file_path: "/uploads/clients/id.pdf",
+        property_id: dummyLotId,
+      })
+    ).rejects.toThrow(/under personal documents/i);
   });
 
   it("createClientLog and getClientLogs record and retrieve client audit entries", async () => {

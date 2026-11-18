@@ -17,18 +17,20 @@ import {
   Loader2,
   AlertTriangle,
   Info,
-  DollarSign,
   Pencil,
+  PhilippinePeso,
 } from 'lucide-react';
+import { DOC_TYPE_LABEL, type DocType } from '@/lib/types/client';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import {
   getPropertyLotById,
   createPropertyLot,
-  assignPropertyParties,
   assignPropertyFullyPaid,
 } from '@/lib/actions/properties';
-import { getSites, getSiteWithLots } from '@/lib/actions/sites';
+import { createBillingLedger } from '@/lib/actions/billing';
+import { formatCurrency } from '@/lib/billing/ledger-engine';
+import { getProjectAreas, getProjectAreaWithLots } from '@/lib/actions/project-areas';
 import { getClientRequirements, formatMissingRequirements } from '@/lib/utils/client-requirements';
 import { PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
 import {
@@ -37,7 +39,7 @@ import {
   type SelectedLotDetails,
 } from './block-lot-popup';
 import { useClientDetail } from '@/lib/hooks/use-client-detail';
-import type { Site, SiteWithLots } from '@/lib/types/property';
+import type { ProjectArea, ProjectAreaWithLots } from '@/lib/types/property';
 
 const PESO = new Intl.NumberFormat('en-PH', {
   style: 'currency',
@@ -82,17 +84,19 @@ const STAGE_OPTIONS: StageOption[] = [
 interface PropertyAssignmentWizardProps {
   preSelectedPropertyId?: string;
   onSuccess?: () => void;
+  onNavigateToDocuments?: (docType?: DocType) => void;
 }
 
 export function PropertyAssignmentWizard({
   preSelectedPropertyId,
   onSuccess,
+  onNavigateToDocuments,
 }: PropertyAssignmentWizardProps) {
   const { client } = useClientDetail();
   const router = useRouter();
-  const [selectedSiteId, setSelectedSiteId] = useState<string>('');
-  const [siteData, setSiteData] = useState<SiteWithLots | null>(null);
-  const [isLoadingSite, setIsLoadingSite] = useState(false);
+  const [selectedProjectAreaId, setSelectedProjectAreaId] = useState<string>('');
+  const [projectAreaData, setProjectAreaData] = useState<ProjectAreaWithLots | null>(null);
+  const [isLoadingProjectArea, setIsLoadingProjectArea] = useState(false);
 
   // Inline Block, Lot, Area & Price state
   const [blockInput, setBlockInput] = useState<string>('');
@@ -105,66 +109,90 @@ export function PropertyAssignmentWizard({
   const [selectedStage, setSelectedStage] = useState<AssignmentStage>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Account Settlement stage state
+  // Account Settlement stage state (Contract Ledger)
   const [totalContractPrice, setTotalContractPrice] = useState<string>('');
   const [isEditingPrice, setIsEditingPrice] = useState(false);
+  const [downpayment, setDownpayment] = useState<string>('0');
+  const [termMonths, setTermMonths] = useState<number>(36);
+  const [firstDueDate, setFirstDueDate] = useState<string>(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() + 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}-25`;
+  });
+  const [dueDay, setDueDay] = useState<number>(25);
+  const [penaltyRate, setPenaltyRate] = useState<number>(3.5);
+
+  const numericTcp = parseFloat(totalContractPrice) || 0;
+  const numericDp = parseFloat(downpayment) || 0;
+  const financedPrincipal = Math.max(0, numericTcp - numericDp);
+  const computedMonthly = termMonths > 0 ? +(financedPrincipal / termMonths).toFixed(2) : 0;
+
+  const handleFirstDueDateChange = (dateVal: string) => {
+    setFirstDueDate(dateVal);
+    const day = Number(dateVal.split('-')[2]);
+    if (day && day >= 1 && day <= 31) {
+      setDueDay(day);
+    }
+  };
 
   // For Release stage state
   const [titleNumber, setTitleNumber] = useState<string>('');
   const [isLegacyTransferred, setIsLegacyTransferred] = useState<boolean>(false);
 
-  const [sites, setSites] = useState<Site[]>([]);
+  const [projectAreas, setProjectAreas] = useState<ProjectArea[]>([]);
   const [isLoadingPreSelected, setIsLoadingPreSelected] = useState(false);
 
   const requirements = getClientRequirements(client, client.client_document);
 
-  const siteOptions = useMemo(
+  const projectAreaOptions = useMemo(
     () =>
-      sites.map((site) => ({
-        value: site.site_id,
-        label: site.name,
-        description: site.description ?? undefined,
+      projectAreas.map((projectArea) => ({
+        value: projectArea.project_area_id,
+        label: projectArea.name,
+        description: projectArea.description ?? undefined,
       })),
-    [sites]
+    [projectAreas]
   );
 
-  // Load sites on mount
+  // Load projectAreas on mount
   useEffect(() => {
-    getSites()
+    getProjectAreas()
       .then((data) => {
-        setSites(data);
-        if (data.length === 1 && !selectedSiteId) {
-          setSelectedSiteId(data[0].site_id);
+        setProjectAreas(data);
+        if (data.length === 1 && !selectedProjectAreaId) {
+          setSelectedProjectAreaId(data[0].project_area_id);
         }
       })
-      .catch((err) => console.error('Failed to load sites:', err));
-  }, [selectedSiteId]);
+      .catch((err) => console.error('Failed to load project areas:', err));
+  }, [selectedProjectAreaId]);
 
-  // Load site data when site selection changes
+  // Load project area data when the project area selection changes
   useEffect(() => {
-    if (!selectedSiteId) {
-      setSiteData(null);
+    if (!selectedProjectAreaId) {
+      setProjectAreaData(null);
       return;
     }
 
     let isMounted = true;
-    setIsLoadingSite(true);
-    getSiteWithLots(selectedSiteId)
+    setIsLoadingProjectArea(true);
+    getProjectAreaWithLots(selectedProjectAreaId)
       .then((data) => {
-        if (isMounted) setSiteData(data);
+        if (isMounted) setProjectAreaData(data);
       })
       .catch((err) => {
-        console.error('Failed to load site details:', err);
-        if (isMounted) setSiteData(null);
+        console.error('Failed to load project area details:', err);
+        if (isMounted) setProjectAreaData(null);
       })
       .finally(() => {
-        if (isMounted) setIsLoadingSite(false);
+        if (isMounted) setIsLoadingProjectArea(false);
       });
 
     return () => {
       isMounted = false;
     };
-  }, [selectedSiteId]);
+  }, [selectedProjectAreaId]);
 
   // Pre-load lot if passed via query params (e.g. from subdivision map)
   useEffect(() => {
@@ -173,8 +201,8 @@ export function PropertyAssignmentWizard({
     setIsLoadingPreSelected(true);
     getPropertyLotById(preSelectedPropertyId)
       .then((lot) => {
-        const siteId = lot.site_id || '';
-        if (siteId) setSelectedSiteId(siteId);
+        const projectAreaId = lot.project_area_id || '';
+        if (projectAreaId) setSelectedProjectAreaId(projectAreaId);
         setBlockInput(lot.block_number.toString());
         setLotInput(lot.lot_number.toString());
         setAreaInput(lot.area_size.toString());
@@ -193,8 +221,8 @@ export function PropertyAssignmentWizard({
     !isNaN(blockNumber) && blockNumber > 0 && !isNaN(lotNumber) && lotNumber > 0;
 
   const evaluatedStatus = useMemo(
-    () => evaluateLotStatus(siteData, blockNumber, lotNumber),
-    [siteData, blockNumber, lotNumber]
+    () => evaluateLotStatus(projectAreaData, blockNumber, lotNumber),
+    [projectAreaData, blockNumber, lotNumber]
   );
 
   const isBlocked = evaluatedStatus?.type === 'already_assigned';
@@ -210,7 +238,7 @@ export function PropertyAssignmentWizard({
   // Derive active SelectedLotDetails when inputs and status are valid
   const selectedLotDetails: SelectedLotDetails | null = useMemo(() => {
     if (
-      !siteData ||
+      !projectAreaData ||
       !hasValidBlockAndLot ||
       !evaluatedStatus ||
       evaluatedStatus.type === 'already_assigned' ||
@@ -220,8 +248,8 @@ export function PropertyAssignmentWizard({
     }
 
     const base = {
-      siteId: siteData.site_id,
-      siteName: siteData.name,
+      projectAreaId: projectAreaData.project_area_id,
+      projectAreaName: projectAreaData.name,
       blockNumber,
       lotNumber,
       areaSize: numericArea,
@@ -255,7 +283,7 @@ export function PropertyAssignmentWizard({
       isManualNew: true,
     };
   }, [
-    siteData,
+    projectAreaData,
     hasValidBlockAndLot,
     evaluatedStatus,
     computedTotalPrice,
@@ -282,7 +310,7 @@ export function PropertyAssignmentWizard({
     setIsEditingPrice(false);
 
     const nextStatus = evaluateLotStatus(
-      siteData,
+      projectAreaData,
       parseInt(nextBlock, 10),
       parseInt(nextLot, 10)
     );
@@ -296,8 +324,8 @@ export function PropertyAssignmentWizard({
     }
   }
 
-  function handleSiteChange(newSiteId: string) {
-    setSelectedSiteId(newSiteId);
+  function handleProjectAreaChange(newProjectAreaId: string) {
+    setSelectedProjectAreaId(newProjectAreaId);
     setBlockInput('');
     setLotInput('');
     setAreaInput('');
@@ -330,8 +358,8 @@ export function PropertyAssignmentWizard({
       // Create/open lot in property_lot first if unopened plot or new record-only lot
       if (!targetPropertyId) {
         const createResult = await createPropertyLot({
-          site_id: selectedLotDetails.siteId,
-          location: selectedLotDetails.siteName,
+          project_area_id: selectedLotDetails.projectAreaId,
+          location: selectedLotDetails.projectAreaName,
           block_number: selectedLotDetails.blockNumber,
           lot_number: selectedLotDetails.lotNumber,
           area_size: selectedLotDetails.areaSize,
@@ -353,27 +381,38 @@ export function PropertyAssignmentWizard({
           return;
         }
 
-        const result = await assignPropertyParties(
-          targetPropertyId,
-          [
-            {
-              client_id: client.client_id,
-              role: 'Principal Buyer',
-              ownership_percentage: 100,
-              is_primary: true,
-            },
-          ],
-          'Reserved',
-          { total_contract_price: tcp }
-        );
+        const dp = parseFloat(downpayment) || 0;
+        if (dp < 0) {
+          toast.error('Downpayment cannot be negative');
+          return;
+        }
+        if (termMonths < 1 || termMonths > 120) {
+          toast.error('Terms must be between 1 and 120 months');
+          return;
+        }
+        if (!firstDueDate) {
+          toast.error('First due date is required');
+          return;
+        }
 
-        if (!result) {
-          throw new Error('Failed to assign property');
+        const result = await createBillingLedger({
+          clientId: client.client_id,
+          propertyId: targetPropertyId,
+          contractPrice: tcp,
+          downpayment: dp,
+          termMonths,
+          firstDueDate,
+          dueDay,
+          penaltyRate,
+        });
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to create contract ledger');
         }
 
         const actionText = selectedLotDetails.isUnopenedPlot
-          ? `Opened Block ${selectedLotDetails.blockNumber} Lot ${selectedLotDetails.lotNumber} and assigned under Account Settlement`
-          : `Property assigned under Account Settlement with installment plan`;
+          ? `Opened Block ${selectedLotDetails.blockNumber} Lot ${selectedLotDetails.lotNumber} and created contract ledger`
+          : `Property assigned and contract ledger created with ${termMonths}-month installment schedule`;
         toast.success(actionText);
       } else if (selectedStage === 'legal-processing') {
         const result = await assignPropertyFullyPaid(targetPropertyId, client.client_id);
@@ -416,6 +455,11 @@ export function PropertyAssignmentWizard({
       setSelectedStage(null);
       setTitleNumber('');
       setIsLegacyTransferred(false);
+      setTotalContractPrice('');
+      setIsEditingPrice(false);
+      setDownpayment('0');
+      setTermMonths(36);
+      setPenaltyRate(3.5);
 
       router.refresh();
 
@@ -430,9 +474,18 @@ export function PropertyAssignmentWizard({
     }
   }
 
+  function handleNavigateToUpload(type?: DocType) {
+    if (onNavigateToDocuments) {
+      onNavigateToDocuments(type);
+    }
+    const params = new URLSearchParams();
+    params.set('tab', 'documents');
+    if (type) params.set('uploadType', type);
+    router.push(`/dashboard/clients/${client.client_id}?${params.toString()}`);
+  }
+
   const canProceed = Boolean(selectedLotDetails) && Boolean(selectedStage);
   const selectedStageOption = STAGE_OPTIONS.find((opt) => opt.id === selectedStage);
-  const needsRequirements = selectedStageOption?.requiresComplete && !requirements.isComplete;
   const needsTitleNumber = selectedStage === 'for-release' && !titleNumber.trim();
   const hasAnyInput = Boolean(blockInput || lotInput || areaInput || priceInput || selectedStage);
 
@@ -443,17 +496,45 @@ export function PropertyAssignmentWizard({
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription className="space-y-1">
             <p className="font-semibold text-foreground">Client requirements incomplete</p>
-            <p className="text-xs">
-              Missing: <span className="font-medium">{formatMissingRequirements(requirements)}</span>
-            </p>
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+              <span>Missing:</span>
+              {requirements.missingProfile.map((field, idx) => (
+                <span key={field} className="font-medium">
+                  {field}
+                  {idx < requirements.missingProfile.length - 1 || requirements.missingDocuments.length > 0 ? ',' : ''}
+                </span>
+              ))}
+              {requirements.missingDocuments.map((type, idx) => (
+                <span key={type} className="inline-flex items-center gap-1 font-medium">
+                  <span>{DOC_TYPE_LABEL[type]}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleNavigateToUpload(type)}
+                    className="font-medium text-primary underline underline-offset-2 hover:text-[color-mix(in_srgb,var(--primary)_85%,black)]"
+                    aria-label={`Upload ${DOC_TYPE_LABEL[type]}`}
+                  >
+                    Upload
+                  </button>
+                  {idx < requirements.missingDocuments.length - 1 ? ',' : ''}
+                </span>
+              ))}
+            </div>
             <p className="text-xs text-muted-foreground">
-              You can prepare the assignment details below, but finalizing the assignment is locked until these requirements are completed.
+              Property assignment is locked until these requirements are completed.
             </p>
           </AlertDescription>
         </Alert>
       )}
 
-      {/* 1. Inline Property Lot Chooser */}
+      <div
+        className={cn(
+          'space-y-5 transition-opacity',
+          !requirements.isComplete && 'pointer-events-none opacity-50 select-none'
+        )}
+        aria-disabled={!requirements.isComplete}
+        inert={!requirements.isComplete ? true : undefined}
+      >
+        {/* 1. Inline Property Lot Chooser */}
       <div className="space-y-3">
         <Label className="text-sm font-semibold text-foreground">
           1. Choose Property Lot
@@ -467,27 +548,27 @@ export function PropertyAssignmentWizard({
         ) : (
           <div className="space-y-2.5">
             <div className="grid gap-3 sm:grid-cols-[1fr_13rem]">
-              {/* Searchable Site Selector */}
+              {/* Searchable Project Area Selector */}
               <div className="space-y-1.5">
-                <Label htmlFor="site-selector" className="text-xs text-muted-foreground font-medium">
-                  Subdivision Site
+                <Label htmlFor="project-area-selector" className="text-xs text-muted-foreground font-medium">
+                  Project Area
                 </Label>
                 <SearchableSelect
-                  id="site-selector"
-                  options={siteOptions}
-                  value={selectedSiteId}
-                  onValueChange={handleSiteChange}
-                  placeholder="Choose a development site..."
-                  searchPlaceholder="Search site name or address..."
-                  emptyMessage="No matching sites found."
+                  id="project-area-selector"
+                  options={projectAreaOptions}
+                  value={selectedProjectAreaId}
+                  onValueChange={handleProjectAreaChange}
+                  placeholder="Choose a project area..."
+                  searchPlaceholder="Search project area name or address..."
+                  emptyMessage="No matching project areas found."
                 />
               </div>
 
               {/* Inline Block & Lot Fields with Focus Grid Popup */}
               <BlockLotPopup
-                open={isLotPopupOpen && Boolean(selectedSiteId) && !isLoadingSite}
+                open={isLotPopupOpen && Boolean(selectedProjectAreaId) && !isLoadingProjectArea}
                 onOpenChange={setIsLotPopupOpen}
-                siteData={siteData}
+                projectAreaData={projectAreaData}
                 activeBlock={!isNaN(blockNumber) && blockNumber > 0 ? blockNumber : null}
                 activeLot={!isNaN(lotNumber) && lotNumber > 0 ? lotNumber : null}
                 onSelectLot={(blk, lot) => updateBlockAndLot(blk.toString(), lot.toString())}
@@ -503,7 +584,7 @@ export function PropertyAssignmentWizard({
                       min={1}
                       step={1}
                       placeholder="e.g. 1"
-                      disabled={!selectedSiteId || isLoadingSite}
+                      disabled={!selectedProjectAreaId || isLoadingProjectArea}
                       value={blockInput}
                       onFocus={() => setIsLotPopupOpen(true)}
                       onChange={(e) => updateBlockAndLot(e.target.value, lotInput)}
@@ -520,7 +601,7 @@ export function PropertyAssignmentWizard({
                       min={1}
                       step={1}
                       placeholder="e.g. 5"
-                      disabled={!selectedSiteId || isLoadingSite}
+                      disabled={!selectedProjectAreaId || isLoadingProjectArea}
                       value={lotInput}
                       onFocus={() => setIsLotPopupOpen(true)}
                       onChange={(e) => updateBlockAndLot(blockInput, e.target.value)}
@@ -543,9 +624,9 @@ export function PropertyAssignmentWizard({
               {/* Left: Consolidated state & action preview */}
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  {isLoadingSite ? (
+                  {isLoadingProjectArea ? (
                     <Badge variant="muted" shape="pill">
-                      Loading site...
+                      Loading project area...
                     </Badge>
                   ) : !evaluatedStatus ? (
                     <Badge variant="muted" shape="pill">
@@ -591,16 +672,16 @@ export function PropertyAssignmentWizard({
                     isBlocked ? 'text-destructive' : 'text-muted-foreground'
                   )}
                 >
-                  {isLoadingSite && 'Fetching site lots and subdivision plan...'}
-                  {!isLoadingSite &&
+                  {isLoadingProjectArea && 'Fetching project area lots and subdivision plan...'}
+                  {!isLoadingProjectArea &&
                     !evaluatedStatus &&
-                    (selectedSiteId
+                    (selectedProjectAreaId
                       ? 'Focus Block or Lot to pick from grid, or enter numbers manually.'
-                      : 'Select a subdivision site first.')}
+                      : 'Select a project area first.')}
                   {evaluatedStatus?.type === 'open' &&
                     (evaluatedStatus.isRecordOnly
                       ? 'Selects existing open lot (no digital plat on file).'
-                      : 'Selects existing open lot from site plan.')}
+                      : 'Selects existing open lot from project area plan.')}
                   {evaluatedStatus?.type === 'unopened_plot' &&
                     'Plot exists on plan; will open lot and assign. Click Area and Price to set.'}
                   {evaluatedStatus?.type === 'new_record_only' &&
@@ -632,7 +713,6 @@ export function PropertyAssignmentWizard({
                       min={0.01}
                       step="0.01"
                       autoFocus
-                      placeholder="250"
                       value={areaInput}
                       onChange={(e) => setAreaInput(e.target.value)}
                       onBlur={() => setEditingMetric(null)}
@@ -680,7 +760,6 @@ export function PropertyAssignmentWizard({
                       min={0.01}
                       step="0.01"
                       autoFocus
-                      placeholder="3500"
                       value={priceInput}
                       onChange={(e) => setPriceInput(e.target.value)}
                       onBlur={() => setEditingMetric(null)}
@@ -797,52 +876,172 @@ export function PropertyAssignmentWizard({
             3. {selectedStageOption?.title} Details
           </Label>
 
-          {/* Account Settlement Stage Form */}
+          {/* Account Settlement Stage Form (Contract Ledger) */}
           {selectedStage === 'account-settlement' && (
             <div className="space-y-4 rounded-lg border border-border bg-card p-4">
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="total-contract-price" className="text-sm font-medium">
-                    Total Contract Price
-                  </Label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setIsEditingPrice(!isEditingPrice)}
-                    className="h-7 text-xs"
-                  >
-                    {isEditingPrice ? 'Use Calculated' : 'Edit Manually'}
-                  </Button>
+              <div className="border-b border-border pb-3">
+                <h4 className="text-sm font-semibold text-foreground">
+                  Contract Ledger Configuration
+                </h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Configure contract price, reservation downpayment, and installment schedule terms.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2 sm:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="total-contract-price" className="text-xs font-medium">
+                      Total Contract Price (PHP)
+                    </Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIsEditingPrice(!isEditingPrice)}
+                      className="h-7 text-xs"
+                    >
+                      {isEditingPrice ? 'Use Calculated' : 'Edit Manually'}
+                    </Button>
+                  </div>
+
+                  {isEditingPrice ? (
+                    <div className="relative">
+                      <PhilippinePeso className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="total-contract-price"
+                        type="number"
+                        min={1}
+                        step="any"
+                        value={totalContractPrice}
+                        onChange={(e) => setTotalContractPrice(e.target.value)}
+                        placeholder="Enter total contract price"
+                        className="pl-9 font-mono text-xs tabular-nums"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between rounded-lg border border-border bg-row-hover px-4 py-2.5">
+                      <span className="text-xs text-muted-foreground">Auto-calculated from lot area</span>
+                      <span className="text-base font-bold font-mono text-foreground tabular-nums">
+                        {formatCurrency(numericTcp)}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                {isEditingPrice ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="ledger-downpayment" className="text-xs font-medium">
+                    Downpayment / Reservation (PHP)
+                  </Label>
                   <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <PhilippinePeso className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      id="total-contract-price"
+                      id="ledger-downpayment"
                       type="number"
-                      value={totalContractPrice}
-                      onChange={(e) => setTotalContractPrice(e.target.value)}
-                      placeholder="Enter total contract price"
-                      className="pl-9"
-                      disabled={needsRequirements}
+                      min={0}
+                      step="any"
+                      value={downpayment}
+                      onChange={(e) => setDownpayment(e.target.value)}
+                      placeholder="0"
+                      className="pl-9 font-mono text-xs tabular-nums"
                     />
                   </div>
-                ) : (
-                  <div className="flex items-center justify-between rounded-lg border border-border bg-row-hover px-4 py-3">
-                    <span className="text-sm text-muted-foreground">Auto-calculated from lot area</span>
-                    <span className="text-lg font-bold text-foreground">
-                      ₱{parseFloat(totalContractPrice || '0').toLocaleString()}
-                    </span>
-                  </div>
-                )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="ledger-terms" className="text-xs font-medium">
+                    Terms (Months)
+                  </Label>
+                  <Input
+                    id="ledger-terms"
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={termMonths}
+                    onChange={(e) => setTermMonths(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                    className="font-mono text-xs tabular-nums"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="ledger-first-due" className="text-xs font-medium">
+                    First Due Date
+                  </Label>
+                  <Input
+                    id="ledger-first-due"
+                    type="date"
+                    value={firstDueDate}
+                    onChange={(e) => handleFirstDueDateChange(e.target.value)}
+                    className="text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="ledger-due-day" className="text-xs font-medium">
+                    Monthly Due Day
+                  </Label>
+                  <Input
+                    id="ledger-due-day"
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={dueDay}
+                    onChange={(e) => setDueDay(Math.min(31, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+                    className="font-mono text-xs tabular-nums"
+                  />
+                </div>
+
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label htmlFor="ledger-penalty" className="text-xs font-medium">
+                    Monthly Late Penalty (%)
+                  </Label>
+                  <Input
+                    id="ledger-penalty"
+                    type="number"
+                    step="0.1"
+                    min={0}
+                    max={100}
+                    value={penaltyRate}
+                    onChange={(e) => setPenaltyRate(parseFloat(e.target.value) || 0)}
+                    className="font-mono text-xs tabular-nums"
+                  />
+                </div>
+              </div>
+
+              <div className="bg-muted/40 border border-border rounded-lg p-4 text-xs space-y-2">
+                <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">
+                  Payment Breakdown
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Contract Price:</span>
+                  <span className="tabular-nums font-mono font-medium text-foreground">
+                    {formatCurrency(numericTcp)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Less Downpayment:</span>
+                  <span className="tabular-nums font-mono font-medium text-foreground">
+                    {formatCurrency(numericDp)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-muted-foreground border-t border-border pt-1">
+                  <span>Balance to Finance:</span>
+                  <span className="tabular-nums font-mono font-medium text-foreground">
+                    {formatCurrency(financedPrincipal)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-foreground font-semibold border-t border-border pt-2 text-sm">
+                  <span>Monthly Installment:</span>
+                  <span className="tabular-nums font-mono text-primary font-bold">
+                    {formatCurrency(computedMonthly)} / mo
+                  </span>
+                </div>
               </div>
 
               <Alert>
                 <Info className="h-4 w-4" />
                 <AlertDescription className="text-xs">
-                  A ledger account will be created for this client with status &quot;Reserved&quot;. The client will be marked as having an active installment plan.
+                  A contract ledger account will be created for this client with status &quot;Reserved&quot;. The installment plan and any signing downpayment will be immediately active in Billing.
                 </AlertDescription>
               </Alert>
             </div>
@@ -933,6 +1132,9 @@ export function PropertyAssignmentWizard({
             setIsLegacyTransferred(false);
             setTotalContractPrice('');
             setIsEditingPrice(false);
+            setDownpayment('0');
+            setTermMonths(36);
+            setPenaltyRate(3.5);
           }}
           disabled={!hasAnyInput && !isSubmitting}
         >
@@ -941,8 +1143,8 @@ export function PropertyAssignmentWizard({
         <Button
           type="button"
           onClick={handleSubmit}
-          disabled={!canProceed || needsRequirements || needsTitleNumber || isSubmitting}
-          title={needsRequirements ? `Cannot assign: Missing ${formatMissingRequirements(requirements)}` : undefined}
+          disabled={!canProceed || !requirements.isComplete || needsTitleNumber || isSubmitting}
+          title={!requirements.isComplete ? `Cannot assign: Missing ${formatMissingRequirements(requirements)}` : undefined}
           className="gap-2"
         >
           {isSubmitting ? (
@@ -954,6 +1156,7 @@ export function PropertyAssignmentWizard({
             'Assign Property'
           )}
         </Button>
+      </div>
       </div>
     </div>
   );

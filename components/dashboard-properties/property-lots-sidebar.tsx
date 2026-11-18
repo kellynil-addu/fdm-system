@@ -35,7 +35,7 @@ import {
   lotLabel,
   totalPrice,
 } from '@/lib/hooks/use-property-lots';
-import type { PropertyLotWithClient, PropertyStatus, Site } from '@/lib/types/property';
+import type { PropertyLotWithClient, PropertyStatus, ProjectArea } from '@/lib/types/property';
 import { PROPERTY_STATUS_VARIANT } from '@/lib/status-colors';
 import { Badge } from '@/components/ui/badge';
 import { IconBox } from '@/components/ui/icon-box';
@@ -232,14 +232,16 @@ function EmptyState({
 }
 
 export interface PropertyLotsSidebarProps {
-  sites: Site[];
+  projectAreas: ProjectArea[];
   onClose: () => void;
   selectedLot?: PropertyLotWithClient | null;
   onSelectLot?: (lot: PropertyLotWithClient | null) => void;
   onHoverLot?: (lotKey: string | null) => void;
-  onSiteFilterChange?: (siteId: string | null) => void;
+  onProjectAreaFilterChange?: (projectAreaId: string | null) => void;
+  /** Project area selected outside the toolbar (e.g. by clicking a map marker). */
+  projectAreaFilter?: string | null;
   createInitialValues?: {
-    site_id?: string;
+    project_area_id?: string;
     block_number?: number;
     lot_number?: number;
     area_size?: number;
@@ -250,13 +252,14 @@ export interface PropertyLotsSidebarProps {
 }
 
 function PropertyLotsSidebarContent({
-  sites,
+  projectAreas,
   onClose,
   selectedLot,
   onSelectLot,
   onHoverLot,
   createInitialValues,
   onClearCreateInitialValues,
+  projectAreaFilter,
 }: PropertyLotsSidebarProps) {
   const {
     lots,
@@ -271,6 +274,18 @@ function PropertyLotsSidebarContent({
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const { rendered: renderedDialog, isOpen: isDialogOpen } = useDialogPresence(activeDialog);
   const wasDialogOpenedRef = useRef(false);
+  const { setFilter } = controller;
+
+  // Push an externally selected project area (e.g. a map marker click) into the Project
+  // Area filter, so the map and the list always agree on which area is selected. The first
+  // run is skipped so a ?projectArea= deep link keeps ownership of the initial filter value.
+  const pushedProjectAreaFilterRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    const isFirstRun = pushedProjectAreaFilterRef.current === undefined;
+    pushedProjectAreaFilterRef.current = projectAreaFilter;
+    if (isFirstRun) return;
+    setFilter('projectAreaId', projectAreaFilter ?? null);
+  }, [projectAreaFilter, setFilter]);
 
   const activeSelectedLot = useMemo(() => {
     if (!selectedLot) return null;
@@ -278,8 +293,8 @@ function PropertyLotsSidebarContent({
       lots.find(
         (l) =>
           (selectedLot.property_id && l.property_id === selectedLot.property_id) ||
-          (selectedLot.site_id &&
-            l.site_id === selectedLot.site_id &&
+          (selectedLot.project_area_id &&
+            l.project_area_id === selectedLot.project_area_id &&
             l.block_number === selectedLot.block_number &&
             l.lot_number === selectedLot.lot_number)
       ) ?? selectedLot
@@ -293,11 +308,14 @@ function PropertyLotsSidebarContent({
     }
   }, [selectedLot, activeDialog, closeDialog]);
 
-  // Open create dialog when initial values are provided from map
+  // Open create dialog when initial values are provided from map. The values ride along in the
+  // dialog payload because `onClearCreateInitialValues` runs in this same commit, while
+  // `activeDialog` still reads stale (null) in its closure — the prop alone would be wiped
+  // before the modal ever renders.
   useEffect(() => {
     if (createInitialValues && !selectedLot) {
       wasDialogOpenedRef.current = true;
-      openDialog({ type: 'create' });
+      openDialog({ type: 'create', prefill: createInitialValues });
     }
   }, [createInitialValues, selectedLot, openDialog]);
 
@@ -414,8 +432,8 @@ function PropertyLotsSidebarContent({
                     onHover={(hovering) =>
                       onHoverLot?.(
                         hovering
-                          ? (lot.site_id
-                              ? `${lot.site_id}:${lot.block_number}-${lot.lot_number}`
+                          ? (lot.project_area_id
+                              ? `${lot.project_area_id}:${lot.block_number}-${lot.lot_number}`
                               : `${lot.block_number}-${lot.lot_number}`)
                           : null
                       )
@@ -442,8 +460,8 @@ function PropertyLotsSidebarContent({
                           onClick={() => onSelectLot?.(lot)}
                           onMouseEnter={() =>
                             onHoverLot?.(
-                              lot.site_id
-                                ? `${lot.site_id}:${lot.block_number}-${lot.lot_number}`
+                              lot.project_area_id
+                                ? `${lot.project_area_id}:${lot.block_number}-${lot.lot_number}`
                                 : `${lot.block_number}-${lot.lot_number}`
                             )
                           }
@@ -501,8 +519,8 @@ function PropertyLotsSidebarContent({
       {renderedDialog?.type === 'create' && (
         <CreatePropertyLotModal
           open={isDialogOpen}
-          sites={sites}
-          initialValues={createInitialValues ?? undefined}
+          projectAreas={projectAreas}
+          initialValues={renderedDialog.prefill}
         />
       )}
     </div>
@@ -512,9 +530,9 @@ function PropertyLotsSidebarContent({
 export function PropertyLotsSidebar(props: PropertyLotsSidebarProps) {
   return (
     <PropertyLotsProvider
-      sites={props.sites}
+      projectAreas={props.projectAreas}
       truncationMode="cap"
-      onSiteFilterChange={props.onSiteFilterChange}
+      onProjectAreaFilterChange={props.onProjectAreaFilterChange}
     >
       <PropertyLotsSidebarContent {...props} />
     </PropertyLotsProvider>

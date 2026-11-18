@@ -133,7 +133,7 @@ export function PropertyCallingCard({
   /** See `ClientCallingCard` — `embedded` overrides both the tier and the prop. */
   const showReveal = !embedded && (revealOnHover ?? isCompact);
   /**
-   * The lot's own view is the site map with the lot selected, not a detail
+   * The lot's own view is the project area map with the lot selected, not a detail
    * route: that is where `PropertyChip` sent people, and the map is the only
    * page that shows a lot in the context of its subdivision.
    */
@@ -230,7 +230,7 @@ export function PropertyCallingCard({
   const body = (
     <>
       {/* Blue rail: the primary accent is already "the land" colour elsewhere in
-          the app (site map fills, Reserved status pills), so the property side
+          the app (project area map fills, Reserved status pills), so the property side
           of the family uses it and the client side takes gold. */}
       {/* Width kept at the full rail; see the note in `ClientCallingCard`. */}
       <CardCallingRail className="bg-[color-mix(in_srgb,var(--primary)_70%,black)]" />
@@ -372,7 +372,13 @@ export function PropertyCallingCard({
         // `self-stretch` matters here specifically: a property card has three
         // compact rows and a client card has two, so without it the two cards
         // in a dialog header come out 89px and 65px and look misaligned.
-        isCompact && 'min-w-[11rem] max-w-full flex-1 self-stretch rounded-lg',
+        //
+        // `h-auto` is load-bearing, for the reason spelled out in
+        // `ClientCallingCard`: the base `h-full` above makes the cross size
+        // definite, and a definite cross size is the one case `self-stretch`
+        // does not apply to. This card is the taller of the two today, so it
+        // looked right while the client card beside it did not.
+        isCompact && 'h-auto min-w-[11rem] max-w-full flex-1 self-stretch rounded-lg',
         /** See the note in `ClientCallingCard` — the parent supplies the chrome. */
         embedded && 'rounded-none border-0 bg-transparent shadow-none',
         className,

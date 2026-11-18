@@ -17,6 +17,15 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 const isDryRun = process.argv.includes("--dry-run");
 const includeOrphans = process.argv.includes("--orphans") || process.argv.includes("--all");
 
+const SAMPLE_PROJECT_AREAS = [
+  "Barangay Limao",
+  "Peñaplata Rotonda",
+  "San Augustin",
+  "Kaputian",
+  "Caliclic",
+  "Prime Lot Holdings",
+];
+
 const TEST_LOCATION_PATTERNS = [
   /prevention park/i,
   /guard palms/i,
@@ -24,7 +33,7 @@ const TEST_LOCATION_PATTERNS = [
   /assignment palms/i,
   /update estate/i,
   /reset estate/i,
-  /co-ownership estate/i,
+  /co-ownership/i,
   /delete estate/i,
   /archive test estate/i,
   /unique village/i,
@@ -34,17 +43,31 @@ const TEST_LOCATION_PATTERNS = [
   /samal heights/i,
   /plat estate/i,
   /\[test\]/i,
-  /\btest\b/i,
+  /test/i,
+  /journal/i,
+  /restructure/i,
+  /penalty/i,
+  /statement/i,
+  /hold\s+estate/i,
+  /pdc\s+estate/i,
+  /forfeiture/i,
+  /reassign/i,
+  /^as$/i,
 ];
 
-const TEST_SITE_PATTERNS = [
-  /^test site/i,
+const TEST_PROJECT_AREA_PATTERNS = [
+  /^test/i,
+  /\[test\]/i,
+  /\btest\b/i,
   /^plat estate/i,
+  /^projectArea-/i,
   /^site-/i,
-  /^direct assign site/i,
-  /^subdivision selector site/i,
+  /direct assign/i,
+  /subdivision selector/i,
   /fgdfgdfg/i,
+  /^projectArea name$/i,
   /^site name$/i,
+  /^as$/i,
 ];
 
 const TEST_CLIENT_PATTERNS = [
@@ -58,7 +81,79 @@ const TEST_CLIENT_PATTERNS = [
   /\b(active|inactive)\s+[a-z0-9]{8,16}$/i,
   /\b(buyer|owner|client)\s+[a-z0-9]{8,16}$/i,
   /\b[a-z0-9]{12}$/i,
+  /\b[a-j]{13}\b/,
 ];
+
+// Clean all billing and ledger records associated with the given ledger account IDs
+async function deleteLedgerAccountRecords(accountIds: string[]) {
+  if (!accountIds || accountIds.length === 0) return;
+
+  // 1. Review queue discrepancies
+  await supabase.from("billing_import_discrepancy").delete().in("account_id", accountIds);
+
+  // 2. Storage holding charges
+  await supabase.from("billing_holding_charge").delete().in("account_id", accountIds);
+
+  // 3. Penalty arrangements
+  await supabase.from("billing_account_penalty_arrangement").delete().in("account_id", accountIds);
+
+  // 4. Post-dated checks
+  await supabase.from("billing_post_dated_check").delete().in("account_id", accountIds);
+
+  // 5. Billing transactions & payments
+  const { data: txns } = await supabase
+    .from("billing_transaction")
+    .select("transaction_id")
+    .in("account_id", accountIds);
+
+  if (txns && txns.length > 0) {
+    const txnIds = txns.map((t) => t.transaction_id);
+
+    // Payments linked to these transactions
+    const { data: payments } = await supabase
+      .from("billing_payment")
+      .select("payment_id")
+      .in("transaction_id", txnIds);
+
+    if (payments && payments.length > 0) {
+      const paymentIds = payments.map((p) => p.payment_id);
+      await supabase.from("billing_payment_application").delete().in("payment_id", paymentIds);
+      await supabase.from("billing_payment").delete().in("payment_id", paymentIds);
+    }
+
+    // Break self-referencing reverses_transaction_id foreign key constraint before deleting transactions
+    await supabase
+      .from("billing_transaction")
+      .update({ reverses_transaction_id: null })
+      .in("account_id", accountIds);
+
+    // Delete transactions (unblocks RESTRICT foreign key on ledger_account)
+    await supabase.from("billing_transaction").delete().in("account_id", accountIds);
+  }
+
+  // 6. Billing schedules & installments
+  const { data: schedules } = await supabase
+    .from("billing_schedule")
+    .select("schedule_id")
+    .in("account_id", accountIds);
+
+  if (schedules && schedules.length > 0) {
+    const scheduleIds = schedules.map((s) => s.schedule_id);
+    await supabase.from("billing_schedule_installment").delete().in("schedule_id", scheduleIds);
+    await supabase.from("billing_schedule").delete().in("account_id", accountIds);
+  }
+
+  // 7. Legacy billing tables
+  await supabase.from("ledger_payment").delete().in("account_id", accountIds);
+  await supabase.from("ledger_compromise").delete().in("account_id", accountIds);
+  await supabase.from("ledger_account_notice").delete().in("account_id", accountIds);
+
+  // 8. Account parties
+  await supabase.from("account_party").delete().in("account_id", accountIds);
+
+  // 9. Ledger accounts
+  await supabase.from("ledger_account").delete().in("account_id", accountIds);
+}
 
 // Clean dependent records before deleting a property lot
 async function deletePropertyLotRecord(propertyId: string) {
@@ -67,8 +162,7 @@ async function deletePropertyLotRecord(propertyId: string) {
   const { data: accounts } = await supabase.from("ledger_account").select("account_id").eq("property_id", propertyId);
   if (accounts && accounts.length > 0) {
     const accIds = accounts.map((a) => a.account_id);
-    await supabase.from("account_party").delete().in("account_id", accIds);
-    await supabase.from("ledger_account").delete().eq("property_id", propertyId);
+    await deleteLedgerAccountRecords(accIds);
   }
   await supabase.from("property_lot").delete().eq("property_id", propertyId);
 }
@@ -77,24 +171,23 @@ async function deletePropertyLotRecord(propertyId: string) {
 async function deleteClientRecord(clientId: string) {
   await supabase.from("land_title").delete().eq("client_id", clientId);
   await supabase.from("account_party").delete().eq("client_id", clientId);
-  await supabase.from("client_document").delete().eq("client_id", clientId);
-  await supabase.from("file_attachment").delete().eq("entity_type", "client").eq("entity_id", clientId);
+  await supabase.from("file_attachment").delete().eq("client_id", clientId);
   await supabase.from("client_log").delete().eq("client_id", clientId);
   await supabase.from("contact_info").delete().eq("client_id", clientId);
   await supabase.from("search_index").delete().eq("entity_type", "client_document").eq("entity_id", clientId);
   await supabase.from("client").delete().eq("client_id", clientId);
 }
 
-// Clean subdivisions and detached lots before deleting a site
-async function deleteSiteRecord(siteId: string) {
-  await supabase.from("site_subdivision").delete().eq("site_id", siteId);
-  const { data: lots } = await supabase.from("property_lot").select("property_id").eq("site_id", siteId);
+// Clean subdivisions and detached lots before deleting a projectArea
+async function deleteProjectAreaRecord(projectAreaId: string) {
+  await supabase.from("project_area_subdivision").delete().eq("project_area_id", projectAreaId);
+  const { data: lots } = await supabase.from("property_lot").select("property_id").eq("project_area_id", projectAreaId);
   if (lots && lots.length > 0) {
     for (const lot of lots) {
       await deletePropertyLotRecord(lot.property_id);
     }
   }
-  await supabase.from("site").delete().eq("site_id", siteId);
+  await supabase.from("project_area").delete().eq("project_area_id", projectAreaId);
 }
 
 async function cleanupTestData() {
@@ -142,18 +235,105 @@ async function cleanupTestData() {
     }
   }
 
-  // 2. Clean up test sites and test property lots
-  const { data: allSites } = await supabase.from("site").select("site_id, name");
-  const testSites = (allSites ?? []).filter((s) => TEST_SITE_PATTERNS.some((p) => p.test(s.name)));
-  const testSiteIds = new Set(testSites.map((s) => s.site_id));
+  // 2. Clean up test ledger accounts used in automated testing
+  const { data: allLedgers } = await supabase
+    .from("ledger_account")
+    .select(`
+      account_id,
+      property_id,
+      baseline_notes,
+      forfeiture_reason,
+      property:property_lot(
+        property_id,
+        location,
+        project_area_id,
+        project_area:project_area(name)
+      ),
+      parties:account_party(
+        client_id,
+        client:client(client_id, full_name)
+      )
+    `);
+
+  const testLedgers = (allLedgers ?? []).filter((la) => {
+    // Cast property and parties from join
+    const prop = la.property as unknown as {
+      property_id?: string;
+      location?: string;
+      project_area_id?: string;
+      project_area?: { name?: string };
+    } | null;
+
+    const parties = la.parties as unknown as Array<{
+      client_id?: string;
+      client?: { client_id?: string; full_name?: string };
+    }> | null;
+
+    // If property lot is missing, it's an orphaned test ledger
+    if (!prop) return true;
+
+    // Check location pattern
+    const propLoc = prop.location;
+    if (propLoc && TEST_LOCATION_PATTERNS.some((p) => p.test(propLoc))) return true;
+
+    // Check project area pattern
+    const paName = prop.project_area?.name;
+    if (paName && TEST_PROJECT_AREA_PATTERNS.some((p) => p.test(paName))) return true;
+
+    // Check baseline notes or forfeiture reason
+    if (la.baseline_notes && /test/i.test(la.baseline_notes)) return true;
+    if (la.forfeiture_reason && /test/i.test(la.forfeiture_reason)) return true;
+
+    // Check party clients
+    const hasTestParty = parties?.some((p) => {
+      const clientName = p.client?.full_name;
+      return (
+        (clientName && TEST_CLIENT_PATTERNS.some((tcp) => tcp.test(clientName))) ||
+        (p.client_id && testUserIds.has(p.client_id))
+      );
+    });
+    if (hasTestParty) return true;
+
+    // Not in sample project areas and has no legitimate client
+    const isSample =
+      (paName && SAMPLE_PROJECT_AREAS.includes(paName)) ||
+      (propLoc && SAMPLE_PROJECT_AREAS.includes(propLoc));
+
+    if (!isSample) {
+      const hasLegitClient = parties?.some((p) => {
+        const clientName = p.client?.full_name;
+        return clientName && !TEST_CLIENT_PATTERNS.some((tcp) => tcp.test(clientName));
+      });
+      if (!hasLegitClient) return true;
+    }
+
+    return false;
+  });
+
+  if (testLedgers.length > 0) {
+    console.log(`Found ${testLedgers.length} test ledger account(s) used in automated testing.`);
+    const testAccountIds = testLedgers.map((l) => l.account_id);
+    if (!isDryRun) {
+      await deleteLedgerAccountRecords(testAccountIds);
+    }
+    for (const tl of testLedgers) {
+      const prop = tl.property as unknown as { location?: string; block_number?: number; lot_number?: number } | null;
+      console.log(`  - ${isDryRun ? "[DRY-RUN] Would delete" : "Deleted"} test ledger account: ${tl.account_id} (${prop?.location ?? "orphan"})`);
+    }
+  }
+
+  // 3. Clean up test projectAreas and test property lots
+  const { data: allProjectAreas } = await supabase.from("project_area").select("project_area_id, name");
+  const testProjectAreas = (allProjectAreas ?? []).filter((s) => TEST_PROJECT_AREA_PATTERNS.some((p) => p.test(s.name)));
+  const testProjectAreaIds = new Set(testProjectAreas.map((s) => s.project_area_id));
 
   const { data: allLots } = await supabase
     .from("property_lot")
-    .select("property_id, location, site_id, block_number, lot_number");
+    .select("property_id, location, project_area_id, block_number, lot_number");
 
   const testLots = (allLots ?? []).filter(
     (l) =>
-      (l.site_id && testSiteIds.has(l.site_id)) ||
+      (l.project_area_id && testProjectAreaIds.has(l.project_area_id)) ||
       (l.location && TEST_LOCATION_PATTERNS.some((p) => p.test(l.location)))
   );
 
@@ -167,17 +347,17 @@ async function cleanupTestData() {
     }
   }
 
-  if (testSites.length > 0) {
-    console.log(`Found ${testSites.length} test site(s) to purge.`);
-    for (const ts of testSites) {
+  if (testProjectAreas.length > 0) {
+    console.log(`Found ${testProjectAreas.length} test projectArea(s) to purge.`);
+    for (const ts of testProjectAreas) {
       if (!isDryRun) {
-        await deleteSiteRecord(ts.site_id);
+        await deleteProjectAreaRecord(ts.project_area_id);
       }
-      console.log(`  - ${isDryRun ? "[DRY-RUN] Would delete" : "Deleted"} test site: ${ts.name} (${ts.site_id})`);
+      console.log(`  - ${isDryRun ? "[DRY-RUN] Would delete" : "Deleted"} test projectArea: ${ts.name} (${ts.project_area_id})`);
     }
   }
 
-  // 3. Clean up test clients and their relations
+  // 4. Clean up test clients and their relations
   const { data: clientList, error: clientListErr } = await supabase
     .from("client")
     .select("client_id, full_name, created_at");
@@ -239,14 +419,37 @@ async function cleanupTestData() {
     }
   }
 
-  // 4. Clean up orphaned search index entries
+  // 5. Clean up test and orphaned import discrepancies
+  const { data: testDiscrepancies } = await supabase
+    .from("billing_import_discrepancy")
+    .select("discrepancy_id, source_filename, account_id");
+
+  if (testDiscrepancies && testDiscrepancies.length > 0) {
+    const toPurge = testDiscrepancies.filter(
+      (d) =>
+        /test/i.test(d.source_filename) ||
+        d.source_filename.startsWith("test-soa-") ||
+        d.account_id === null
+    );
+
+    if (toPurge.length > 0) {
+      console.log(`Found ${toPurge.length} test billing discrepancy record(s) to purge.`);
+      if (!isDryRun) {
+        const ids = toPurge.map((d) => d.discrepancy_id);
+        await supabase.from("billing_import_discrepancy").delete().in("discrepancy_id", ids);
+      }
+      console.log(`  - ${isDryRun ? "[DRY-RUN] Would purge" : "Purged"} ${toPurge.length} test billing discrepancy record(s).`);
+    }
+  }
+
+  // 6. Clean up orphaned search index entries
   const { data: orphanedIndexes } = await supabase
     .from("search_index")
     .select("index_id, entity_type, entity_id");
 
   if (orphanedIndexes && orphanedIndexes.length > 0) {
-    const { data: allDocs } = await supabase.from("client_document").select("document_id");
-    const validDocIds = new Set((allDocs ?? []).map((d) => d.document_id));
+    const { data: allDocs } = await supabase.from("file_attachment").select("attachment_id");
+    const validDocIds = new Set((allDocs ?? []).map((d) => d.attachment_id));
 
     const indicesToDelete = orphanedIndexes.filter(
       (idx) => idx.entity_type === "client_document" && !validDocIds.has(idx.entity_id)
@@ -263,7 +466,7 @@ async function cleanupTestData() {
     }
   }
 
-  // 5. Clean up orphaned account parties
+  // 7. Clean up orphaned account parties
   const { data: currentClients } = await supabase.from("client").select("client_id");
   const validClientIds = new Set((currentClients ?? []).map((c) => c.client_id));
 
@@ -283,7 +486,7 @@ async function cleanupTestData() {
     console.log(`  - ${isDryRun ? "[DRY-RUN] Would purge" : "Purged"} ${orphanedParties.length} orphaned party entry/entries.`);
   }
 
-  // 6. Clean up orphaned ledger accounts
+  // 8. Clean up orphaned ledger accounts
   const { data: currentLots } = await supabase.from("property_lot").select("property_id");
   const validLotIds = new Set((currentLots ?? []).map((l) => l.property_id));
 
@@ -293,10 +496,8 @@ async function cleanupTestData() {
   if (orphanedLedgers.length > 0) {
     console.log(`Found ${orphanedLedgers.length} orphaned ledger accounts.`);
     if (!isDryRun) {
-      for (const l of orphanedLedgers) {
-        await supabase.from("account_party").delete().eq("account_id", l.account_id);
-        await supabase.from("ledger_account").delete().eq("account_id", l.account_id);
-      }
+      const orphanedIds = orphanedLedgers.map((l) => l.account_id);
+      await deleteLedgerAccountRecords(orphanedIds);
     }
     console.log(`  - ${isDryRun ? "[DRY-RUN] Would purge" : "Purged"} ${orphanedLedgers.length} orphaned ledger account(s).`);
   }

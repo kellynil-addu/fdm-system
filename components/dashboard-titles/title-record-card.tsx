@@ -26,20 +26,10 @@ import type { AccountAwaitingTitle, LandTitle } from '@/lib/types/title';
 
 const DATE_FORMAT = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' });
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
-
-export function getClearanceProgress(startedAt?: string | null) {
-  if (!startedAt) return { targetDate: null, daysRemaining: 0, isComplete: false };
-  const start = new Date(startedAt).getTime();
-  const target = new Date(start + 30 * MS_PER_DAY);
-  const now = Date.now();
-  const daysRemaining = Math.ceil((target.getTime() - now) / MS_PER_DAY);
-  return {
-    targetDate: target,
-    daysRemaining,
-    isComplete: daysRemaining <= 0,
-  };
-}
+// The clearance window is a domain fact, so it lives with the rest of them.
+// Re-exported here because this card is where several callers first found it.
+export { getClearanceProgress } from '@/lib/title-progress';
+import { getClearanceProgress } from '@/lib/title-progress';
 
 function getStatusChangedAt(title: LandTitle): string {
   if (title.status === 'Clearance Period' && title.clearance_started_at) {
@@ -131,7 +121,7 @@ export function TitleRecordCard({ item, onClick }: TitleRecordCardProps) {
   const hasTct = Boolean(title.property?.title_number?.trim());
 
   const uploaded = documentsForLot(title.client?.documents ?? [], title.property_id).map(
-    (d) => d.document_type
+    (d) => d.file_category
   );
   const required = getRequiredReleaseDocuments(title.is_legacy_transferred).length;
   const missing = getMissingReleaseDocuments(title.is_legacy_transferred, uploaded).length;

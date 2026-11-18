@@ -1,112 +1,257 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { FilePicker } from '@/components/ui/file-picker';
 import { Badge } from '@/components/ui/badge';
-import { IconBox } from '@/components/ui/icon-box';
+import { FileTree, FileTreeFolder, FileTreeItem } from '@/components/ui/file-tree';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   Trash2,
   Check,
   Circle,
-  FileText,
   Upload,
   ExternalLink,
-  ShieldCheck,
+  Pencil,
   ShieldAlert,
   Loader2,
-  X,
+  ChevronDown,
+  Plus,
+  FolderOpen,
+  Folder,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatActivityTime } from '@/lib/format-activity-time';
+import { getDocumentEffectiveLabel } from '@/lib/format-document-name';
 import { useClientDetail } from '@/lib/hooks/use-client-detail';
+import { useOcrQueue } from '@/lib/hooks/use-ocr-queue';
 import {
   DOC_TYPES,
   DOC_TYPE_LABEL,
+  PERSONAL_DOC_TYPES,
+  PROPERTY_DOC_TYPES,
   REQUIRED_CLIENT_DOCUMENTS,
-  type DocType,
+  compareDocumentsByCategory,
+  getDocumentTypeLabel,
+  type StandardDocType,
+  type ClientDocument,
 } from '@/lib/types/client';
-import { DOCUMENT_FILE_ACCEPT } from '@/lib/validations/document';
+import {
+  ClientDocumentUploadModal,
+  type TargetFolderInfo,
+} from './client-document-upload-modal';
+import { ClientDocumentLabelModal } from './client-document-label-modal';
 
-const DOCUMENT_TYPES = DOC_TYPES;
-const ALL_LOTS = 'all-lots';
+interface DocumentFolder {
+  id: string;
+  label: string;
+  sublabel?: string;
+  isClient: boolean;
+  targetInfo: TargetFolderInfo;
+  docs: ClientDocument[];
+}
 
 export function ClientDetailDocuments() {
-  const { client, uploadDocument, deleteDocument, getDocumentUrl } = useClientDetail();
-  const [isUploadOpen, setIsUploadOpen] = useState(false);
-  // Empty until the user picks a type, so nothing is filed under the wrong type by default.
-  const [documentType, setDocumentType] = useState<DocType | ''>('');
-  const [lotId, setLotId] = useState<string>(ALL_LOTS);
-  const [categoryFilter, setCategoryFilter] = useState<DocType | 'all'>('all');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const { client, uploadDocument, updateDocumentLabel, deleteDocument, getDocumentUrl } = useClientDetail();
+  const { enqueueFile } = useOcrQueue();
+  const searchParams = useSearchParams();
+
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [openingId, setOpeningId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [docToLabel, setDocToLabel] = useState<ClientDocument | null>(null);
+  const [docToDelete, setDocToDelete] = useState<ClientDocument | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const [uploadModal, setUploadModal] = useState<{
+    open: boolean;
+    folder: TargetFolderInfo | null;
+    initialType: string;
+  }>({
+    open: false,
+    folder: null,
+    initialType: '',
+  });
 
   const allDocuments = client.client_document || [];
   const lots = client.properties ?? [];
-  const lotName = (propertyId: string | null | undefined) => {
-    const lot = lots.find((p) => p.property_id === propertyId);
-    return lot ? `Block ${lot.block_number} Lot ${lot.lot_number}` : null;
-  };
 
-  const counts = DOCUMENT_TYPES.reduce(
+  const folders: DocumentFolder[] = useMemo(() => {
+    const lotMap = new Map(lots.map((lot) => [lot.property_id, lot]));
+    const clientDocs: ClientDocument[] = [];
+    const propertyDocsMap = new Map<string, ClientDocument[]>();
+    const unlinkedDocs: ClientDocument[] = [];
+
+    for (const doc of allDocuments) {
+      if (!doc.property_id) {
+        clientDocs.push(doc);
+      } else if (lotMap.has(doc.property_id)) {
+        const existing = propertyDocsMap.get(doc.property_id) ?? [];
+        existing.push(doc);
+        propertyDocsMap.set(doc.property_id, existing);
+      } else {
+        unlinkedDocs.push(doc);
+      }
+    }
+
+    const result: DocumentFolder[] = [
+      {
+        id: 'client',
+        label: 'Personal Documents',
+        sublabel: client.full_name,
+        isClient: true,
+        targetInfo: {
+          propertyId: null,
+          label: 'Personal Documents',
+          sublabel: client.full_name,
+        },
+        docs: [...clientDocs].sort(compareDocumentsByCategory),
+      },
+    ];
+
+    for (const lot of lots) {
+      result.push({
+        id: lot.property_id,
+        label: `Block ${lot.block_number} Lot ${lot.lot_number}`,
+        sublabel: lot.location || 'Property Lot',
+        isClient: false,
+        targetInfo: {
+          propertyId: lot.property_id,
+          label: `Block ${lot.block_number} Lot ${lot.lot_number}`,
+          sublabel: lot.location || 'Property Lot',
+        },
+        docs: [...(propertyDocsMap.get(lot.property_id) ?? [])].sort(compareDocumentsByCategory),
+      });
+    }
+
+    if (unlinkedDocs.length > 0) {
+      result.push({
+        id: 'unlinked',
+        label: 'Other / Unlinked Documents',
+        sublabel: 'Documents not associated with current lots',
+        isClient: false,
+        targetInfo: {
+          propertyId: null,
+          label: 'Other / Unlinked Documents',
+        },
+        docs: [...unlinkedDocs].sort(compareDocumentsByCategory),
+      });
+    }
+
+    return result;
+  }, [allDocuments, lots, client.full_name]);
+
+  function isFolderExpanded(folderId: string): boolean {
+    return expandedFolders[folderId] ?? true;
+  }
+
+  function toggleFolder(folderId: string) {
+    setExpandedFolders((prev) => ({
+      ...prev,
+      [folderId]: !(prev[folderId] ?? true),
+    }));
+  }
+
+  const areAllExpanded = useMemo(() => {
+    return folders.every((f) => expandedFolders[f.id] ?? true);
+  }, [folders, expandedFolders]);
+
+  function toggleAllFolders() {
+    const nextState = !areAllExpanded;
+    const updated: Record<string, boolean> = {};
+    for (const f of folders) {
+      updated[f.id] = nextState;
+    }
+    setExpandedFolders(updated);
+  }
+
+  function openUpload(targetInfo: TargetFolderInfo, type: string = '') {
+    const folderId = targetInfo.propertyId ?? 'client';
+    setExpandedFolders((prev) => ({ ...prev, [folderId]: true }));
+    setUploadModal({
+      open: true,
+      folder: targetInfo,
+      initialType: type,
+    });
+  }
+
+  useEffect(() => {
+    const uploadParam = searchParams.get('uploadType');
+    if (uploadParam) {
+      openUpload(
+        {
+          propertyId: null,
+          label: 'Personal Documents',
+          sublabel: client.full_name,
+        },
+        uploadParam
+      );
+    }
+  }, [searchParams, client.full_name]);
+
+  const counts = DOC_TYPES.reduce(
     (acc, type) => {
       acc[type] = allDocuments.filter((doc) => doc.document_type === type).length;
       return acc;
     },
-    {} as Record<DocType, number>
+    {} as Record<StandardDocType, number>
   );
 
-  const missing = REQUIRED_CLIENT_DOCUMENTS.filter((type) => counts[type] === 0);
-  const isComplete = missing.length === 0;
+  const missing = REQUIRED_CLIENT_DOCUMENTS.filter(
+    (type) => (counts[type as StandardDocType] ?? 0) === 0
+  );
 
-  const visibleDocuments =
-    categoryFilter === 'all'
-      ? allDocuments
-      : allDocuments.filter((doc) => doc.document_type === categoryFilter);
+  async function handleUpload(file: File, documentType: string, propertyId: string | null) {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('document_type', documentType);
+    if (propertyId) formData.append('property_id', propertyId);
 
-  async function handleUpload(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedFile || !documentType) return;
+    const created = await uploadDocument(formData);
+    toast.success(`${getDocumentTypeLabel(documentType)} uploaded`);
 
-    setIsUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      formData.append('document_type', documentType);
-      if (lotId !== ALL_LOTS) formData.append('property_id', lotId);
-
-      await uploadDocument(formData);
-
-      setSelectedFile(null);
-      setDocumentType('');
-      setLotId(ALL_LOTS);
-      setIsUploadOpen(false);
-      toast.success('Document uploaded');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to upload document');
-    } finally {
-      setIsUploading(false);
-    }
+    enqueueFile({
+      attachmentId: created.document_id,
+      file,
+      fileName: file.name,
+      entityType: 'client_document',
+      keywords: [documentType, client.full_name].filter(Boolean).join(' '),
+    });
   }
 
-  async function handleDelete(documentId: string) {
-    setDeletingId(documentId);
+  async function handleConfirmDelete() {
+    if (!docToDelete) return;
+    setIsDeleting(true);
     try {
-      await deleteDocument(documentId);
+      await deleteDocument(docToDelete.document_id);
       toast.success('Document removed');
+      setDocToDelete(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to remove document');
     } finally {
-      setDeletingId(null);
+      setIsDeleting(false);
     }
   }
 
@@ -124,213 +269,288 @@ export function ClientDetailDocuments() {
 
   return (
     <div className="space-y-4">
-      {/* Required Documents Checklist */}
-      <div className="space-y-3 rounded-lg border border-border bg-row-hover p-4">
-        <div className="flex items-center gap-2">
-          {isComplete ? (
-            <>
-              <ShieldCheck className="h-4 w-4 shrink-0 text-success" />
-              <p className="text-sm font-semibold text-foreground">Required files complete</p>
-            </>
-          ) : (
-            <>
-              <ShieldAlert className="h-4 w-4 shrink-0 text-destructive" />
-              <p className="text-sm font-semibold text-foreground">
-                {missing.length} required document{missing.length === 1 ? '' : 's'} missing
-              </p>
-            </>
-          )}
+      {/* Required Documents Checklist - only shown if documents are missing */}
+      {missing.length > 0 && (
+        <div className="space-y-3 rounded-lg border border-border bg-row-hover p-4">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 shrink-0 text-destructive" />
+            <p className="text-sm font-semibold text-foreground">
+              {missing.length} required document{missing.length === 1 ? '' : 's'} missing
+            </p>
+          </div>
+
+          <ul className="flex flex-wrap gap-x-4 gap-y-2">
+            {REQUIRED_CLIENT_DOCUMENTS.map((type) => {
+              const isPresent = (counts[type as StandardDocType] ?? 0) > 0;
+              return (
+                <li key={type} className="flex items-center gap-1.5 text-xs">
+                  {isPresent ? (
+                    <Check className="h-3.5 w-3.5 shrink-0 text-success" />
+                  ) : (
+                    <Circle className="h-3.5 w-3.5 shrink-0 text-destructive" />
+                  )}
+                  <span className={isPresent ? 'text-foreground' : 'text-destructive'}>
+                    {DOC_TYPE_LABEL[type]}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openUpload(
+                        {
+                          propertyId: null,
+                          label: 'Personal Documents',
+                          sublabel: client.full_name,
+                        },
+                        type
+                      )
+                    }
+                    className="font-medium text-primary underline underline-offset-2 hover:text-[color-mix(in_srgb,var(--primary)_85%,black)]"
+                    aria-label={`Upload ${DOC_TYPE_LABEL[type]}`}
+                  >
+                    Upload
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
         </div>
+      )}
 
-        <ul className="flex flex-wrap gap-x-4 gap-y-2">
-          {REQUIRED_CLIENT_DOCUMENTS.map((type) => {
-            const isPresent = counts[type] > 0;
-            return (
-              <li key={type} className="flex items-center gap-1.5 text-xs">
-                {isPresent ? (
-                  <Check className="h-3.5 w-3.5 shrink-0 text-success" />
-                ) : (
-                  <Circle className="h-3.5 w-3.5 shrink-0 text-destructive" />
-                )}
-                <span className={isPresent ? 'text-foreground' : 'text-destructive'}>
-                  {DOC_TYPE_LABEL[type]}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-
-      {/* Upload Section */}
-      <div className="flex items-center justify-between">
+      {/* Toolbar / Tree Header */}
+      <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold text-foreground">Uploaded Documents</h3>
-          <Badge variant="secondary">{allDocuments.length}</Badge>
+          <h3 className="text-sm font-semibold text-foreground">Document Explorer</h3>
+          <Badge variant="secondary">{allDocuments.length} total</Badge>
         </div>
         <Button
           type="button"
           size="sm"
-          variant={isUploadOpen ? 'ghost' : 'outline'}
-          onClick={() => setIsUploadOpen((open) => !open)}
-          className="h-8 gap-1.5 text-xs"
+          variant="quiet"
+          onClick={toggleAllFolders}
+          className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
         >
-          {isUploadOpen ? <X className="h-3.5 w-3.5" /> : <Upload className="h-3.5 w-3.5" />}
-          {isUploadOpen ? 'Cancel' : 'Upload document'}
+          {areAllExpanded ? (
+            <>
+              <Folder className="h-3.5 w-3.5" />
+              Collapse all
+            </>
+          ) : (
+            <>
+              <FolderOpen className="h-3.5 w-3.5" />
+              Expand all
+            </>
+          )}
         </Button>
       </div>
 
-      {isUploadOpen && (
-        <form
-          onSubmit={handleUpload}
-          className="space-y-3 rounded-lg border border-border bg-row-hover p-4"
-        >
-          <Select value={documentType} onValueChange={(value) => setDocumentType(value as DocType)}>
-            <SelectTrigger className="h-9" aria-label="Document type">
-              <SelectValue placeholder="Select document type" />
-            </SelectTrigger>
-            <SelectContent>
-              {DOCUMENT_TYPES.map((type) => (
-                <SelectItem key={type} value={type}>
-                  {DOC_TYPE_LABEL[type]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <TooltipProvider delayDuration={300}>
+        <FileTree>
+          {folders.map((folder) => {
+            const categoryCounts = new Map<string, number>();
+            for (const d of folder.docs) {
+              categoryCounts.set(d.document_type, (categoryCounts.get(d.document_type) ?? 0) + 1);
+            }
 
-          {lots.length > 0 && (
-            <Select value={lotId} onValueChange={setLotId}>
-              <SelectTrigger className="h-9" aria-label="Lot this document belongs to">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_LOTS}>All of this client&apos;s lots</SelectItem>
-                {lots.map((lot) => (
-                  <SelectItem key={lot.property_id} value={lot.property_id}>
-                    Block {lot.block_number} Lot {lot.lot_number}, {lot.location}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+            return (
+              <FileTreeFolder
+                key={folder.id}
+                depth={0}
+                label={folder.label}
+                sublabel={folder.sublabel}
+                meta={`${folder.docs.length} ${folder.docs.length === 1 ? 'file' : 'files'}`}
+                expanded={isFolderExpanded(folder.id)}
+                onToggle={() => toggleFolder(folder.id)}
+                actions={
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <Upload className="h-3.5 w-3.5" />
+                        Upload
+                        <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">
+                        Select document type
+                      </DropdownMenuLabel>
+                      {(folder.isClient ? PERSONAL_DOC_TYPES : PROPERTY_DOC_TYPES).map((type) => (
+                        <DropdownMenuItem
+                          key={type}
+                          onClick={() => openUpload(folder.targetInfo, type)}
+                          className="cursor-pointer text-xs"
+                        >
+                          {DOC_TYPE_LABEL[type]}
+                        </DropdownMenuItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => openUpload(folder.targetInfo, 'custom')}
+                        className="cursor-pointer text-xs font-medium text-primary"
+                      >
+                        <Plus className="mr-1.5 h-3.5 w-3.5" />
+                        Upload a custom file...
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                }
+              >
+                {folder.docs.length === 0 ? (
+                  <div className="flex items-center justify-between py-1.5 pl-10 pr-3 text-xs italic text-muted-foreground">
+                    <span>No documents in this folder</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-2 text-xs font-normal not-italic text-primary hover:text-primary"
+                      onClick={() => openUpload(folder.targetInfo, '')}
+                    >
+                      <Upload className="mr-1 h-3 w-3" />
+                      Upload file
+                    </Button>
+                  </div>
+                ) : (
+                  folder.docs.map((doc) => {
+                    const countInCategory = categoryCounts.get(doc.document_type) ?? 0;
+                    const showLabel = countInCategory >= 2 || Boolean(doc.label);
+                    const secondaryLabel = showLabel ? getDocumentEffectiveLabel(doc) : undefined;
 
-          <FilePicker
-            file={selectedFile}
-            onFileChange={setSelectedFile}
-            accept={DOCUMENT_FILE_ACCEPT}
-            disabled={isUploading}
-          />
+                    return (
+                      <FileTreeItem
+                        key={doc.document_id}
+                        depth={1}
+                        label={getDocumentTypeLabel(doc.document_type)}
+                        secondaryLabel={secondaryLabel}
+                        loading={openingId === doc.document_id}
+                        onClick={() => void handleOpen(doc.document_id)}
+                        hoverActions={
+                          <>
+                            <span className="select-none text-xs text-muted-foreground">
+                              {doc.is_autogenerated ? 'Autogenerated' : 'Uploaded'}{' '}
+                              {formatActivityTime(doc.uploaded_at)}
+                            </span>
+                            <div className="flex items-center gap-0.5">
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => void handleOpen(doc.document_id)}
+                                    disabled={openingId === doc.document_id}
+                                    aria-label="Open document"
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                  >
+                                    {openingId === doc.document_id ? (
+                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                    ) : (
+                                      <ExternalLink className="h-3.5 w-3.5" />
+                                    )}
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Open document</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => setDocToLabel(doc)}
+                                    aria-label="Edit label"
+                                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Edit label</TooltipContent>
+                              </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => setDocToDelete(doc)}
+                                    aria-label="Delete document"
+                                    className="h-7 w-7 text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] hover:text-destructive"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Delete document</TooltipContent>
+                              </Tooltip>
+                            </div>
+                          </>
+                        }
+                      />
+                    );
+                  })
+                )}
+              </FileTreeFolder>
+            );
+          })}
+        </FileTree>
+      </TooltipProvider>
 
-          <Button
-            type="submit"
-            size="sm"
-            disabled={isUploading || !selectedFile || !documentType}
-            className="h-9 w-full gap-1.5"
-          >
-            {isUploading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Upload className="h-3.5 w-3.5" />
-            )}
-            Upload document
-          </Button>
-        </form>
-      )}
+      {/* Upload Modal */}
+      <ClientDocumentUploadModal
+        open={uploadModal.open}
+        onOpenChange={(open) => setUploadModal((prev) => ({ ...prev, open }))}
+        targetFolder={uploadModal.folder}
+        initialType={uploadModal.initialType}
+        onUpload={handleUpload}
+      />
 
-      {/* Category Filter */}
-      {allDocuments.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            variant={categoryFilter === 'all' ? 'default' : 'outline'}
-            onClick={() => setCategoryFilter('all')}
-            className="h-8 text-xs"
-          >
-            All ({allDocuments.length})
-          </Button>
-          {DOCUMENT_TYPES.filter((type) => counts[type] > 0).map((type) => (
-            <Button
-              key={type}
-              size="sm"
-              variant={categoryFilter === type ? 'default' : 'outline'}
-              onClick={() => setCategoryFilter(type)}
-              className="h-8 text-xs"
+      {/* Label Modal */}
+      <ClientDocumentLabelModal
+        document={docToLabel}
+        onOpenChange={(open) => !open && setDocToLabel(null)}
+        onSave={async (documentId, label) => {
+          await updateDocumentLabel(documentId, label);
+        }}
+      />
+
+      {/* Delete Confirmation Alert */}
+      <AlertDialog
+        open={docToDelete !== null}
+        onOpenChange={(open) => !open && !isDeleting && setDocToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete document?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm">
+              Are you sure you want to remove &quot;
+              {docToDelete ? getDocumentTypeLabel(docToDelete.document_type) : 'this document'}
+              &quot;? This action cannot be undone and will permanently delete the file.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmDelete();
+              }}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_85%,black)]"
             >
-              {DOC_TYPE_LABEL[type]} ({counts[type]})
-            </Button>
-          ))}
-        </div>
-      )}
-
-      {/* Documents List */}
-      {visibleDocuments.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-row-hover py-12">
-          <IconBox size="lg">
-            <FileText className="h-6 w-6" />
-          </IconBox>
-          <div className="text-center">
-            <p className="text-sm font-medium text-foreground">
-              {allDocuments.length === 0 ? 'No documents uploaded' : 'No documents in this category'}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {allDocuments.length === 0
-                ? 'Upload required documents to complete this client profile'
-                : 'Try selecting a different category'}
-            </p>
-          </div>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {visibleDocuments.map((doc) => (
-            <div
-              key={doc.document_id}
-              className="flex items-center gap-3 rounded-lg border border-border bg-card p-3 transition-colors hover:bg-row-hover"
-            >
-              <IconBox size="default" shape="rounded-md">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </IconBox>
-
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-foreground">{DOC_TYPE_LABEL[doc.document_type]}</p>
-                <p className="text-xs text-muted-foreground">
-                  {lotName(doc.property_id) ? `${lotName(doc.property_id)}. ` : ''}
-                  Uploaded {formatActivityTime(doc.uploaded_at)}
-                </p>
-              </div>
-
-              <div className="flex shrink-0 items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void handleOpen(doc.document_id)}
-                  disabled={openingId === doc.document_id}
-                  className="h-8 gap-1.5 text-xs"
-                >
-                  {openingId === doc.document_id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  )}
-                  Open
-                </Button>
-                <Button
-                  size="sm"
-                  variant="danger"
-                  onClick={() => void handleDelete(doc.document_id)}
-                  disabled={deletingId === doc.document_id}
-                  className="h-8 gap-1.5 text-xs"
-                >
-                  {deletingId === doc.document_id ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" />
-                  )}
-                  Delete
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete document'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

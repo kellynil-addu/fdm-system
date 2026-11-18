@@ -52,7 +52,7 @@ interface RawLedgerEntry {
 
 interface RawLotQueryResult {
   property_id: string;
-  site_id: string | null;
+  project_area_id: string | null;
   boundary: unknown;
   location: string;
   block_number: number;
@@ -64,7 +64,7 @@ interface RawLotQueryResult {
   updated_at: string;
   is_archived?: boolean | null;
   archived_at?: string | null;
-  site?: { site_id: string; name: string; description: string | null } | null;
+  project_area?: { project_area_id: string; name: string; description: string | null } | null;
   ledger_accounts?: RawLedgerEntry[];
 }
 
@@ -97,7 +97,7 @@ export async function getClientReportData(clientId: string): Promise<ClientRepor
       // Query client core profile with contacts, documents, and interaction audit logs
       const { data: client, error: clientErr } = await supabase
         .from("client")
-        .select("*, contact_info(*), client_document(*), client_log(*)")
+        .select("*, contact_info(*), client_document:file_attachment!client_id(file_category), client_log(*)")
         .eq("client_id", validClientId)
         .single();
 
@@ -107,7 +107,7 @@ export async function getClientReportData(clientId: string): Promise<ClientRepor
 
       // Calculate document compliance status against mandatory checklists
       const documents = client.client_document ?? [];
-      const presentDocs: DocType[] = Array.from(new Set(documents.map((d: { document_type: DocType }) => d.document_type)));
+      const presentDocs: DocType[] = Array.from(new Set(documents.map((d: { file_category: string }) => d.file_category as DocType)));
       const missingDocs = REQUIRED_CLIENT_DOCUMENTS.filter((req) => !presentDocs.includes(req));
 
       // Query assigned properties via active ledger accounts
@@ -205,12 +205,12 @@ export async function getPropertyReportData(propertyId: string): Promise<Propert
     schema: uuidSchema,
     input: propertyId,
     handler: async (validPropertyId, { supabase }) => {
-      // Query property lot with site and ledger accounts
+      // Query property lot with project area and ledger accounts
       const { data: lot, error: lotErr } = await supabase
         .from("property_lot")
         .select(`
           *,
-          site:site(site_id, name, description),
+          project_area:project_area(project_area_id, name, description),
           ledger_accounts:ledger_account(
             account_id,
             status,
@@ -257,7 +257,7 @@ export async function getPropertyReportData(propertyId: string): Promise<Propert
       return {
         lot: {
           property_id: lot.property_id,
-          site_id: lot.site_id ?? null,
+          project_area_id: lot.project_area_id ?? null,
           boundary: lot.boundary ?? null,
           location: lot.location,
           block_number: lot.block_number,
@@ -270,7 +270,7 @@ export async function getPropertyReportData(propertyId: string): Promise<Propert
           is_archived: Boolean(lot.is_archived),
           archived_at: lot.archived_at ?? null,
         },
-        site_name: lot.site?.name ?? null,
+        project_area_name: lot.project_area?.name ?? null,
         calculated_total_price: Number(lot.area_size) * Number(lot.price_per_sqm),
         active_account: activeLedger
           ? {

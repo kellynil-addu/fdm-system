@@ -1,8 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Calendar, FileCheck, Loader2 } from 'lucide-react';
+import {
+  Calendar,
+  FileCheck,
+  Loader2,
+} from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { SectionCard } from '@/components/ui/section-card';
+import { StatusBar } from '@/components/ui/status-bar';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,11 +20,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useLandTitles } from '@/lib/hooks/use-land-titles';
-import { getClearanceProgress } from './title-record-card';
+import { useLandTitles, lotRefLabel } from '@/lib/hooks/use-land-titles';
+import { formatMediumDate } from '@/lib/format-date';
+import { getClearanceProgress } from '@/lib/title-progress';
 import type { LandTitle, TitleStatus } from '@/lib/types/title';
-
-const DATE_FORMAT = new Intl.DateTimeFormat('en-PH', { dateStyle: 'medium' });
 
 interface TitleClearanceTabProps {
   title: LandTitle;
@@ -34,23 +40,22 @@ export function TitleClearanceTab({
   const [confirmReadyOpen, setConfirmReadyOpen] = useState(false);
 
   const clearance = getClearanceProgress(title.clearance_started_at);
+  const daysRemaining = Math.max(0, clearance.daysRemaining);
+
+  const propertyRef = lotRefLabel(title.property);
+  const clientName = title.client?.full_name ?? 'Client Account';
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-xl border border-border p-5 bg-card space-y-4 shadow-2xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-primary" />
-              <h4 className="text-sm font-semibold text-foreground">30-Day Clearance Period</h4>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {clearance.isComplete
-                ? 'Clearance window has ended. Title is eligible to be marked ready for claim.'
-                : clearance.targetDate
-                ? `Clears on ${DATE_FORMAT.format(clearance.targetDate)} (${Math.max(0, clearance.daysRemaining)} days remaining)`
-                : 'Clearance period active'}
-            </p>
+    <div className="space-y-4">
+      {/* 30-Day Clearance Countdown Card */}
+      <SectionCard className="space-y-3.5">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pb-2 border-b border-border">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Calendar className="h-4 w-4 text-primary" />
+            <h3 className="text-sm font-semibold text-foreground">30-Day Internal Clearance Window</h3>
+            <Badge variant={clearance.isComplete ? 'success' : 'info'} shape="pill" dot className="text-xs">
+              {clearance.isComplete ? 'Window Concluded' : `${daysRemaining}d remaining`}
+            </Badge>
           </div>
 
           {title.status === 'Clearance Period' && canEdit && (
@@ -58,14 +63,41 @@ export function TitleClearanceTab({
               size="sm"
               disabled={isUpdatingStatus || (!clearance.isComplete && !isAdmin)}
               onClick={() => setConfirmReadyOpen(true)}
-              className="text-sm gap-2 h-9 px-4 shrink-0"
+              className="text-xs gap-1.5 h-8 px-3 font-medium self-end sm:self-center"
             >
-              <FileCheck className="h-4 w-4" />
-              Mark Ready for Claim
+              {isUpdatingStatus ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileCheck className="h-3.5 w-3.5" />
+              )}
+              {clearance.isComplete ? 'Mark Ready for Claim' : 'Early Clearance Override'}
             </Button>
           )}
         </div>
-      </div>
+
+        {/* Clearance Progress Meter */}
+        {title.clearance_started_at ? (
+          <div>
+            <StatusBar
+              tone={clearance.isComplete ? 'muted' : 'slate'}
+              status={clearance.isComplete ? 'Window concluded' : 'Window running'}
+              progress={clearance.percentElapsed}
+              detail={
+                clearance.isComplete
+                  ? `Concluded ${formatMediumDate(clearance.targetDate ?? new Date())}`
+                  : `${daysRemaining} ${daysRemaining === 1 ? 'day' : 'days'} remaining`
+              }
+              trailing={`Started ${formatMediumDate(title.clearance_started_at)}`}
+            />
+          </div>
+        ) : null}
+
+        {/* Minimal Lot Reference Strip */}
+        <div className="flex items-center justify-between text-xs text-muted-foreground pt-1">
+          <span>Target Completion: <strong className="text-foreground">{clearance.targetDate ? formatMediumDate(clearance.targetDate) : '30 days from start'}</strong></span>
+          <span>{propertyRef} • {title.property?.title_number ? `TCT ${title.property.title_number}` : 'TCT Pending'}</span>
+        </div>
+      </SectionCard>
 
       {/* Confirmation Alert to Mark Ready for Claim */}
       <AlertDialog open={confirmReadyOpen} onOpenChange={setConfirmReadyOpen}>
@@ -78,8 +110,8 @@ export function TitleClearanceTab({
             </AlertDialogTitle>
             <AlertDialogDescription className="text-sm">
               {clearance.isComplete
-                ? 'The 30-day internal clearance period has concluded. This will move the title to Ready for Claim in the vault and enable client notice letters or turnover to the buyer.'
-                : `The 30-day clearance period is still ongoing (${Math.max(0, clearance.daysRemaining)} days remaining). Marking this ready now will bypass the remaining clearance window and make the title ready for client release. Are you sure you want to proceed?`}
+                ? `The 30-day internal clearance period has concluded for ${propertyRef}. This will move the title to Ready for Claim in the vault and enable client notice letters or physical turnover to ${clientName}.`
+                : `The 30-day clearance period is still ongoing (${daysRemaining} days remaining). Marking this ready now will bypass the remaining clearance window and make the title ready for client release. Are you sure you want to proceed with this administrative override?`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -90,12 +122,12 @@ export function TitleClearanceTab({
                 setConfirmReadyOpen(false);
                 onStatusChange('Ready for Claim');
               }}
-              className="bg-primary text-primary-foreground hover:opacity-90"
+              className="bg-primary text-primary-foreground hover:opacity-90 font-medium"
             >
               {isUpdatingStatus ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
               ) : null}
-              Confirm
+              {clearance.isComplete ? 'Confirm Ready for Claim' : 'Confirm Early Override'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -100,7 +100,7 @@ export function mapLotWithAccount(lot: RawLotRow): PropertyLotWithClient {
 
   return {
     property_id: lot.property_id,
-    site_id: lot.site_id ?? null,
+    project_area_id: lot.project_area_id ?? null,
     boundary: lot.boundary ?? null,
     location: lot.location,
     block_number: lot.block_number,

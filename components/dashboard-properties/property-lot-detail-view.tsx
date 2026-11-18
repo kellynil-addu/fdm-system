@@ -23,6 +23,7 @@ import {
   ExternalLink,
   MoreHorizontal,
   RotateCcw,
+  PhilippinePeso,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -345,11 +346,14 @@ export interface PropertyLotDetailViewProps {
 }
 
 export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetailViewProps) {
-  const { createLot, updateLot, archiveLot, unarchiveLot, reopenLot, sites } = usePropertyLots();
-  const { isSystemAdmin } = useSession();
+  const { createLot, updateLot, archiveLot, unarchiveLot, reopenLot, deleteLot, projectAreas } = usePropertyLots();
+  const { isSystemAdmin, hasPermission } = useSession();
+  const canDeleteLot = hasPermission('properties.delete');
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isCloseDialogOpen, setIsCloseDialogOpen] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [isReopenDialogOpen, setIsReopenDialogOpen] = useState(false);
   const [isReopening, setIsReopening] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
@@ -364,7 +368,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
     setDraftArea(lot.area_size);
     setDraftPrice(lot.price_per_sqm);
     setDraftTitle(lot.title_number ?? null);
-  }, [lot.property_id, lot.site_id, lot.block_number, lot.lot_number, lot.area_size, lot.price_per_sqm, lot.title_number]);
+  }, [lot.property_id, lot.project_area_id, lot.block_number, lot.lot_number, lot.area_size, lot.price_per_sqm, lot.title_number]);
 
   const isRegistered = Boolean(lot.property_id);
   const displayStatus: SubdivisionDisplayStatus = isRegistered ? lot.status : 'Closed';
@@ -455,7 +459,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
   async function handleEnsureRegistered(): Promise<string | null> {
     if (lot.property_id) return lot.property_id;
     const res = await createLot({
-      site_id: lot.site_id,
+      project_area_id: lot.project_area_id,
       location: lot.location,
       block_number: lot.block_number,
       lot_number: lot.lot_number,
@@ -506,6 +510,25 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
     }
   }
 
+  async function handleConfirmClose() {
+    if (!lot.property_id || isClosing) return;
+    setIsClosing(true);
+    try {
+      const result = await deleteLot(lot.property_id);
+      if (result.success) {
+        toast.success(`${lotLabel(lot)} closed successfully`);
+        setIsCloseDialogOpen(false);
+        onBack();
+      } else {
+        toast.error(result.error || 'Failed to close lot');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to close lot');
+    } finally {
+      setIsClosing(false);
+    }
+  }
+
   const effectiveLotForModal: PropertyLotWithClient = {
     ...lot,
     area_size: currentArea,
@@ -514,7 +537,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-card">
-      {/* Header with back navigation, single lot/site identity, and overflow actions */}
+      {/* Header with back navigation, single lot/project area identity, and overflow actions */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4">
         <div className="flex items-center gap-2 min-w-0">
           <Button
@@ -599,13 +622,29 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                     )}
                   </>
                 ) : (
-                  <DropdownMenuItem
-                    disabled={archiveState.status === 'pending'}
-                    icon={<Archive className="h-4 w-4" />}
-                    onSelect={() => runArchive(lot.property_id)}
-                  >
-                    Archive lot
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuItem
+                      disabled={archiveState.status === 'pending'}
+                      icon={<Archive className="h-4 w-4" />}
+                      onSelect={() => runArchive(lot.property_id)}
+                    >
+                      Archive lot
+                    </DropdownMenuItem>
+                    {displayStatus === 'Open' && (
+                      <DropdownMenuItem
+                        variant="destructive"
+                        disabled={!canDeleteLot}
+                        icon={<Trash2 className="h-4 w-4" />}
+                        onSelect={() => {
+                          if (canDeleteLot) {
+                            setIsCloseDialogOpen(true);
+                          }
+                        }}
+                      >
+                        Close lot
+                      </DropdownMenuItem>
+                    )}
+                  </>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -657,7 +696,6 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   title="Edit area size"
                   label="Area size (sqm)"
                   initialValue={currentArea}
-                  placeholder="250"
                   onSave={handleUpdateArea}
                 />
               </div>
@@ -692,7 +730,6 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   title="Edit price per sqm"
                   label="Price per sqm (₱)"
                   initialValue={currentPrice}
-                  placeholder="6500"
                   onSave={handleUpdatePrice}
                 />
               </div>
@@ -701,7 +738,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
             {/* Computed Base Price Row */}
             <div className="group flex items-center justify-between gap-2 rounded-lg border-t border-border p-2 transition-colors hover:bg-row-hover">
               <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                <DollarSign className="h-4 w-4 shrink-0 text-primary" />
+                <PhilippinePeso className="h-4 w-4 shrink-0 text-primary" />
                 <div className="min-w-0 flex-1">
                   <p className="text-[11px] font-medium text-muted-foreground">
                     Base contract price
@@ -794,6 +831,21 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   >
                     <Plus className="h-3.5 w-3.5" />
                     <span>Open for Sale</span>
+                  </Button>
+                )}
+
+                {displayStatus === 'Open' && !isArchived && (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    disabled={!canDeleteLot}
+                    title={!canDeleteLot ? 'Requires properties.delete permission' : undefined}
+                    onClick={() => setIsCloseDialogOpen(true)}
+                    className="w-full gap-1.5 text-xs"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Close Lot</span>
                   </Button>
                 )}
               </div>
@@ -1025,9 +1077,9 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
         <CreatePropertyLotModal
           open={isCreateModalOpen}
           onOpenChange={setIsCreateModalOpen}
-          sites={sites}
+          projectAreas={projectAreas}
           initialValues={{
-            site_id: lot.site_id ?? undefined,
+            project_area_id: lot.project_area_id ?? undefined,
             block_number: lot.block_number,
             lot_number: lot.lot_number,
             area_size: currentArea,
@@ -1045,6 +1097,35 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
           onSuccess={() => onBack()}
         />
       )}
+
+      <AlertDialog
+        open={isCloseDialogOpen}
+        onOpenChange={(open) => !isClosing && setIsCloseDialogOpen(open)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close Lot for Sale?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to close <strong>{lotLabel(lot)}</strong>? This will remove the lot record from the database and return it to closed status.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isClosing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmClose();
+              }}
+              disabled={isClosing}
+              className="bg-destructive text-destructive-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_90%,black)]"
+            >
+              {isClosing && <Loader2 className="h-4 w-4 animate-spin" />}
+              Close Lot
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog
         open={isReopenDialogOpen}

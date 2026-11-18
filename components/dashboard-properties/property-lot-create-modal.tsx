@@ -19,7 +19,7 @@ import {
 import { usePropertyLots } from '@/lib/hooks/use-property-lots';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
-import type { Site } from '@/lib/types/property';
+import type { ProjectArea } from '@/lib/types/property';
 import {
   createPropertyLotSchema,
   LOT_LIMITS,
@@ -35,9 +35,9 @@ const PESO = new Intl.NumberFormat('en-PH', {
 export interface CreatePropertyLotModalProps {
   open: boolean;
   onOpenChange?: (open: boolean) => void;
-  sites: Site[];
+  projectAreas: ProjectArea[];
   initialValues?: {
-    site_id?: string;
+    project_area_id?: string;
     block_number?: number;
     lot_number?: number;
     area_size?: number;
@@ -49,7 +49,7 @@ export interface CreatePropertyLotModalProps {
 export function CreatePropertyLotModal({
   open,
   onOpenChange,
-  sites,
+  projectAreas,
   initialValues,
 }: CreatePropertyLotModalProps) {
   const { createLot, closeDialog } = usePropertyLots();
@@ -59,20 +59,20 @@ export function CreatePropertyLotModal({
     closeDialog();
   }
 
-  const siteOptions = useMemo(
+  const projectAreaOptions = useMemo(
     () =>
-      sites.map((s) => ({
-        value: s.site_id,
+      projectAreas.map((s) => ({
+        value: s.project_area_id,
         label: s.name,
         description: s.description ?? undefined,
       })),
-    [sites]
+    [projectAreas]
   );
 
   const form = useForm<CreatePropertyLotFormData>({
     resolver: zodResolver(createPropertyLotSchema),
     defaultValues: {
-      site_id: initialValues?.site_id ?? '',
+      project_area_id: initialValues?.project_area_id ?? '',
       block_number: initialValues?.block_number ?? undefined,
       lot_number: initialValues?.lot_number ?? undefined,
       area_size: initialValues?.area_size ?? undefined,
@@ -89,11 +89,13 @@ export function CreatePropertyLotModal({
     },
   });
 
-  // Prefill form when opened with initial values
+  // Prefill form with the values it was opened with. `defaultValues` alone is not enough: the
+  // component stays mounted across dialog transitions, so the form would otherwise keep whatever
+  // the previous open left behind.
   useEffect(() => {
     if (open) {
       form.reset({
-        site_id: initialValues?.site_id ?? '',
+        project_area_id: initialValues?.project_area_id ?? '',
         block_number: initialValues?.block_number ?? undefined,
         lot_number: initialValues?.lot_number ?? undefined,
         area_size: initialValues?.area_size ?? undefined,
@@ -106,11 +108,11 @@ export function CreatePropertyLotModal({
   const { register, watch, formState: { errors } } = form;
 
   const onSubmit = form.handleSubmit((data) => {
-    const site = sites.find((s) => s.site_id === data.site_id);
-    if (!site) return;
+    const projectArea = projectAreas.find((s) => s.project_area_id === data.project_area_id);
+    if (!projectArea) return;
     return execute({
-      site_id: data.site_id,
-      location: site.name,
+      project_area_id: data.project_area_id,
+      location: projectArea.name,
       block_number: data.block_number,
       lot_number: data.lot_number,
       area_size: data.area_size,
@@ -143,28 +145,28 @@ export function CreatePropertyLotModal({
             </Alert>
           )}
 
-          {/* Site picker */}
+          {/* Project area picker */}
           <div className="space-y-1.5">
-            <Label htmlFor="site_id" className="text-sm font-medium text-foreground">
-              Site
+            <Label htmlFor="project_area_id" className="text-sm font-medium text-foreground">
+              Project Area
             </Label>
             <Controller
-              name="site_id"
+              name="project_area_id"
               control={form.control}
               render={({ field }) => (
                 <SearchableSelect
-                  id="site_id"
-                  options={siteOptions}
+                  id="project_area_id"
+                  options={projectAreaOptions}
                   value={field.value}
                   onValueChange={field.onChange}
-                  disabled={isPending || sites.length === 0}
-                  placeholder={sites.length === 0 ? 'No sites available' : 'Select a site'}
-                  searchPlaceholder="Search site name or address..."
+                  disabled={isPending || projectAreas.length === 0}
+                  placeholder={projectAreas.length === 0 ? 'No project areas available' : 'Select a project area'}
+                  searchPlaceholder="Search project area name or address..."
                 />
               )}
             />
-            {errors.site_id && (
-              <p className="text-xs text-destructive">{errors.site_id.message}</p>
+            {errors.project_area_id && (
+              <p className="text-xs text-destructive">{errors.project_area_id.message}</p>
             )}
           </div>
 
@@ -177,7 +179,6 @@ export function CreatePropertyLotModal({
               min={1}
               max={LOT_LIMITS.blockOrLotNumber}
               step={1}
-              placeholder="1"
               disabled={isPending}
               error={errors.block_number?.message}
               {...register('block_number', { valueAsNumber: true })}
@@ -189,7 +190,6 @@ export function CreatePropertyLotModal({
               min={1}
               max={LOT_LIMITS.blockOrLotNumber}
               step={1}
-              placeholder="1"
               disabled={isPending}
               error={errors.lot_number?.message}
               {...register('lot_number', { valueAsNumber: true })}
@@ -204,7 +204,6 @@ export function CreatePropertyLotModal({
               min={0}
               max={LOT_LIMITS.areaSqm}
               step="0.01"
-              placeholder="250.00"
               disabled={isPending}
               error={errors.area_size?.message}
               {...register('area_size', { valueAsNumber: true })}
@@ -216,7 +215,6 @@ export function CreatePropertyLotModal({
               min={0}
               max={LOT_LIMITS.pricePerSqm}
               step="0.01"
-              placeholder="3500.00"
               disabled={isPending}
               error={errors.price_per_sqm?.message}
               {...register('price_per_sqm', { valueAsNumber: true })}
@@ -247,7 +245,7 @@ export function CreatePropertyLotModal({
 
           <p className="text-xs text-muted-foreground">
             New lots start as <strong className="font-medium text-foreground">Open</strong>. If the block and
-            lot match a subdivision on the site plan, it will visually appear on the map.
+            lot match a subdivision on the project area plan, it will visually appear on the map.
           </p>
 
           <DialogFooter>

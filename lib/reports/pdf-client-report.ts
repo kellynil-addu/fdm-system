@@ -94,7 +94,7 @@ export function generateClientPdfReport(data: ClientReportData): void {
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 2, lineColor: PDF_COLORS.border, lineWidth: 0.2 },
       headStyles: { fillColor: PDF_COLORS.headerBg, textColor: PDF_COLORS.textSecondary, fontStyle: 'bold' },
-      head: [['Lot', 'Location / Site', 'Area', 'Price/Sqm', 'Contract Price', 'Status', 'Ownership']],
+      head: [['Lot', 'Location / Project Area', 'Area', 'Price/Sqm', 'Contract Price', 'Status', 'Ownership']],
       body: propertyRows,
       foot: [
         [

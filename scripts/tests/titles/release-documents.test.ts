@@ -6,6 +6,7 @@ import {
   getMissingReleaseDocumentsForTitle,
   getReleaseDocumentUrl,
   getReleaseDocuments,
+  getTitleReferenceDocuments,
   uploadReleaseDocument,
 } from "@/lib/actions/release-documents";
 import { assignPropertyFullyPaid, createPropertyLot } from "@/lib/actions/properties";
@@ -94,9 +95,8 @@ describe("Release documents are client documents", () => {
   });
 
   it("uploads from the client profile count toward the release packet", async () => {
-    // No lot chosen: applies to all of the client's lots
-    unwrap(await uploadClientDocument(clientId, pdfForm("Contract", "contract-to-sell.pdf")));
     // Linked to this lot
+    unwrap(await uploadClientDocument(clientId, pdfForm("Contract", "contract-to-sell.pdf", lotId)));
     unwrap(await uploadClientDocument(clientId, pdfForm("Title Copy", "title.pdf", lotId)));
 
     const missing = await getMissingReleaseDocumentsForTitle(titleId);
@@ -121,10 +121,10 @@ describe("Release documents are client documents", () => {
     expect(histories.map((d) => d.document_id)).toEqual([second.document_id]);
     expect(histories.some((d) => d.document_id === first.document_id)).toBe(false);
 
-    // The shared Contract from the client profile is untouched by a lot upload
+    // Uploading a new lot contract updates the packet
     unwrap(await uploadReleaseDocument(titleId, pdfForm("Contract", "lot-contract.pdf")));
     const contracts = (await getReleaseDocuments(titleId)).filter((d) => d.document_type === "Contract");
-    expect(contracts.some((d) => !d.property_id)).toBe(true);
+    expect(contracts.some((d) => d.property_id === lotId)).toBe(true);
   });
 
   it("removing an item deletes it from the client's documents too", async () => {
@@ -139,6 +139,39 @@ describe("Release documents are client documents", () => {
     const validId = unwrap(await uploadClientDocument(clientId, pdfForm("Valid ID", "id.pdf")));
     expect((await deleteReleaseDocument(validId.document_id)).success).toBe(false);
     expect((await uploadReleaseDocument(titleId, pdfForm("Valid ID"))).success).toBe(false);
+  });
+
+  it("exposes client Valid ID and non-packet docs as read-only reference documents for the lot", async () => {
+    const customPersonal = unwrap(
+      await uploadClientDocument(clientId, pdfForm("Marriage Certificate", "marriage.pdf"))
+    );
+    const customThisLot = unwrap(
+      await uploadClientDocument(clientId, pdfForm("Survey Plan", "survey.pdf", lotId))
+    );
+    const otherLot = await soldLotWithTitle("Ref Other Lot");
+    const customOtherLot = unwrap(
+      await uploadClientDocument(clientId, pdfForm("Other Lot Memo", "other.pdf", otherLot.lotId))
+    );
+
+    const refs = await getTitleReferenceDocuments(titleId);
+    const refIds = refs.map((d) => d.document_id);
+
+    expect(refs.some((d) => d.document_type === "Valid ID")).toBe(true);
+    expect(refIds).toContain(customPersonal.document_id);
+    expect(refIds).toContain(customThisLot.document_id);
+    expect(refIds).not.toContain(customOtherLot.document_id);
+    expect(refs.some((d) => d.document_type === "SOA" || d.document_type === "Contract")).toBe(false);
+    // Valid ID must sort first ahead of custom categories
+    expect(refs[0]?.document_type).toBe("Valid ID");
+
+    await logoutUser();
+    await withTemporaryUser({ roleNames: ["legal_staff"] }, async () => {
+      const legalRefs = await getTitleReferenceDocuments(titleId);
+      const validIdDoc = legalRefs.find((d) => d.document_type === "Valid ID");
+      expect(validIdDoc).toBeDefined();
+      expect(await getReleaseDocumentUrl(validIdDoc!.document_id)).toMatch(/^https?:\/\//);
+    });
+    await loginAsAdmin();
   });
 
   it("only lets Legal upload release documents", async () => {

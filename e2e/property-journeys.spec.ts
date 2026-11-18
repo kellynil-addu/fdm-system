@@ -14,7 +14,7 @@ test.describe('Property journeys: field validations, modal closure, and lot crea
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText('New Property Lot')).toBeVisible();
 
-    // Submit without choosing a site or entering required numbers
+    // Submit without choosing a projectArea or entering required numbers
     await dialog.getByRole('button', { name: 'Create Lot' }).click();
 
     // Verify validation errors are displayed beneath the inputs
@@ -37,10 +37,10 @@ test.describe('Property journeys: field validations, modal closure, and lot crea
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
 
-    // Choose a site from the select dropdown
-    const siteSelectTrigger = dialog.locator('#site_id');
-    await siteSelectTrigger.click();
-    // Select first site option in dropdown
+    // Choose a projectArea from the select dropdown
+    const projectAreaSelectTrigger = dialog.locator('#project_area_id');
+    await projectAreaSelectTrigger.click();
+    // Select first projectArea option in dropdown
     const firstOption = page.locator('[role="option"]').first();
     await expect(firstOption).toBeVisible();
     await firstOption.click();

@@ -5,13 +5,13 @@ import {
   forfeitPropertyLot,
   reopenPropertyLotForSale,
 } from "@/lib/actions/properties";
-import { createSite } from "@/lib/actions/sites";
+import { createProjectArea } from "@/lib/actions/project-areas";
 import { createClient } from "@/lib/actions/clients";
 import {
   loginAsAdmin,
   hardDeleteTestProperty,
   hardDeleteTestClient,
-  hardDeleteTestSite,
+  hardDeleteTestProjectArea,
 } from "../framework/session";
 import { unwrap } from "../framework/action-helper";
 import { uniqueNameSuffix } from "../framework/fake-data";
@@ -19,7 +19,7 @@ import { uniqueNameSuffix } from "../framework/fake-data";
 describe("Property Lot Forfeiture & Reopening Lifecycle", () => {
   const testPropertyIds: string[] = [];
   const testClientIds: string[] = [];
-  const testSiteIds: string[] = [];
+  const testProjectAreaIds: string[] = [];
 
   beforeAll(async () => {
     await loginAsAdmin();
@@ -40,9 +40,9 @@ describe("Property Lot Forfeiture & Reopening Lifecycle", () => {
         // Ignore cleanup errors
       }
     }
-    for (const id of testSiteIds) {
+    for (const id of testProjectAreaIds) {
       try {
-        await hardDeleteTestSite(id);
+        await hardDeleteTestProjectArea(id);
       } catch {
         // Ignore cleanup errors
       }
@@ -50,9 +50,9 @@ describe("Property Lot Forfeiture & Reopening Lifecycle", () => {
   });
 
   it("forfeits a reserved lot and retains previous client context", async () => {
-    const site = unwrap(
-      await createSite({
-        name: `Forfeiture Test Site ${uniqueNameSuffix()}`,
+    const projectArea = unwrap(
+      await createProjectArea({
+        name: `Forfeiture Test ProjectArea ${uniqueNameSuffix()}`,
         boundary: [
           [0, 0],
           [0, 10],
@@ -61,7 +61,7 @@ describe("Property Lot Forfeiture & Reopening Lifecycle", () => {
         ],
       })
     );
-    testSiteIds.push(site.site_id);
+    testProjectAreaIds.push(projectArea.project_area_id);
 
     const client = unwrap(
       await createClient({
@@ -74,7 +74,7 @@ describe("Property Lot Forfeiture & Reopening Lifecycle", () => {
 
     const lot = unwrap(
       await createPropertyLot({
-        site_id: site.site_id,
+        project_area_id: projectArea.project_area_id,
         block_number: 1,
         lot_number: 1,
         area_size: 150,
@@ -106,9 +106,9 @@ describe("Property Lot Forfeiture & Reopening Lifecycle", () => {
   });
 
   it("blocks assignment of new clients while the lot is in Forfeited status", async () => {
-    const site = unwrap(
-      await createSite({
-        name: `Guard Test Site ${uniqueNameSuffix()}`,
+    const projectArea = unwrap(
+      await createProjectArea({
+        name: `Guard Test ProjectArea ${uniqueNameSuffix()}`,
         boundary: [
           [0, 0],
           [0, 10],
@@ -117,7 +117,7 @@ describe("Property Lot Forfeiture & Reopening Lifecycle", () => {
         ],
       })
     );
-    testSiteIds.push(site.site_id);
+    testProjectAreaIds.push(projectArea.project_area_id);
 
     const client1 = unwrap(
       await createClient({
@@ -137,7 +137,7 @@ describe("Property Lot Forfeiture & Reopening Lifecycle", () => {
 
     const lot = unwrap(
       await createPropertyLot({
-        site_id: site.site_id,
+        project_area_id: projectArea.project_area_id,
         block_number: 2,
         lot_number: 1,
         area_size: 120,
@@ -161,9 +161,9 @@ describe("Property Lot Forfeiture & Reopening Lifecycle", () => {
   });
 
   it("enforces 30-day grace period before reopening, then restores lot to Open", async () => {
-    const site = unwrap(
-      await createSite({
-        name: `Reopen Test Site ${uniqueNameSuffix()}`,
+    const projectArea = unwrap(
+      await createProjectArea({
+        name: `Reopen Test ProjectArea ${uniqueNameSuffix()}`,
         boundary: [
           [0, 0],
           [0, 10],
@@ -172,7 +172,7 @@ describe("Property Lot Forfeiture & Reopening Lifecycle", () => {
         ],
       })
     );
-    testSiteIds.push(site.site_id);
+    testProjectAreaIds.push(projectArea.project_area_id);
 
     const client = unwrap(
       await createClient({
@@ -185,7 +185,7 @@ describe("Property Lot Forfeiture & Reopening Lifecycle", () => {
 
     const lot = unwrap(
       await createPropertyLot({
-        site_id: site.site_id,
+        project_area_id: projectArea.project_area_id,
         block_number: 3,
         lot_number: 1,
         area_size: 200,
@@ -223,7 +223,7 @@ describe("Property Lot Forfeiture & Reopening Lifecycle", () => {
     // Create another lot to test backdated historical forfeiture
     const historicalLot = unwrap(
       await createPropertyLot({
-        site_id: site.site_id,
+        project_area_id: projectArea.project_area_id,
         block_number: 4,
         lot_number: 1,
         area_size: 200,

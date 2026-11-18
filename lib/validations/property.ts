@@ -45,7 +45,7 @@ const pricePerSqmSchema = amountSchema("Price per sqm", LOT_LIMITS.pricePerSqm);
 const contractPriceSchema = amountSchema("Contract price", LOT_LIMITS.contractPrice);
 
 export const createPropertyLotSchema = z.object({
-  site_id: z.string().min(1, "Please select a site").optional(),
+  project_area_id: z.string().min(1, "Please select a project area").optional(),
   location: z.string().trim().min(1, "Location is required").optional(),
   block_number: blockOrLotNumberSchema("Block number"),
   lot_number: blockOrLotNumberSchema("Lot number"),
@@ -133,31 +133,38 @@ export const removeAccountPartyActionSchema = z.object({
   clientId: uuidSchema,
 });
 
-export const createSiteSchema = z.object({
-  name: z.string().trim().min(1, "Site name is required"),
+export const createProjectAreaSchema = z.object({
+  name: z.string().trim().min(1, "Project area name is required"),
   description: z.string().trim().nullable().optional(),
   boundary: polygonBoundarySchema,
 });
 
-export const createSubdivisionLotSchema = z.object({
-  site_id: uuidSchema,
-  block_number: blockOrLotNumberSchema("Block number"),
-  lot_number: blockOrLotNumberSchema("Lot number"),
-  boundary: polygonBoundarySchema,
-  create_property_lot: z.boolean().optional(),
-  area_size: areaSchema.optional(),
-  price_per_sqm: pricePerSqmSchema.optional(),
-});
+export const createSubdivisionLotSchema = z
+  .object({
+    project_area_id: uuidSchema,
+    block_number: blockOrLotNumberSchema("Block number"),
+    lot_number: blockOrLotNumberSchema("Lot number"),
+    boundary: polygonBoundarySchema,
+    create_property_lot: z.boolean().optional(),
+    area_size: areaSchema.optional(),
+    price_per_sqm: pricePerSqmSchema.optional(),
+  })
+  // property_lot requires a price, so registering one needs a real figure. Area can be derived
+  // from the boundary; price cannot, and defaulting it would invent a contract term.
+  .refine((data) => !data.create_property_lot || (data.price_per_sqm ?? 0) > 0, {
+    message: "Price per sqm is required to register a lot",
+    path: ["price_per_sqm"],
+  });
 
 export const deleteSubdivisionLotSchema = z.object({
-  site_id: uuidSchema,
+  project_area_id: uuidSchema,
   block_number: z.number().int().positive(),
   lot_number: z.number().int().positive(),
   subdivision_id: uuidSchema.optional(),
 });
 
 export const openSubdivisionForSaleSchema = z.object({
-  site_id: uuidSchema,
+  project_area_id: uuidSchema,
   block_number: blockOrLotNumberSchema("Block number"),
   lot_number: blockOrLotNumberSchema("Lot number"),
   area_size: areaSchema,
@@ -172,7 +179,7 @@ export const assignPropertyFullyPaidActionSchema = z.object({
 });
 
 export const createAndAssignPropertyFromSubdivisionSchema = z.object({
-  site_id: uuidSchema,
+  project_area_id: uuidSchema,
   block_number: blockOrLotNumberSchema("Block number"),
   lot_number: blockOrLotNumberSchema("Lot number"),
   area_size: areaSchema,
@@ -187,7 +194,20 @@ export const createAndAssignPropertyFromSubdivisionSchema = z.object({
 export const forfeitPropertyLotSchema = z.object({
   propertyId: uuidSchema,
   reason: z.string().trim().max(1000).optional(),
-  forfeitedAt: z.string().datetime().optional(),
+  forfeitedAt: z
+    .string()
+    .trim()
+    .refine((val) => !val || !isNaN(Date.parse(val)), {
+      message: "Invalid date or datetime format",
+    })
+    .transform((val) => {
+      if (!val) return undefined;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+        return new Date(`${val}T00:00:00.000Z`).toISOString();
+      }
+      return new Date(val).toISOString();
+    })
+    .optional(),
 });
 
 export const reopenPropertyLotForSaleSchema = z.object({
@@ -197,9 +217,14 @@ export const reopenPropertyLotForSaleSchema = z.object({
 
 export const updateSubdivisionBoundarySchema = z.object({
   subdivision_id: uuidSchema,
-  site_id: uuidSchema,
+  project_area_id: uuidSchema,
   block_number: blockOrLotNumberSchema("Block number"),
   lot_number: blockOrLotNumberSchema("Lot number"),
+  boundary: polygonBoundarySchema,
+});
+
+export const updateProjectAreaBoundarySchema = z.object({
+  project_area_id: uuidSchema,
   boundary: polygonBoundarySchema,
 });
 
@@ -210,5 +235,6 @@ export type CreateAndAssignPropertyFromSubdivisionFormData = z.infer<typeof crea
 export type ForfeitPropertyLotFormData = z.infer<typeof forfeitPropertyLotSchema>;
 export type ReopenPropertyLotForSaleFormData = z.infer<typeof reopenPropertyLotForSaleSchema>;
 export type UpdateSubdivisionBoundaryFormData = z.infer<typeof updateSubdivisionBoundarySchema>;
+export type UpdateProjectAreaBoundaryFormData = z.infer<typeof updateProjectAreaBoundarySchema>;
 
 

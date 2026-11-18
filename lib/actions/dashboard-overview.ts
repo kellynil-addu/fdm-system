@@ -1,7 +1,7 @@
 "use server";
 
 import { createScope } from "@/lib/actions/action-handler";
-import { getSiteWithLots } from "@/lib/actions/sites";
+import { getProjectAreaWithLots } from "@/lib/actions/project-areas";
 import { hasPermission } from "@/lib/permissions";
 import { reviewClientRecord, type ReviewableClient, type ClientFollowUp } from "@/lib/client-record-review";
 import { getPaginationOffsets } from "@/lib/pagination";
@@ -20,11 +20,11 @@ export async function getDashboardOverview(): Promise<DashboardStats> {
 
     async function mapPreview(): Promise<DashboardMapPreview | null> {
       if (!canReadProperties) return null;
-      const { data: site, error } = await supabase
-        .from("site")
-        .select("site_id")
+      const { data: projectArea, error } = await supabase
+        .from("project_area")
+        .select("project_area_id")
         .order("name")
-        .order("site_id")
+        .order("project_area_id")
         .limit(1)
         .maybeSingle();
 
@@ -32,9 +32,9 @@ export async function getDashboardOverview(): Promise<DashboardStats> {
         console.error("Dashboard map preview failed:", error.message);
         return null;
       }
-      if (!site) return { site: null };
+      if (!projectArea) return { projectArea: null };
       try {
-        return { site: await getSiteWithLots(site.site_id) };
+        return { projectArea: await getProjectAreaWithLots(projectArea.project_area_id) };
       } catch (error) {
         console.error("Dashboard map plots failed:", error);
         return null;
@@ -49,7 +49,7 @@ export async function getDashboardOverview(): Promise<DashboardStats> {
         const { from, to, limit } = getPaginationOffsets({ page, limit: 500 });
         const { data, error } = await supabase
           .from("client")
-          .select("client_id, full_name, contact_info(value), client_document(document_type)")
+          .select("client_id, full_name, contact_info(value), documents:file_attachment!client_id(file_category)")
           .neq("status", "Archived")
           .order("client_id")
           .range(from, to)

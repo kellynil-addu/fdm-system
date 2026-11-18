@@ -1,13 +1,13 @@
-import type { SiteDraftStoragePayload } from '@/lib/types/property';
+import type { ProjectAreaDraftStoragePayload } from '@/lib/types/property';
 
 const DRAFT_KEY_PREFIX = 'fdm_map_draft_';
 
-export function getSiteDraft(siteId: string): SiteDraftStoragePayload | null {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined' || !siteId) return null;
+export function getProjectAreaDraft(projectAreaId: string): ProjectAreaDraftStoragePayload | null {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined' || !projectAreaId) return null;
   try {
-    const raw = localStorage.getItem(`${DRAFT_KEY_PREFIX}${siteId}`);
+    const raw = localStorage.getItem(`${DRAFT_KEY_PREFIX}${projectAreaId}`);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as SiteDraftStoragePayload;
+    const parsed = JSON.parse(raw) as ProjectAreaDraftStoragePayload;
     if (parsed && Array.isArray(parsed.draftLots)) {
       return parsed;
     }
@@ -17,26 +17,26 @@ export function getSiteDraft(siteId: string): SiteDraftStoragePayload | null {
   }
 }
 
-export function saveSiteDraft(
-  siteId: string,
-  payload: Omit<SiteDraftStoragePayload, 'lastModified'>
+export function saveProjectAreaDraft(
+  projectAreaId: string,
+  payload: Omit<ProjectAreaDraftStoragePayload, 'lastModified'>
 ): void {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined' || !siteId) return;
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined' || !projectAreaId) return;
   try {
-    const data: SiteDraftStoragePayload = {
+    const data: ProjectAreaDraftStoragePayload = {
       ...payload,
       lastModified: Date.now(),
     };
-    localStorage.setItem(`${DRAFT_KEY_PREFIX}${siteId}`, JSON.stringify(data));
+    localStorage.setItem(`${DRAFT_KEY_PREFIX}${projectAreaId}`, JSON.stringify(data));
   } catch (err) {
     console.error('Failed to save draft to localStorage', err);
   }
 }
 
-export function clearSiteDraft(siteId: string): void {
-  if (typeof window === 'undefined' || typeof localStorage === 'undefined' || !siteId) return;
+export function clearProjectAreaDraft(projectAreaId: string): void {
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined' || !projectAreaId) return;
   try {
-    localStorage.removeItem(`${DRAFT_KEY_PREFIX}${siteId}`);
+    localStorage.removeItem(`${DRAFT_KEY_PREFIX}${projectAreaId}`);
   } catch (err) {
     console.error('Failed to clear draft from localStorage', err);
   }

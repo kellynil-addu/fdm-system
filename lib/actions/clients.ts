@@ -14,10 +14,15 @@ import {
   getClientsParamsSchema,
   createClientDocumentSchema,
   getClientDocumentsParamsSchema,
+  updateClientDocumentLabelSchema,
   clientInteractionSchema,
   createClientLogSchema,
   getContactValueError,
 } from "@/lib/validations/client";
+import {
+  buildClientPropertyBillingSummary,
+  type RawAccountBillingData,
+} from "@/lib/billing/client-property-billing";
 import {
   type Client,
   type ClientProperty,
@@ -37,9 +42,12 @@ import {
   type GetClientsParams,
   type PaginatedResult,
   REQUIRED_CLIENT_DOCUMENTS,
+  PROPERTY_DOC_TYPES,
 } from "@/lib/types/client";
 
 import type { PropertyLot } from "@/lib/types/property";
+import type { FileAttachment } from "@/lib/types/title";
+import { toClientDocument, toClientDocuments, CLIENT_DOCUMENT_COLUMNS } from "@/lib/attachments";
 import { deleteEntityIndex } from "@/lib/actions/search-index";
 import {
   uploadClientDocumentObject,
@@ -54,13 +62,30 @@ const client = createScope(["clients.read"]);
 const clientWrite = client.extend(["clients.update"]);
 const clientDelete = client.extend(["clients.delete"]);
 
-const uploadClientDocumentSchema = z.object({
-  clientId: uuidSchema,
-  document_type: docTypeSchema,
-  file: documentFileSchema,
-  // Optional lot the document belongs to. FormData gives null when absent.
-  property_id: uuidSchema.nullish().transform((v) => v ?? null),
-});
+const uploadClientDocumentSchema = z
+  .object({
+    clientId: uuidSchema,
+    document_type: docTypeSchema,
+    file: documentFileSchema,
+    // Optional lot the document belongs to. FormData gives null when absent.
+    property_id: uuidSchema.nullish().transform((v) => v ?? null),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.property_id && (PROPERTY_DOC_TYPES as readonly string[]).includes(data.document_type)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["document_type"],
+        message: `${data.document_type} must be assigned to a property folder. Under personal documents, only Valid ID and custom files are accepted.`,
+      });
+    }
+    if (data.property_id && data.document_type === "Valid ID") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["document_type"],
+        message: "Valid ID must be uploaded under personal documents, not a property folder.",
+      });
+    }
+  });
 
 async function resolveUserNames(
   supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
@@ -185,32 +210,107 @@ async function resolveClientProperties(
   const [partyResult, titleResult] = await Promise.all([
     supabase
       .from("account_party")
-      .select("ledger_account!inner(account_id, property_id, status, cleared_at)")
-      .eq("client_id", clientId)
-      .eq("ledger_account.status", "Active"),
+      .select("account_id")
+      .eq("client_id", clientId),
     supabase
       .from("land_title")
-      .select("title_id, property_id, status")
+      .select(`
+        title_id,
+        property_id,
+        status,
+        is_legacy_transferred,
+        clearance_started_at,
+        released_to_name,
+        created_at,
+        updated_at
+      `)
       .eq("client_id", clientId),
   ]);
 
   if (partyResult.error) {
-    console.error(`Failed to resolve properties for client ${clientId}:`, partyResult.error.message);
+    console.error(`Failed to resolve account parties for client ${clientId}:`, partyResult.error.message);
   }
   if (titleResult.error) {
     console.error(`Failed to resolve titles for client ${clientId}:`, titleResult.error.message);
   }
 
-  type AccountRef = { account_id: string; property_id: string; cleared_at: string | null };
-  const accounts = new Map<string, AccountRef>();
-  for (const row of partyResult.data ?? []) {
-    // A many-to-one embed is one object at runtime, but untyped clients see an array.
-    const embedded = row.ledger_account as unknown as AccountRef | AccountRef[] | null;
-    const account = Array.isArray(embedded) ? embedded[0] : embedded;
-    if (account?.property_id) accounts.set(account.property_id, account);
+  const accountIds = Array.from(
+    new Set((partyResult.data ?? []).map((row) => row.account_id).filter(Boolean))
+  );
+
+  const accounts = new Map<
+    string,
+    { raw: RawAccountBillingData; summary: ReturnType<typeof buildClientPropertyBillingSummary> }
+  >();
+
+  if (accountIds.length > 0) {
+    const { data: accountsData, error: accountsErr } = await supabase
+      .from("ledger_account")
+      .select(`
+        account_id,
+        property_id,
+        total_contract_price,
+        remaining_balance,
+        downpayment,
+        terms_months,
+        monthly_amortization,
+        amortization_day,
+        penalty_rate_percent,
+        first_due_date,
+        status,
+        created_at,
+        cleared_at,
+        cleared_by,
+        forfeited_at,
+        forfeiture_reason,
+        contract_policies,
+        overdue_notice_stage,
+        payments:billing_payment(
+          payment_id,
+          payment_date,
+          amount,
+          receipt_number,
+          payment_method,
+          waive_penalty,
+          notes
+        ),
+        notices:billing_notice_event(
+          notice_id,
+          stage,
+          notice_number,
+          notice_date,
+          title,
+          tracking_number,
+          notes,
+          overdue_amount,
+          arrears_principal,
+          penalty_due
+        )
+      `)
+      .in("account_id", accountIds);
+
+    if (accountsErr) {
+      console.error(`Failed to fetch ledger accounts for client ${clientId}:`, accountsErr.message);
+    } else {
+      for (const row of (accountsData ?? []) as unknown as RawAccountBillingData[]) {
+        if (row.property_id) {
+          const summary = buildClientPropertyBillingSummary(row);
+          accounts.set(row.property_id, { raw: row, summary });
+        }
+      }
+    }
   }
 
-  type TitleRef = { title_id: string; property_id: string; status: string };
+  type TitleRef = {
+    title_id: string;
+    property_id: string;
+    status: string;
+    is_legacy_transferred?: boolean | null;
+    clearance_started_at?: string | null;
+    released_to_name?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+  };
   const titleMap = new Map<string, TitleRef>();
   for (const row of (titleResult.data ?? []) as TitleRef[]) {
     if (row.property_id) titleMap.set(row.property_id, row);
@@ -232,15 +332,26 @@ async function resolveClientProperties(
   }
 
   return (data ?? []).map((lot) => {
-    const account = accounts.get(lot.property_id);
+    const accEntry = accounts.get(lot.property_id);
+    const account = accEntry?.raw;
+    const summary = accEntry?.summary;
     const title = titleMap.get(lot.property_id);
     return {
       ...lot,
       account_id: account?.account_id ?? null,
+      account_status: account?.status ?? null,
       cleared_at: account?.cleared_at ?? null,
+      total_contract_price: account ? Number(account.total_contract_price) : null,
+      remaining_balance: summary ? summary.remainingBalance : account ? Number(account.remaining_balance) : null,
+      billing_summary: summary ?? null,
       has_title: Boolean(title),
       title_id: title?.title_id ?? null,
       title_status: title?.status ?? null,
+      is_legacy_transferred: title?.is_legacy_transferred ?? false,
+      clearance_started_at: title?.clearance_started_at ?? null,
+      released_to_name: title?.released_to_name ?? null,
+      title_created_at: title?.created_at ?? null,
+      title_updated_at: title?.updated_at ?? null,
     };
   });
 }
@@ -250,19 +361,23 @@ export async function getClientById(clientId: string): Promise<ClientWithDetails
     schema: uuidSchema,
     input: clientId,
     handler: async (validId, { supabase }) => {
-      const { data, error } = await supabase
+      const { data: row, error } = await supabase
         .from("client")
-        .select("*, contact_info(*), client_document(*), client_log(*)")
+        .select(
+          `*, contact_info(*), documents:file_attachment!client_id(${CLIENT_DOCUMENT_COLUMNS}), client_log(*)`
+        )
         .eq("client_id", validId)
-        .single<ClientWithDetails>();
+        .single<ClientWithDetails & { documents: FileAttachment[] }>();
 
-      if (error || !data) {
+      if (error || !row) {
         throw new Error(`Client not found: ${error?.message ?? "Unknown error"}`);
       }
 
+      const { documents, ...data } = row;
       const names = await resolveUserNames(supabase, data.client_log.flatMap(log => log.performed_by ? [log.performed_by] : []));
       return {
         ...data,
+        client_document: toClientDocuments(documents),
         client_log: data.client_log
           .map(log => ({ ...log, performer_name: log.performed_by ? names.get(log.performed_by) ?? 'Staff member' : 'System' }))
           .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()),
@@ -557,16 +672,21 @@ export async function uploadClientDocument(
       const filePath = await uploadClientDocumentObject(validId, file);
 
       const { data, error } = await supabase
-        .from("client_document")
+        .from("file_attachment")
         .insert({
+          entity_type: "client",
+          entity_id: validId,
           client_id: validId,
-          document_type,
           property_id,
+          file_category: document_type,
           file_path: filePath,
+          file_name: file.name,
+          file_size: file.size,
+          mime_type: file.type,
           uploaded_by: userId,
         })
-        .select()
-        .single<ClientDocument>();
+        .select(CLIENT_DOCUMENT_COLUMNS)
+        .single<FileAttachment>();
 
       if (error || !data) {
         await removeClientDocumentObject(filePath).catch((cleanupError) => {
@@ -575,7 +695,7 @@ export async function uploadClientDocument(
         throw new Error(`Failed to save document metadata: ${error?.message ?? "Unknown error"}`);
       }
 
-      return data;
+      return toClientDocument(data);
     },
   });
 }
@@ -586,9 +706,9 @@ export async function getClientDocumentUrl(documentId: string): Promise<string> 
     input: documentId,
     handler: async (validId, { supabase }) => {
       const { data, error } = await supabase
-        .from("client_document")
+        .from("file_attachment")
         .select("file_path")
-        .eq("document_id", validId)
+        .eq("attachment_id", validId)
         .single<{ file_path: string }>();
 
       if (error || !data) {
@@ -609,21 +729,24 @@ export async function createClientDocument(
     input: { clientId, ...input },
     handler: async ({ clientId: validId, ...data }, { supabase, userId }) => {
       const { data: created, error } = await supabase
-        .from("client_document")
+        .from("file_attachment")
         .insert({
+          entity_type: "client",
+          entity_id: validId,
           client_id: validId,
-          document_type: data.document_type,
+          property_id: data.property_id ?? null,
+          file_category: data.document_type,
           file_path: data.file_path,
           uploaded_by: userId,
         })
-        .select()
-        .single<ClientDocument>();
+        .select(CLIENT_DOCUMENT_COLUMNS)
+        .single<FileAttachment>();
 
       if (error || !created) {
         throw new Error(`Failed to save document metadata: ${error?.message ?? "Unknown error"}`);
       }
 
-      return created;
+      return toClientDocument(created);
     },
   });
 }
@@ -637,23 +760,87 @@ export async function getClientDocuments(
     input: { clientId, ...params },
     handler: async ({ clientId: validId, category }, { supabase }) => {
       let query = supabase
-        .from("client_document")
-        .select("*")
+        .from("file_attachment")
+        .select(CLIENT_DOCUMENT_COLUMNS)
         .eq("client_id", validId);
 
       if (category) {
-        query = query.eq("document_type", category);
+        query = query.eq("file_category", category);
       }
 
       const { data, error } = await query
         .order("uploaded_at", { ascending: false })
-        .returns<ClientDocument[]>();
+        .returns<FileAttachment[]>();
 
       if (error) {
         throw new Error(`Failed to fetch client documents: ${error.message}`);
       }
 
-      return data ?? [];
+      return toClientDocuments(data);
+    },
+  });
+}
+
+export async function updateClientDocumentLabel(
+  documentId: string,
+  label: string
+): Promise<ActionResult<ClientDocument>> {
+  return clientWrite.run({
+    schema: updateClientDocumentLabelSchema,
+    input: { documentId, label },
+    handler: async ({ documentId: validId, label: validLabel }, { supabase }) => {
+      const { data: existing, error: fetchError } = await supabase
+        .from("file_attachment")
+        .select("attachment_id, entity_type, file_category, metadata, client:client_id(full_name)")
+        .eq("attachment_id", validId)
+        .maybeSingle<{
+          attachment_id: string;
+          entity_type: string;
+          file_category: string;
+          metadata: Record<string, unknown> | null;
+          client: { full_name: string } | null;
+        }>();
+
+      if (fetchError) {
+        throw new Error(`Failed to load document: ${fetchError.message}`);
+      }
+      if (!existing) {
+        throw new Error("Document not found.");
+      }
+
+      const nextMetadata: Record<string, unknown> = { ...(existing.metadata ?? {}) };
+      if (validLabel) {
+        nextMetadata.label = validLabel;
+      } else {
+        delete nextMetadata.label;
+      }
+
+      const { data: updated, error: updateError } = await supabase
+        .from("file_attachment")
+        .update({ metadata: nextMetadata })
+        .eq("attachment_id", validId)
+        .select(CLIENT_DOCUMENT_COLUMNS)
+        .maybeSingle<FileAttachment>();
+
+      if (updateError) {
+        throw new Error(`Failed to update document label: ${updateError.message}`);
+      }
+      if (!updated) {
+        throw new Error("Document not found or you do not have permission to edit it.");
+      }
+
+      // Keep search_index keywords in sync when an index entry already exists.
+      const indexEntityType = existing.entity_type === "land_title" ? "land_title" : "client_document";
+      const nextKeywords = [existing.file_category, existing.client?.full_name, validLabel]
+        .filter(Boolean)
+        .join(" ");
+      await supabase
+        .from("search_index")
+        .update({ keywords: nextKeywords })
+        .eq("entity_type", indexEntityType)
+        .eq("entity_id", validId);
+
+      return toClientDocument(updated);
     },
   });
 }
@@ -663,30 +850,27 @@ export async function deleteClientDocument(documentId: string): Promise<ActionRe
     schema: uuidSchema,
     input: documentId,
     handler: async (validId, { supabase }) => {
-      const { data: existing } = await supabase
-        .from("client_document")
-        .select("file_path")
-        .eq("document_id", validId)
-        .single<{ file_path: string }>();
-
-      const { error } = await supabase
-        .from("client_document")
+      const { data: deleted, error } = await supabase
+        .from("file_attachment")
         .delete()
-        .eq("document_id", validId);
+        .eq("attachment_id", validId)
+        .select("file_path")
+        .maybeSingle<{ file_path: string }>();
 
       if (error) {
         throw new Error(`Failed to delete client document: ${error.message}`);
+      }
+      if (!deleted) {
+        throw new Error("Document not found or you do not have permission to remove it.");
       }
 
       await deleteEntityIndex("client_document", validId).catch((indexError) => {
         console.error(`Failed to clear search index for ${validId}:`, indexError);
       });
 
-      if (existing?.file_path) {
-        await removeClientDocumentObject(existing.file_path).catch((storageError) => {
-          console.error(`Failed to remove storage object ${existing.file_path}:`, storageError);
-        });
-      }
+      await removeClientDocumentObject(deleted.file_path).catch((storageError) => {
+        console.error(`Failed to remove storage object ${deleted.file_path}:`, storageError);
+      });
     },
   });
 }
@@ -699,17 +883,17 @@ export async function checkClientDocumentStatus(
     input: clientId,
     handler: async (validId, { supabase }) => {
       const { data: documents, error } = await supabase
-        .from("client_document")
-        .select("document_type")
+        .from("file_attachment")
+        .select("file_category")
         .eq("client_id", validId)
-        .returns<Array<{ document_type: DocType }>>();
+        .returns<Array<{ file_category: string }>>();
 
       if (error) {
         throw new Error(`Failed to fetch client documents: ${error.message}`);
       }
 
       const presentTypes = Array.from(
-        new Set((documents ?? []).map((doc) => doc.document_type))
+        new Set((documents ?? []).map((doc) => doc.file_category as DocType))
       );
 
       const missingTypes = REQUIRED_CLIENT_DOCUMENTS.filter(
@@ -730,7 +914,7 @@ export async function getClientsWithMissingDocuments(): Promise<ClientDocumentNo
   return client.query(async ({ supabase }) => {
     const { data: clients, error: clientErr } = await supabase
       .from("client")
-      .select("client_id, full_name, contact_info(*), client_document(document_type)")
+      .select("client_id, full_name, contact_info(*), documents:file_attachment!client_id(file_category)")
       .neq("status", "Archived");
 
     if (clientErr || !clients) {
@@ -741,7 +925,7 @@ export async function getClientsWithMissingDocuments(): Promise<ClientDocumentNo
 
     for (const item of clients) {
       const presentTypes = new Set(
-        (item.client_document ?? []).map((d: { document_type: DocType }) => d.document_type)
+        (item.documents ?? []).map((d: { file_category: string }) => d.file_category as DocType)
       );
 
       const missing = REQUIRED_CLIENT_DOCUMENTS.filter((req) => !presentTypes.has(req));

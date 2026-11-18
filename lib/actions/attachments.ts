@@ -46,6 +46,8 @@ export async function uploadAttachment(
         .insert({
           entity_type,
           entity_id,
+          // Client paperwork is linked by `client_id` so it joins from `client`.
+          client_id: entity_type === "client" ? entity_id : null,
           file_category,
           file_path: filePath,
           file_name: file.name,

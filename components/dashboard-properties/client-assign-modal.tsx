@@ -115,7 +115,7 @@ export function ClientAssignModal({
     if (onEnsureRegistered) return onEnsureRegistered();
 
     const res = await createLot({
-      site_id: lot.site_id,
+      project_area_id: lot.project_area_id,
       location: lot.location,
       block_number: lot.block_number,
       lot_number: lot.lot_number,
