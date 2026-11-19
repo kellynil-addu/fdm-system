@@ -93,8 +93,12 @@ export function TitleNoticesTab({
   const statusFileInputRef = useRef<HTMLInputElement>(null);
 
   const [confirmReleaseOpen, setConfirmReleaseOpen] = useState(false);
+  // The notice number stays set after close so the dialog text doesn't change
+  // mid close-animation; the separate open flag controls visibility.
   const [confirmStartNotice, setConfirmStartNotice] = useState<1 | 2 | 3 | null>(null);
+  const [startNoticeOpen, setStartNoticeOpen] = useState(false);
   const [confirmUndoNotice, setConfirmUndoNotice] = useState<1 | 2 | 3 | null>(null);
+  const [undoNoticeOpen, setUndoNoticeOpen] = useState(false);
 
   const [noticeStatusChoice, setNoticeStatusChoice] = useState<'received' | 'returned_to_sender'>('received');
   const [statusNotesInput, setStatusNotesInput] = useState('');
@@ -156,7 +160,7 @@ export function TitleNoticesTab({
         ...notices.filter((n) => n.notice_number !== noticeNumber),
         created,
       ]);
-      setConfirmStartNotice(null);
+      setStartNoticeOpen(false);
       return created;
     },
     {
@@ -243,7 +247,7 @@ export function TitleNoticesTab({
             : n
         )
       );
-      setConfirmUndoNotice(null);
+      setUndoNoticeOpen(false);
     },
     {
       onSuccess: () => {
@@ -346,7 +350,10 @@ export function TitleNoticesTab({
               size="sm"
               variant="quiet"
               className="text-xs gap-1.5 h-7 px-2.5 font-medium"
-              onClick={() => setConfirmStartNotice(nextNoticeNumber)}
+              onClick={() => {
+                setConfirmStartNotice(nextNoticeNumber);
+                setStartNoticeOpen(true);
+              }}
             >
               <Send className="h-3 w-3" />
               Start {nextNoticeNumber === 1 ? '1st' : nextNoticeNumber === 2 ? '2nd' : 'Final'} Notice
@@ -421,7 +428,10 @@ export function TitleNoticesTab({
                         <DropdownMenuContent align="end" className="text-xs">
                           <DropdownMenuItem
                             disabled={hasSubsequentNotice}
-                            onClick={() => setConfirmUndoNotice(n.notice_number as 1 | 2 | 3)}
+                            onClick={() => {
+                              setConfirmUndoNotice(n.notice_number as 1 | 2 | 3);
+                              setUndoNoticeOpen(true);
+                            }}
                             className="gap-2 cursor-pointer"
                           >
                             <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
@@ -593,7 +603,7 @@ export function TitleNoticesTab({
         )}
 
         {latestNoticeNumber === 3 && !ongoingNotice && (
-          <div className="flex items-center gap-2 p-2.5 rounded-md border border-border bg-muted/30 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 p-2.5 rounded-md border border-border bg-[color-mix(in_srgb,var(--muted)_30%,transparent)] text-xs text-muted-foreground">
             <ShieldAlert className="h-4 w-4 shrink-0 text-warning" />
             <span>Notice cycle complete (Final Demand issued).</span>
           </div>
@@ -616,8 +626,10 @@ export function TitleNoticesTab({
 
       {/* Confirmation Alert to Start Notice */}
       <AlertDialog
-        open={confirmStartNotice !== null}
-        onOpenChange={(open) => !open && setConfirmStartNotice(null)}
+        open={startNoticeOpen}
+        onOpenChange={(open) => {
+          if (!open && !isStartingNotice) setStartNoticeOpen(false);
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -632,15 +644,15 @@ export function TitleNoticesTab({
             <AlertDialogCancel disabled={isStartingNotice}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               disabled={isStartingNotice}
-              onClick={() => {
+              onClick={(e) => {
+                e.preventDefault();
                 if (confirmStartNotice) {
                   void runStartNotice(confirmStartNotice);
                 }
               }}
-              className="bg-primary text-primary-foreground hover:opacity-90"
             >
               {isStartingNotice ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : null}
               Start Notice
             </AlertDialogAction>
@@ -650,8 +662,10 @@ export function TitleNoticesTab({
 
       {/* Confirmation Alert to Undo Notice Status */}
       <AlertDialog
-        open={confirmUndoNotice !== null}
-        onOpenChange={(open) => !open && setConfirmUndoNotice(null)}
+        open={undoNoticeOpen}
+        onOpenChange={(open) => {
+          if (!open && !isUndoingNotice) setUndoNoticeOpen(false);
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -664,15 +678,16 @@ export function TitleNoticesTab({
             <AlertDialogCancel disabled={isUndoingNotice}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               disabled={isUndoingNotice}
-              onClick={() => {
+              variant="destructive"
+              onClick={(e) => {
+                e.preventDefault();
                 if (confirmUndoNotice) {
                   void runUndoNotice(confirmUndoNotice);
                 }
               }}
-              className="bg-destructive text-destructive-foreground hover:opacity-90"
             >
               {isUndoingNotice ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : null}
               Undo Status
             </AlertDialogAction>

@@ -224,7 +224,10 @@ function ToggleUserDialog({ user, open }: { user: UserListItem; open: boolean })
           <AlertDialogCancel disabled={state.status === 'pending'}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             disabled={state.status === 'pending'}
-            onClick={() => execute(user.id, user.isBanned)}
+            onClick={(e) => {
+              e.preventDefault();
+              void execute(user.id, user.isBanned);
+            }}
             variant={user.isBanned ? 'default' : 'destructive'}
           >
             {state.status === 'pending' ? 'Saving...' : user.isBanned ? 'Activate' : 'Deactivate'}
@@ -258,7 +261,10 @@ function DeleteUserDialog({ user, open }: { user: UserListItem; open: boolean })
           <AlertDialogCancel disabled={state.status === 'pending'}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             disabled={state.status === 'pending'}
-            onClick={() => execute(user.id)}
+            onClick={(e) => {
+              e.preventDefault();
+              void execute(user.id);
+            }}
             variant="destructive"
           >
             {state.status === 'pending' ? 'Deleting...' : 'Delete User'}

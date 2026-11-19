@@ -122,10 +122,9 @@ export function TitleClearanceTab({
                 setConfirmReadyOpen(false);
                 onStatusChange('Ready for Claim');
               }}
-              className="bg-primary text-primary-foreground hover:opacity-90 font-medium"
             >
               {isUpdatingStatus ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
               ) : null}
               {clearance.isComplete ? 'Confirm Ready for Claim' : 'Confirm Early Override'}
             </AlertDialogAction>

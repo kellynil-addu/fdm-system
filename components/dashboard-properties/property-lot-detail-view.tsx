@@ -1051,7 +1051,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
               </div>
 
               {lot.title && (
-                <div className="border-t border-border bg-row-hover/60 px-3 py-2">
+                <div className="border-t border-border bg-[color-mix(in_srgb,var(--row-hover)_60%,transparent)] px-3 py-2">
                   <Link
                     href={`/dashboard/legal?titleId=${encodeURIComponent(lot.title.title_id)}`}
                     className="group/link flex items-center justify-between text-xs font-medium text-primary hover:underline"
@@ -1120,7 +1120,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                 void handleConfirmClose();
               }}
               disabled={isClosing}
-              className="bg-destructive text-destructive-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_90%,black)]"
+              variant="destructive"
             >
               {isClosing && <Loader2 className="h-4 w-4 animate-spin" />}
               Close Lot

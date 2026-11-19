@@ -555,7 +555,7 @@ export function ClientDetailDocuments() {
                 void handleConfirmDelete();
               }}
               disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_85%,black)]"
+              variant="destructive"
             >
               {isDeleting ? (
                 <>
