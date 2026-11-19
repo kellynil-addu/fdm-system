@@ -485,7 +485,7 @@ function UniversalActivityCard() {
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             Live workspace feed
           </span>
-          <Link href="/dashboard/reports" className="font-medium text-primary hover:underline">
+          <Link href="/dashboard/settings/audit-logs" className="font-medium text-primary hover:underline">
             View Audit Log &rarr;
           </Link>
         </div>

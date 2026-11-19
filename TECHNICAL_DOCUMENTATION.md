@@ -123,7 +123,7 @@ For a new developer to clone and run the project on a local machine or computer,
 | **Structure** | `fdm-system/`<br>`├── app/` *(Next.js App Router pages, layouts, and API route handlers)*<br>`├── components/` *(Domain and UI components, strictly 1 level deep)*<br>`├── lib/` *(Server actions, services, repositories, hooks, and utilities)*<br>`├── public/` *(Static assets, MapLibre assets, logos, and images)*<br>`├── scripts/` *(Database seed scripts and Vitest E2E integration test suite)*<br>`└── supabase/migrations/` *(Ordered SQL migrations defining schemas, tables, and RLS)* |
 | **Directory** | **Purpose** |
 | `/app/(auth)/` | Public authentication routes (login page) |
-| `/app/(dashboard)/` | Role-protected dashboard routes (overview, clients, properties, map, admin, billing, legal, accounting, reports, settings) |
+| `/app/(dashboard)/` | Role-protected dashboard routes (overview, clients, properties, map, admin, billing, legal, accounting, settings) |
 | `/app/api/arcgis/token/` | Server-side secure OAuth token generation handler for ArcGIS REST API |
 | `/app/auth/` | Auth confirmation, password recovery, and session update route handlers |
 | `/components/auth/` | Authentication form components, reset password forms, and credential dialogs |

@@ -56,7 +56,6 @@ const ROUTE_LABELS: Record<string, string> = {
   clients: 'Client records',
   properties: 'Property inventory',
   map: 'Project Area Map',
-  reports: 'Reports',
   admin: 'Team & access',
   settings: 'Account Settings',
   billing: 'Billing & ledgers',
