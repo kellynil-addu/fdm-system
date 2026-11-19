@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -49,13 +49,21 @@ import { toast } from 'sonner';
 import { ActivityTime } from '@/components/shared/activity-time';
 import { useClientDetail } from '@/lib/hooks/use-client-detail';
 import { ClientFloatingEditor } from './client-floating-editor';
+import { cn } from '@/lib/utils';
 import {
   GENDERS,
   type CivilStatus,
   type Gender,
+  type ClientTimelineEvent,
 } from '@/lib/types/client';
 
 const ACTIVITY_TYPES = ['Call', 'Meeting', 'Email', 'Note', 'Follow-up'];
+const FILTER_TABS = [
+  { id: 'all', label: 'All' },
+  { id: 'touchpoint', label: 'Touchpoints' },
+  { id: 'billing', label: 'Billing' },
+  { id: 'legal', label: 'Legal' },
+] as const;
 
 function contactIcon(type: string) {
   const lowered = type.toLowerCase();
@@ -92,6 +100,36 @@ export function ClientDetailSidebar() {
   const [activityDescription, setActivityDescription] = useState('');
   const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [timelineFilter, setTimelineFilter] = useState<(typeof FILTER_TABS)[number]['id']>('all');
+
+  const timelineEvents = useMemo<ClientTimelineEvent[]>(() => {
+    if (client.activity_timeline) return client.activity_timeline;
+    return client.client_log.map((log) => ({
+      id: log.log_id,
+      category: 'touchpoint',
+      isTouchpoint: true,
+      eventType: log.event_type,
+      title: log.event_type,
+      description: log.description,
+      timestamp: log.time,
+      performerName: log.performer_name ?? (log.performed_by ? 'Staff member' : 'System'),
+    }));
+  }, [client.activity_timeline, client.client_log]);
+
+  const filterCounts = useMemo(() => {
+    const counts = { all: timelineEvents.length, touchpoint: 0, billing: 0, legal: 0 };
+    for (const ev of timelineEvents) {
+      if (ev.category in counts) {
+        counts[ev.category as keyof typeof counts]++;
+      }
+    }
+    return counts;
+  }, [timelineEvents]);
+
+  const filteredTimeline = useMemo(() => {
+    if (timelineFilter === 'all') return timelineEvents;
+    return timelineEvents.filter((ev) => ev.category === timelineFilter);
+  }, [timelineEvents, timelineFilter]);
 
   async function handleUpdateAddress(address: string) {
     try {
@@ -658,34 +696,111 @@ export function ClientDetailSidebar() {
           )}
           </div>
 
+          {/* Category filter pills */}
+          <div
+            role="group"
+            aria-label="Filter activity by category"
+            className="mb-3 flex flex-wrap items-center gap-1 rounded-lg bg-row-hover p-1"
+          >
+            {FILTER_TABS.map((tab) => {
+              const isActive = timelineFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => setTimelineFilter(tab.id)}
+                  className={cn(
+                    'flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                    isActive
+                      ? 'bg-card font-semibold text-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <span>{tab.label}</span>
+                  <span className="text-[10px] tabular-nums text-muted-foreground">
+                    ({filterCounts[tab.id]})
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <div>
-            {client.client_log.length === 0 ? (
+            {timelineEvents.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border-warm bg-row-hover px-3 py-6 text-center text-xs text-muted-foreground">
                 No activity recorded yet
               </p>
+            ) : filteredTimeline.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border-warm bg-row-hover px-3 py-6 text-center text-xs text-muted-foreground">
+                No {timelineFilter === 'touchpoint' ? 'touchpoint' : timelineFilter} activity recorded
+              </p>
             ) : (
               <ol className="relative space-y-3.5 border-l-2 border-border-warm pl-4 ml-1.5">
-                {client.client_log.map((log) => (
-                  <li key={log.log_id} className="relative">
-                    <span
-                      aria-hidden="true"
-                      className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-border-warm ring-2 ring-background"
-                    />
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="text-xs font-semibold text-foreground">
-                        {log.event_type}
-                      </span>
-                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <ActivityTime timestamp={log.time} />
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                      {log.description || 'No description provided'}
-                    </p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">Recorded by {log.performer_name ?? (log.performed_by ? 'Staff member' : 'System')}</p>
-                  </li>
-                ))}
+                {filteredTimeline.map((item) => {
+                  if (item.isTouchpoint) {
+                    return (
+                      <li key={item.id} className="relative">
+                        <span
+                          aria-hidden="true"
+                          className="absolute -left-[22px] top-1.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background"
+                        />
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="text-xs font-semibold text-foreground">
+                            {item.title}
+                          </span>
+                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            <ActivityTime timestamp={item.timestamp} />
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs leading-relaxed text-foreground">
+                          {item.description || 'No description provided'}
+                        </p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Recorded by {item.performerName ?? 'Staff member'}
+                        </p>
+                      </li>
+                    );
+                  }
+
+                  return (
+                    <li key={item.id} className="relative">
+                      <span
+                        aria-hidden="true"
+                        className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full border border-border-warm bg-background ring-2 ring-background"
+                      />
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            [{item.category === 'billing' ? 'Billing' : 'Legal'}]
+                          </span>
+                          <span className="text-xs font-medium text-foreground">
+                            {item.title}
+                          </span>
+                        </div>
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          <ActivityTime timestamp={item.timestamp} />
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                        {item.description}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+                        <span>Processed by {item.performerName ?? 'System'}</span>
+                        {item.href && (
+                          <Link
+                            href={item.href}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            View →
+                          </Link>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ol>
             )}
           </div>

@@ -122,11 +122,26 @@ export interface ClientLog {
   performer_name?: string;
 }
 
+export type ClientTimelineCategory = "touchpoint" | "billing" | "legal";
+
+export interface ClientTimelineEvent {
+  id: string;
+  category: ClientTimelineCategory;
+  isTouchpoint: boolean;
+  eventType: string;
+  title: string;
+  description: string | null;
+  timestamp: string;
+  performerName?: string;
+  href?: string;
+}
+
 export interface ClientWithDetails extends Client {
   contact_info: ContactInfo[];
   client_document: ClientDocument[];
   client_log: ClientLog[];
   properties?: ClientProperty[];
+  activity_timeline?: ClientTimelineEvent[];
 }
 
 export interface ClientPropertyBillingSummary {

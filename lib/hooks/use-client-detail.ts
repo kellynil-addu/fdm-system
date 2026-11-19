@@ -33,6 +33,7 @@ import type {
   ClientWithDetails,
   ContactInfo,
   ClientLog,
+  ClientTimelineEvent,
   ClientDocument,
   CreateClientLogInput,
   CivilStatus,
@@ -287,10 +288,23 @@ export function ClientDetailProvider({
   const addActivity = useCallback(
     async (input: CreateClientLogInput): Promise<ClientLog> => {
       const created = await createClientLogAction(client.client_id, input);
-      setClient((prev) => ({
-        ...prev,
-        client_log: [created, ...prev.client_log],
-      }));
+      setClient((prev) => {
+        const newTimelineEvent: ClientTimelineEvent = {
+          id: created.log_id,
+          category: 'touchpoint',
+          isTouchpoint: true,
+          eventType: created.event_type,
+          title: created.event_type,
+          description: created.description,
+          timestamp: created.time,
+          performerName: created.performer_name || 'Staff member',
+        };
+        return {
+          ...prev,
+          client_log: [created, ...prev.client_log],
+          activity_timeline: [newTimelineEvent, ...(prev.activity_timeline || [])],
+        };
+      });
       notifyActivityUpdated();
       router.refresh();
       return created;

@@ -9,9 +9,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { extractDocumentText } from '@/lib/ocr/extract-document-text';
-import { indexEntityText } from '@/lib/actions/search-index';
-import { getAttachmentUrl } from '@/lib/actions/attachments';
+import { indexAttachmentWithPaddle } from '@/lib/actions/ocr-paddle';
 import type { IndexableEntity, UnindexedDocument } from '@/lib/types/search';
 
 export interface OcrJob {
@@ -30,7 +28,7 @@ export interface OcrJob {
 
 export interface EnqueueFileParams {
   attachmentId: string;
-  file: File;
+  file?: File;
   fileName?: string;
   entityType?: IndexableEntity;
   keywords?: string;
@@ -53,7 +51,6 @@ export function OcrQueueProvider({ children }: { children: ReactNode }) {
   const [jobs, setJobs] = useState<OcrJob[]>([]);
   const isWorkingRef = useRef(false);
 
-  // Warn if closing the browser tab while OCR jobs are still in progress.
   const isProcessing = jobs.some((j) => j.status === 'pending' || j.status === 'processing');
 
   useEffect(() => {
@@ -66,12 +63,12 @@ export function OcrQueueProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isProcessing]);
 
-  // Processes the next pending OCR job in serial queue.
+  // Processes the next pending OCR job using server-side PaddleOCR
   const processNextJob = useCallback(async () => {
     if (isWorkingRef.current) return;
 
     const nextJob = jobs.find((j) => j.status === 'pending');
-    if (!nextJob || !nextJob.file) return;
+    if (!nextJob) return;
 
     isWorkingRef.current = true;
     setJobs((prev) =>
@@ -79,37 +76,37 @@ export function OcrQueueProvider({ children }: { children: ReactNode }) {
     );
 
     try {
-      const result = await extractDocumentText(
-        nextJob.file,
-        (progress, page, totalPages) => {
-          setJobs((prev) =>
-            prev.map((j) =>
-              j.id === nextJob.id ? { ...j, progress, page, totalPages } : j
-            )
-          );
-        }
-      );
+      const formData = new FormData();
+      formData.append('attachmentId', nextJob.attachmentId);
+      if (nextJob.file) {
+        formData.append('file', nextJob.file);
+      }
+      formData.append('entityType', nextJob.entityType);
+      if (nextJob.keywords) {
+        formData.append('keywords', nextJob.keywords);
+      }
 
-      // Save extracted text to search_index
-      await indexEntityText({
-        entity_id: nextJob.attachmentId,
-        entity_type: nextJob.entityType,
-        content: result.text || null,
-        keywords: nextJob.keywords || nextJob.fileName || null,
-      });
+      const res = await indexAttachmentWithPaddle(formData);
+      if (!res.success) {
+        throw new Error(res.error || 'PaddleOCR indexing failed');
+      }
 
       setJobs((prev) =>
-        prev.map((j) => (j.id === nextJob.id ? { ...j, status: 'done', progress: 1 } : j))
+        prev.map((j) =>
+          j.id === nextJob.id
+            ? { ...j, status: 'done', progress: 1, totalPages: res.data.totalPages }
+            : j
+        )
       );
     } catch (err) {
-      console.warn(`OCR processing failed for ${nextJob.fileName}:`, err);
+      console.warn(`PaddleOCR indexing failed for ${nextJob.fileName}:`, err);
       setJobs((prev) =>
         prev.map((j) =>
           j.id === nextJob.id
             ? {
                 ...j,
                 status: 'failed',
-                error: err instanceof Error ? err.message : 'Text extraction failed',
+                error: err instanceof Error ? err.message : 'Indexing failed',
               }
             : j
         )
@@ -131,11 +128,12 @@ export function OcrQueueProvider({ children }: { children: ReactNode }) {
       entityType = 'client_document',
       keywords,
     }: EnqueueFileParams) => {
+      const resolvedName = fileName ?? file?.name ?? 'document';
       const newJob: OcrJob = {
         id: `${attachmentId}-${Date.now()}`,
         attachmentId,
         file,
-        fileName: fileName ?? file.name,
+        fileName: resolvedName,
         entityType,
         keywords,
         status: 'pending',
@@ -143,7 +141,6 @@ export function OcrQueueProvider({ children }: { children: ReactNode }) {
       };
 
       setJobs((prev) => {
-        // Avoid duplicate jobs for the same attachment
         if (prev.some((j) => j.attachmentId === attachmentId && j.status !== 'failed')) {
           return prev;
         }
@@ -153,29 +150,14 @@ export function OcrQueueProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  // Downloads an unindexed document from S3 and enqueues it.
   const enqueueRemoteAttachment = useCallback(
     async (attachment: UnindexedDocument) => {
-      try {
-        const presignedUrl = await getAttachmentUrl(attachment.attachment_id);
-        const response = await fetch(presignedUrl);
-        if (!response.ok) throw new Error('Failed to download document from storage');
-
-        const blob = await response.blob();
-        const file = new File([blob], attachment.file_name, {
-          type: attachment.mime_type || blob.type || 'application/pdf',
-        });
-
-        enqueueFile({
-          attachmentId: attachment.attachment_id,
-          file,
-          fileName: attachment.file_name,
-          entityType: (attachment.entity_type as IndexableEntity) || 'client_document',
-          keywords: [attachment.file_category, attachment.client_name].filter(Boolean).join(' '),
-        });
-      } catch (err) {
-        console.error('Failed to hydrate remote document for OCR:', err);
-      }
+      enqueueFile({
+        attachmentId: attachment.attachment_id,
+        fileName: attachment.file_name,
+        entityType: (attachment.entity_type as IndexableEntity) || 'client_document',
+        keywords: [attachment.file_category, attachment.client_name].filter(Boolean).join(' '),
+      });
     },
     [enqueueFile]
   );

@@ -37,6 +37,7 @@ export async function hardDeleteTestClients(clientIds: string[]) {
   if (clientIds.length === 0) return;
   const admin = getTestAdminClient();
   await admin.from("land_title").delete().in("client_id", clientIds);
+  await admin.from("billing_event").delete().in("client_id", clientIds);
   await admin.from("account_party").delete().in("client_id", clientIds);
   await admin.from("file_attachment").delete().in("client_id", clientIds);
   await admin.from("client_log").delete().in("client_id", clientIds);
