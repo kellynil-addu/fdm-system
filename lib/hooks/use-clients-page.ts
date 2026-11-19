@@ -71,6 +71,9 @@ interface ClientsContextValue {
   /** Clients whose required paperwork is incomplete. */
   missingDocumentAlerts: ClientDocumentNotification[];
   isSystemAdmin: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
 const ClientsContext = createContext<ClientsContextValue | null>(null);
@@ -98,7 +101,10 @@ export function ClientsProvider({
   children: ReactNode;
   initialClients?: ClientListItem[];
 }) {
-  const { isSystemAdmin } = useSession();
+  const { isSystemAdmin, hasPermission } = useSession();
+  const canCreate = hasPermission('clients.create');
+  const canEdit = hasPermission('clients.update');
+  const canDelete = Boolean(isSystemAdmin || hasPermission('clients.delete'));
   const router = useRouter();
   const requestedClient = useSearchParams().get('client');
   const [clients, setClients] = useState<ClientListItem[]>(initialClients);
@@ -226,7 +232,16 @@ export function ClientsProvider({
     },
   });
 
-  const openDialog = useCallback((dialog: ClientDialog) => setActiveDialog(dialog), []);
+  const openDialog = useCallback(
+    (dialog: ClientDialog) => {
+      if (dialog?.type === 'create' && !canCreate) return;
+      if (dialog?.type === 'edit' && !canEdit) return;
+      if (dialog?.type === 'archive' && !canEdit) return;
+      if (dialog?.type === 'delete' && !canDelete) return;
+      setActiveDialog(dialog);
+    },
+    [canCreate, canEdit, canDelete]
+  );
   const closeDialog = useCallback(() => setActiveDialog(null), []);
 
   const createClient = useCallback(async (input: CreateClientInput): Promise<ActionResult<ClientListItem>> => {
@@ -369,6 +384,9 @@ export function ClientsProvider({
         searchDocuments,
         missingDocumentAlerts,
         isSystemAdmin: Boolean(isSystemAdmin),
+        canCreate,
+        canEdit,
+        canDelete,
       },
     },
     children

@@ -87,6 +87,9 @@ interface PropertyLotsContextValue {
   reopenLot: (propertyId: string, allowEarlyReopen?: boolean) => Promise<ActionResult<PropertyLotWithClient>>;
   projectAreas: ProjectArea[];
   isSystemAdmin: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
 const PropertyLotsContext = createContext<PropertyLotsContextValue | null>(null);
@@ -128,7 +131,10 @@ export function PropertyLotsProvider({
   truncationMode?: 'paged' | 'cap';
   onProjectAreaFilterChange?: (projectAreaId: string | null) => void;
 }) {
-  const { isSystemAdmin } = useSession();
+  const { isSystemAdmin, hasPermission } = useSession();
+  const canCreate = hasPermission('properties.create');
+  const canEdit = hasPermission('properties.update');
+  const canDelete = Boolean(isSystemAdmin || hasPermission('properties.delete'));
   const router = useRouter();
   const [lots, setLots] = useState<PropertyLotWithClient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -261,7 +267,14 @@ export function PropertyLotsProvider({
     };
   }, [projectAreas]);
 
-  const openDialog = useCallback((dialog: PropertyDialog) => setActiveDialog(dialog), []);
+  const openDialog = useCallback(
+    (dialog: PropertyDialog) => {
+      if (dialog?.type === 'create' && !canCreate) return;
+      if (dialog?.type === 'assign' && !canEdit) return;
+      setActiveDialog(dialog);
+    },
+    [canCreate, canEdit]
+  );
   const closeDialog = useCallback(() => setActiveDialog(null), []);
 
   const createLot = useCallback(
@@ -417,6 +430,9 @@ export function PropertyLotsProvider({
     reopenLot,
     projectAreas,
     isSystemAdmin,
+    canCreate,
+    canEdit,
+    canDelete,
   };
 
   return createElement(PropertyLotsContext.Provider, { value }, children);

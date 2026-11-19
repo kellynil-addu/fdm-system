@@ -345,9 +345,10 @@ export interface PropertyLotDetailViewProps {
 }
 
 export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetailViewProps) {
-  const { updateLot, archiveLot, unarchiveLot, reopenLot, deleteLot, projectAreas } = usePropertyLots();
-  const { isSystemAdmin, hasPermission } = useSession();
-  const canDeleteLot = hasPermission('properties.delete');
+  const { updateLot, archiveLot, unarchiveLot, reopenLot, deleteLot, projectAreas, canEdit, canDelete } = usePropertyLots();
+  const { isSystemAdmin } = useSession();
+  const canEditLot = canEdit;
+  const canDeleteLot = canDelete;
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -573,18 +574,20 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   Export PDF report
                 </DropdownMenuItem>
 
-                <DropdownMenuSeparator />
+                {(canEditLot || canDeleteLot) && <DropdownMenuSeparator />}
 
                 {isArchived ? (
                   <>
-                    <DropdownMenuItem
-                      disabled={unarchiveState.status === 'pending'}
-                      icon={<ArchiveRestore className="h-4 w-4" />}
-                      onSelect={() => runUnarchive(lot.property_id)}
-                    >
-                      Restore lot
-                    </DropdownMenuItem>
-                    {isSystemAdmin && (
+                    {canEditLot && (
+                      <DropdownMenuItem
+                        disabled={unarchiveState.status === 'pending'}
+                        icon={<ArchiveRestore className="h-4 w-4" />}
+                        onSelect={() => runUnarchive(lot.property_id)}
+                      >
+                        Restore lot
+                      </DropdownMenuItem>
+                    )}
+                    {canDeleteLot && (
                       <DropdownMenuItem
                         variant="destructive"
                         disabled={!eligibility.isEligibleForDelete}
@@ -603,14 +606,16 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   </>
                 ) : (
                   <>
-                    <DropdownMenuItem
-                      disabled={archiveState.status === 'pending'}
-                      icon={<Archive className="h-4 w-4" />}
-                      onSelect={() => runArchive(lot.property_id)}
-                    >
-                      Archive lot
-                    </DropdownMenuItem>
-                    {displayStatus === 'Open' && (
+                    {canEditLot && (
+                      <DropdownMenuItem
+                        disabled={archiveState.status === 'pending'}
+                        icon={<Archive className="h-4 w-4" />}
+                        onSelect={() => runArchive(lot.property_id)}
+                      >
+                        Archive lot
+                      </DropdownMenuItem>
+                    )}
+                    {displayStatus === 'Open' && canDeleteLot && (
                       <DropdownMenuItem
                         variant="destructive"
                         disabled={!canDeleteLot}
@@ -674,12 +679,14 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                     )}
                   </Button>
                 )}
-                <LotMetricFloatingEditor
-                  title="Edit area size"
-                  label="Area size (sqm)"
-                  initialValue={currentArea}
-                  onSave={handleUpdateArea}
-                />
+                {canEditLot && (
+                  <LotMetricFloatingEditor
+                    title="Edit area size"
+                    label="Area size (sqm)"
+                    initialValue={currentArea}
+                    onSave={handleUpdateArea}
+                  />
+                )}
               </div>
             </div>
 
@@ -710,12 +717,14 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                     )}
                   </Button>
                 )}
-                <LotMetricFloatingEditor
-                  title="Edit price per sqm"
-                  label="Price per sqm (₱)"
-                  initialValue={currentPrice}
-                  onSave={handleUpdatePrice}
-                />
+                {canEditLot && (
+                  <LotMetricFloatingEditor
+                    title="Edit price per sqm"
+                    label="Price per sqm (₱)"
+                    initialValue={currentPrice}
+                    onSave={handleUpdatePrice}
+                  />
+                )}
               </div>
             </div>
 
@@ -798,45 +807,47 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                 </p>
               </div>
 
-              <div className="flex flex-col gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setIsAssignModalOpen(true)}
-                  className="w-full gap-1.5 text-xs"
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                  <span>Assign Client</span>
-                </Button>
+              {(canEditLot || (displayStatus === 'Open' && !isArchived && canDeleteLot)) && (
+                <div className="flex flex-col gap-2">
+                  {canEditLot && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={() => setIsAssignModalOpen(true)}
+                      className="w-full gap-1.5 text-xs"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      <span>Assign Client</span>
+                    </Button>
+                  )}
 
-                {displayStatus === 'Closed' && (
-                  <Button
-                    type="button"
-                    variant="quiet"
-                    size="sm"
-                    onClick={() => setIsCreateModalOpen(true)}
-                    className="w-full gap-1.5 text-xs"
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    <span>Open for Sale</span>
-                  </Button>
-                )}
+                  {displayStatus === 'Closed' && canEditLot && (
+                    <Button
+                      type="button"
+                      variant="quiet"
+                      size="sm"
+                      onClick={() => setIsCreateModalOpen(true)}
+                      className="w-full gap-1.5 text-xs"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Open for Sale</span>
+                    </Button>
+                  )}
 
-                {displayStatus === 'Open' && !isArchived && (
-                  <Button
-                    type="button"
-                    variant="danger"
-                    size="sm"
-                    disabled={!canDeleteLot}
-                    title={!canDeleteLot ? 'Requires properties.delete permission' : undefined}
-                    onClick={() => setIsCloseDialogOpen(true)}
-                    className="w-full gap-1.5 text-xs"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span>Close Lot</span>
-                  </Button>
-                )}
-              </div>
+                  {displayStatus === 'Open' && !isArchived && canDeleteLot && (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      onClick={() => setIsCloseDialogOpen(true)}
+                      className="w-full gap-1.5 text-xs"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Close Lot</span>
+                    </Button>
+                  )}
+                </div>
+              )}
             </Card>
           )}
 
@@ -877,15 +888,17 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   )}
                 </div>
 
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setIsReopenDialogOpen(true)}
-                  className="w-full gap-1.5 text-xs"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  <span>Reopen Lot for Sale</span>
-                </Button>
+                {canEditLot && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setIsReopenDialogOpen(true)}
+                    className="w-full gap-1.5 text-xs"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5" />
+                    <span>Reopen Lot for Sale</span>
+                  </Button>
+                )}
               </Card>
             </>
           )}
@@ -1025,13 +1038,15 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                       )}
                     </Button>
                   )}
-                  <LotTitleFloatingEditor
-                    title="Edit title number"
-                    label="Transfer Certificate of Title (TCT)"
-                    initialValue={currentTitle}
-                    placeholder="e.g. T-123456"
-                    onSave={handleUpdateTitle}
-                  />
+                  {canEditLot && (
+                    <LotTitleFloatingEditor
+                      title="Edit title number"
+                      label="Transfer Certificate of Title (TCT)"
+                      initialValue={currentTitle}
+                      placeholder="e.g. T-123456"
+                      onSave={handleUpdateTitle}
+                    />
+                  )}
                 </div>
               </div>
 

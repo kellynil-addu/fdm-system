@@ -42,3 +42,25 @@ export function useSession(): SessionContextValue {
   }
   return ctx;
 }
+
+export interface ResourcePermissions {
+  canCreate: boolean;
+  canRead: boolean;
+  canUpdate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+}
+
+export function useResourcePermissions(resource: string): ResourcePermissions {
+  const { hasPermission, isSystemAdmin } = useSession();
+  return React.useMemo(() => {
+    const canUpdate = hasPermission(`${resource}.update`);
+    return {
+      canCreate: hasPermission(`${resource}.create`),
+      canRead: hasPermission(`${resource}.read`),
+      canUpdate,
+      canEdit: canUpdate,
+      canDelete: isSystemAdmin || hasPermission(`${resource}.delete`),
+    };
+  }, [hasPermission, isSystemAdmin, resource]);
+}

@@ -78,7 +78,9 @@ export function ClientCompactRow({
   gutterL = 'pl-4 sm:pl-6',
   gutterR = 'pr-4 sm:pr-6',
 }: ClientCompactRowProps) {
-  const { isSystemAdmin } = useSession();
+  const { isSystemAdmin, hasPermission } = useSession();
+  const canEdit = hasPermission('clients.update');
+  const canDelete = Boolean(isSystemAdmin || hasPermission('clients.delete'));
   // Selectable row variant for picker dialogs
   if (selectable) {
     return (
@@ -205,26 +207,30 @@ export function ClientCompactRow({
             <DropdownMenuItem icon={<FileDown className="h-4 w-4" />} onSelect={handleExportPdf}>
               Client summary PDF
             </DropdownMenuItem>
-            <DropdownMenuItem icon={<Edit3 className="h-4 w-4" />} onSelect={onOpenEdit}>
+            <DropdownMenuItem
+              hidden={!canEdit}
+              icon={<Edit3 className="h-4 w-4" />}
+              onSelect={onOpenEdit}
+            >
               Edit client
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            {(canEdit || canDelete) && <DropdownMenuSeparator />}
             <DropdownMenuItem
-              hidden={!isArchived}
+              hidden={!isArchived || !canEdit}
               icon={<ArchiveRestore className="h-4 w-4" />}
               onSelect={onOpenRestore}
             >
               Restore client
             </DropdownMenuItem>
             <DropdownMenuItem
-              hidden={isArchived}
+              hidden={isArchived || !canEdit}
               icon={<Archive className="h-4 w-4" />}
               onSelect={onOpenArchive}
             >
               Archive client
             </DropdownMenuItem>
             <DropdownMenuItem
-              hidden={!isArchived || !isSystemAdmin}
+              hidden={!isArchived || !canDelete}
               disabled={!eligibility.isEligibleForDelete}
               disabledReason={eligibility.tooltipReason}
               variant="destructive"

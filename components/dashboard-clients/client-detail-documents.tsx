@@ -75,7 +75,15 @@ interface DocumentFolder {
 }
 
 export function ClientDetailDocuments() {
-  const { client, uploadDocument, updateDocumentLabel, deleteDocument, getDocumentUrl } = useClientDetail();
+  const {
+    client,
+    uploadDocument,
+    updateDocumentLabel,
+    deleteDocument,
+    getDocumentUrl,
+    canEditClient,
+    canDeleteClient,
+  } = useClientDetail();
   const { enqueueFile } = useOcrQueue();
   const searchParams = useSearchParams();
 
@@ -292,23 +300,25 @@ export function ClientDetailDocuments() {
                   <span className={isPresent ? 'text-foreground' : 'text-destructive'}>
                     {DOC_TYPE_LABEL[type]}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      openUpload(
-                        {
-                          propertyId: null,
-                          label: 'Personal Documents',
-                          sublabel: client.full_name,
-                        },
-                        type
-                      )
-                    }
-                    className="font-medium text-primary underline underline-offset-2 hover:text-[color-mix(in_srgb,var(--primary)_85%,black)]"
-                    aria-label={`Upload ${DOC_TYPE_LABEL[type]}`}
-                  >
-                    Upload
-                  </button>
+                  {canEditClient && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        openUpload(
+                          {
+                            propertyId: null,
+                            label: 'Personal Documents',
+                            sublabel: client.full_name,
+                          },
+                          type
+                        )
+                      }
+                      className="font-medium text-primary underline underline-offset-2 hover:text-[color-mix(in_srgb,var(--primary)_85%,black)]"
+                      aria-label={`Upload ${DOC_TYPE_LABEL[type]}`}
+                    >
+                      Upload
+                    </button>
+                  )}
                 </li>
               );
             })}
@@ -361,57 +371,61 @@ export function ClientDetailDocuments() {
                 expanded={isFolderExpanded(folder.id)}
                 onToggle={() => toggleFolder(folder.id)}
                 actions={
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                      >
-                        <Upload className="h-3.5 w-3.5" />
-                        Upload
-                        <ChevronDown className="h-2.5 w-2.5 opacity-60" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56">
-                      <DropdownMenuLabel className="text-xs text-muted-foreground">
-                        Select document type
-                      </DropdownMenuLabel>
-                      {(folder.isClient ? PERSONAL_DOC_TYPES : PROPERTY_DOC_TYPES).map((type) => (
-                        <DropdownMenuItem
-                          key={type}
-                          onClick={() => openUpload(folder.targetInfo, type)}
-                          className="cursor-pointer text-xs"
+                  canEditClient ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 gap-1 px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
                         >
-                          {DOC_TYPE_LABEL[type]}
+                          <Upload className="h-3.5 w-3.5" />
+                          Upload
+                          <ChevronDown className="h-2.5 w-2.5 opacity-60" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56">
+                        <DropdownMenuLabel className="text-xs text-muted-foreground">
+                          Select document type
+                        </DropdownMenuLabel>
+                        {(folder.isClient ? PERSONAL_DOC_TYPES : PROPERTY_DOC_TYPES).map((type) => (
+                          <DropdownMenuItem
+                            key={type}
+                            onClick={() => openUpload(folder.targetInfo, type)}
+                            className="cursor-pointer text-xs"
+                          >
+                            {DOC_TYPE_LABEL[type]}
+                          </DropdownMenuItem>
+                        ))}
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => openUpload(folder.targetInfo, 'custom')}
+                          className="cursor-pointer text-xs font-medium text-primary"
+                        >
+                          <Plus className="mr-1.5 h-3.5 w-3.5" />
+                          Upload a custom file...
                         </DropdownMenuItem>
-                      ))}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => openUpload(folder.targetInfo, 'custom')}
-                        className="cursor-pointer text-xs font-medium text-primary"
-                      >
-                        <Plus className="mr-1.5 h-3.5 w-3.5" />
-                        Upload a custom file...
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null
                 }
               >
                 {folder.docs.length === 0 ? (
                   <div className="flex items-center justify-between py-1.5 pl-10 pr-3 text-xs italic text-muted-foreground">
                     <span>No documents in this folder</span>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 px-2 text-xs font-normal not-italic text-primary hover:text-primary"
-                      onClick={() => openUpload(folder.targetInfo, '')}
-                    >
-                      <Upload className="mr-1 h-3 w-3" />
-                      Upload file
-                    </Button>
+                    {canEditClient && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-xs font-normal not-italic text-primary hover:text-primary"
+                        onClick={() => openUpload(folder.targetInfo, '')}
+                      >
+                        <Upload className="mr-1 h-3 w-3" />
+                        Upload file
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   folder.docs.map((doc) => {
@@ -454,36 +468,40 @@ export function ClientDetailDocuments() {
                                 </TooltipTrigger>
                                 <TooltipContent>Open document</TooltipContent>
                               </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => setDocToLabel(doc)}
-                                    aria-label="Edit label"
-                                    className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Edit label</TooltipContent>
-                              </Tooltip>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="ghost"
-                                    onClick={() => setDocToDelete(doc)}
-                                    aria-label="Delete document"
-                                    className="h-7 w-7 text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] hover:text-destructive"
-                                  >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Delete document</TooltipContent>
-                              </Tooltip>
+                              {canEditClient && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => setDocToLabel(doc)}
+                                      aria-label="Edit label"
+                                      className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Edit label</TooltipContent>
+                                </Tooltip>
+                              )}
+                              {canDeleteClient && (
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={() => setDocToDelete(doc)}
+                                      aria-label="Delete document"
+                                      className="h-7 w-7 text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] hover:text-destructive"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Delete document</TooltipContent>
+                                </Tooltip>
+                              )}
                             </div>
                           </>
                         }

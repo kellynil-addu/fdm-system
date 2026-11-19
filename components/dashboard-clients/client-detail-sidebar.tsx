@@ -83,6 +83,7 @@ export function ClientDetailSidebar() {
     deleteContact,
     setPrimaryContact,
     addActivity,
+    canEditClient,
   } = useClientDetail();
 
   // Activity state
@@ -305,13 +306,15 @@ export function ClientDetailSidebar() {
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </Button>
-              <ClientFloatingEditor
-                mode="text"
-                title="Edit address"
-                initialValue={client.address || ''}
-                placeholder="Davao City, Philippines"
-                onSave={handleUpdateAddress}
-              />
+              {canEditClient && (
+                <ClientFloatingEditor
+                  mode="text"
+                  title="Edit address"
+                  initialValue={client.address || ''}
+                  placeholder="Davao City, Philippines"
+                  onSave={handleUpdateAddress}
+                />
+              )}
             </div>
           </div>
 
@@ -341,13 +344,15 @@ export function ClientDetailSidebar() {
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </Button>
-              <ClientFloatingEditor
-                mode="text"
-                title="Edit TIN number"
-                initialValue={client.tin_number || ''}
-                placeholder="123-456-789"
-                onSave={handleUpdateTin}
-              />
+              {canEditClient && (
+                <ClientFloatingEditor
+                  mode="text"
+                  title="Edit TIN number"
+                  initialValue={client.tin_number || ''}
+                  placeholder="123-456-789"
+                  onSave={handleUpdateTin}
+                />
+              )}
             </div>
           </div>
 
@@ -380,14 +385,16 @@ export function ClientDetailSidebar() {
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </Button>
-              <ClientFloatingEditor
-                mode="civil-status"
-                title="Edit civil status"
-                initialCivilStatus={client.civil_status || 'Single'}
-                initialSpouseName={client.spouse_name || ''}
-                initialSpouseContact={client.spouse_contact || []}
-                onSave={handleUpdateCivilStatus}
-              />
+              {canEditClient && (
+                <ClientFloatingEditor
+                  mode="civil-status"
+                  title="Edit civil status"
+                  initialCivilStatus={client.civil_status || 'Single'}
+                  initialSpouseName={client.spouse_name || ''}
+                  initialSpouseContact={client.spouse_contact || []}
+                  onSave={handleUpdateCivilStatus}
+                />
+              )}
             </div>
           </div>
 
@@ -417,13 +424,15 @@ export function ClientDetailSidebar() {
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </Button>
-              <ClientFloatingEditor
-                mode="select"
-                title="Edit gender"
-                initialValue={client.gender || 'Male'}
-                options={GENDERS}
-                onSave={handleUpdateGender}
-              />
+              {canEditClient && (
+                <ClientFloatingEditor
+                  mode="select"
+                  title="Edit gender"
+                  initialValue={client.gender || 'Male'}
+                  options={GENDERS}
+                  onSave={handleUpdateGender}
+                />
+              )}
             </div>
           </div>
 
@@ -469,41 +478,45 @@ export function ClientDetailSidebar() {
                       <Copy className="h-3.5 w-3.5" />
                     )}
                   </Button>
-                  <ClientFloatingEditor
-                    mode="contact-edit"
-                    title="Edit contact"
-                    initialType={contact.type}
-                    initialValue={contact.value}
-                    onSave={(type, val) => handleUpdateContact(contact.contact_id, type, val)}
-                  />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                        aria-label={`Actions for ${contact.value}`}
-                      >
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-44">
-                      <DropdownMenuItem
-                        disabled={contact.is_primary}
-                        icon={<Star className="h-4 w-4" />}
-                        onSelect={() => handleSetPrimaryContact(contact.contact_id)}
-                      >
-                        {contact.is_primary ? 'Primary contact' : 'Set as primary'}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        icon={<Trash2 className="h-4 w-4" />}
-                        onSelect={() => handleDeleteContact(contact.contact_id)}
-                      >
-                        Delete contact
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {canEditClient && (
+                    <>
+                      <ClientFloatingEditor
+                        mode="contact-edit"
+                        title="Edit contact"
+                        initialType={contact.type}
+                        initialValue={contact.value}
+                        onSave={(type, val) => handleUpdateContact(contact.contact_id, type, val)}
+                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            aria-label={`Actions for ${contact.value}`}
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem
+                            disabled={contact.is_primary}
+                            icon={<Star className="h-4 w-4" />}
+                            onSelect={() => handleSetPrimaryContact(contact.contact_id)}
+                          >
+                            {contact.is_primary ? 'Primary contact' : 'Set as primary'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            variant="destructive"
+                            icon={<Trash2 className="h-4 w-4" />}
+                            onSelect={() => handleDeleteContact(contact.contact_id)}
+                          >
+                            Delete contact
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
+                  )}
                 </div>
               </div>
             );
@@ -518,19 +531,21 @@ export function ClientDetailSidebar() {
         </div>
 
         {/* Add Contact Button with Floating Popup */}
-        <div className="border-t border-border-warm-subtle bg-card p-1.5">
-          <ClientFloatingEditor
-            mode="contact-add"
-            title="Add contact"
-            onSave={handleAddContact}
-            trigger={
-              <Button variant="ghost" size="sm" className="h-7 w-full gap-1.5 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground">
-                <Plus className="h-3 w-3" />
-                Add contact
-              </Button>
-            }
-          />
-        </div>
+        {canEditClient && (
+          <div className="border-t border-border-warm-subtle bg-card p-1.5">
+            <ClientFloatingEditor
+              mode="contact-add"
+              title="Add contact"
+              onSave={handleAddContact}
+              trigger={
+                <Button variant="ghost" size="sm" className="h-7 w-full gap-1.5 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground">
+                  <Plus className="h-3 w-3" />
+                  Add contact
+                </Button>
+              }
+            />
+          </div>
+        )}
       </Card>
 
         {/* Divider line before Activity History */}
@@ -540,7 +555,8 @@ export function ClientDetailSidebar() {
         <div className="flex flex-col pb-6 pt-0.5">
           <div className="flex items-center justify-between gap-3 pb-2.5">
             <h3 className="text-xs font-semibold text-foreground">Activity history</h3>
-            <Popover open={isAddingActivity} onOpenChange={setIsAddingActivity}>
+            {canEditClient && (
+              <Popover open={isAddingActivity} onOpenChange={setIsAddingActivity}>
               <PopoverTrigger asChild>
                 <Button
                   type="button"
@@ -639,6 +655,7 @@ export function ClientDetailSidebar() {
                 </form>
               </PopoverContent>
             </Popover>
+          )}
           </div>
 
           <div>

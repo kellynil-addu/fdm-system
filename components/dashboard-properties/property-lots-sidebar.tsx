@@ -192,6 +192,7 @@ function EmptyState({
   controller: { isFiltered: boolean; clearAll: () => void };
   onCreate: () => void;
 }) {
+  const { canCreate } = usePropertyLots();
   const Icon = controller.isFiltered ? SearchX : LandPlot;
   return (
     <div className="flex flex-col items-center justify-center gap-3 px-4 py-12 text-center">
@@ -205,7 +206,9 @@ function EmptyState({
         <p className="max-w-xs text-xs text-muted-foreground">
           {controller.isFiltered
             ? 'Try a different search term or clear the filter.'
-            : 'Add the first lot to start tracking lot availability.'}
+            : canCreate
+              ? 'Add the first lot to start tracking lot availability.'
+              : 'No property lots recorded yet.'}
         </p>
       </div>
       {controller.isFiltered ? (
@@ -218,7 +221,7 @@ function EmptyState({
           <X className="h-3.5 w-3.5" />
           Clear filters
         </Button>
-      ) : (
+      ) : canCreate ? (
         <Button
           size="sm"
           onClick={onCreate}
@@ -227,7 +230,7 @@ function EmptyState({
           <Plus className="h-3.5 w-3.5" />
           New Lot
         </Button>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -270,6 +273,7 @@ function PropertyLotsSidebarContent({
     activeDialog,
     openDialog,
     closeDialog,
+    canCreate,
   } = usePropertyLots();
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -361,14 +365,16 @@ function PropertyLotsSidebarContent({
         </div>
 
         <div className="flex items-center gap-1.5">
-          <Button
-            size="sm"
-            onClick={() => openDialog({ type: 'create' })}
-            className="h-8 gap-1.5 bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>New Lot</span>
-          </Button>
+          {canCreate && (
+            <Button
+              size="sm"
+              onClick={() => openDialog({ type: 'create' })}
+              className="h-8 gap-1.5 bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>New Lot</span>
+            </Button>
+          )}
 
           {/* Single icon button for full lot table */}
           <Button

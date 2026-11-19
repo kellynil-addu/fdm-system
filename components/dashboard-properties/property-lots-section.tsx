@@ -159,6 +159,7 @@ function EmptyState({
   controller: { isFiltered: boolean; clearAll: () => void };
   onCreate: () => void;
 }) {
+  const { canCreate } = usePropertyLots();
   const Icon = controller.isFiltered ? SearchX : LandPlot;
   return (
     <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">
@@ -172,7 +173,9 @@ function EmptyState({
         <p className="max-w-sm text-sm text-muted-foreground">
           {controller.isFiltered
             ? 'Try a different search term, or clear the filters to see every lot.'
-            : 'Add the first lot to start tracking property availability and inventory.'}
+            : canCreate
+              ? 'Add the first lot to start tracking property availability and inventory.'
+              : 'No property lots recorded yet.'}
         </p>
       </div>
       {controller.isFiltered ? (
@@ -180,12 +183,12 @@ function EmptyState({
           <X className="h-3.5 w-3.5" />
           Clear filters
         </Button>
-      ) : (
+      ) : canCreate ? (
         <Button onClick={onCreate} className="gap-2">
           <Plus className="h-4 w-4" />
           New Lot
         </Button>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -198,6 +201,7 @@ function PropertyLotsContent() {
     activeDialog,
     openDialog,
     projectAreas,
+    canCreate,
   } = usePropertyLots();
 
   const { rendered: renderedDialog, isOpen: isDialogOpen } = useDialogPresence(activeDialog);
@@ -226,13 +230,15 @@ function PropertyLotsContent() {
                   Project Area Map
                 </Link>
               </Button>
-              <Button
-                onClick={() => openDialog({ type: 'create' })}
-                className="gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                New Lot
-              </Button>
+              {canCreate && (
+                <Button
+                  onClick={() => openDialog({ type: 'create' })}
+                  className="gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Lot
+                </Button>
+              )}
             </div>
           </div>
 

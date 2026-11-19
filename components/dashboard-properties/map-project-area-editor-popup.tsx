@@ -12,11 +12,12 @@ export interface MapProjectAreaEditorPopupProps {
 }
 
 export function MapProjectAreaEditorPopup({ plot, onEditBoundary, onDeletePlot }: MapProjectAreaEditorPopupProps) {
-  const { isSystemAdmin } = useSession();
+  const { isSystemAdmin, hasPermission } = useSession();
 
   const isDraft = plot.status === 'Draft';
-  const canEditBoundary = !plot.isProjectAreaArchived && !isDraft;
-  const canDeletePlot = !isDraft && isSystemAdmin;
+  const canUpdateProperty = hasPermission('properties.update');
+  const canEditBoundary = !plot.isProjectAreaArchived && !isDraft && canUpdateProperty;
+  const canDeletePlot = !isDraft && (isSystemAdmin || hasPermission('properties.delete'));
 
   return (
     <div className="min-w-[220px] p-3 font-sans" style={{ fontFamily: 'var(--font-geist-sans), sans-serif' }}>

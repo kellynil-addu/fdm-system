@@ -23,11 +23,14 @@ export function ClientDetailProperties({
   onOpenAssignProperty,
   canAssign = true,
 }: ClientDetailPropertiesProps) {
-  const { client } = useClientDetail();
+  const { client, canAssignProperty } = useClientDetail();
   const properties = sortClientPropertiesForDisplay(client.properties ?? []);
-  const assignDisabledReason = canAssign
+  const isAllowedToAssign = canAssign && canAssignProperty;
+  const assignDisabledReason = !canAssignProperty
     ? undefined
-    : 'Only active clients can be assigned a lot. Reactivate this client first.';
+    : !canAssign
+      ? 'Only active clients can be assigned a lot. Reactivate this client first.'
+      : undefined;
 
   return (
     <div className="space-y-6">
@@ -40,20 +43,20 @@ export function ClientDetailProperties({
           <div className="text-center">
             <p className="text-sm font-medium text-foreground">No properties assigned</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              {assignDisabledReason ?? 'Click below to assign a property lot to this client.'}
+              {assignDisabledReason ?? (isAllowedToAssign ? 'Click below to assign a property lot to this client.' : 'No property lots have been assigned to this client.')}
             </p>
           </div>
-          <Button
-            variant="quiet"
-            size="sm"
-            onClick={onOpenAssignProperty}
-            disabled={!canAssign}
-            title={assignDisabledReason}
-            className="mt-2 gap-1.5"
-          >
-            <Plus className="h-4 w-4" />
-            Assign new property
-          </Button>
+          {isAllowedToAssign && (
+            <Button
+              variant="quiet"
+              size="sm"
+              onClick={onOpenAssignProperty}
+              className="mt-2 gap-1.5"
+            >
+              <Plus className="h-4 w-4" />
+              Assign new property
+            </Button>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
@@ -72,22 +75,19 @@ export function ClientDetailProperties({
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center justify-start gap-3 pt-2">
-            <Button
-              variant="quiet"
-              size="sm"
-              onClick={onOpenAssignProperty}
-              disabled={!canAssign}
-              title={assignDisabledReason}
-              className="gap-1.5 text-xs"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Assign new property
-            </Button>
-            {assignDisabledReason && (
-              <p className="text-xs text-muted-foreground">{assignDisabledReason}</p>
-            )}
-          </div>
+          {isAllowedToAssign && (
+            <div className="flex flex-wrap items-center justify-start gap-3 pt-2">
+              <Button
+                variant="quiet"
+                size="sm"
+                onClick={onOpenAssignProperty}
+                className="gap-1.5 text-xs"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Assign new property
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

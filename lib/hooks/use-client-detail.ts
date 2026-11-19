@@ -27,6 +27,7 @@ import {
   undoBillingClearance as undoBillingClearanceAction,
 } from '@/lib/actions/billing';
 import { forfeitPropertyLot as forfeitPropertyLotAction } from '@/lib/actions/properties';
+import { useSession } from '@/lib/hooks/use-session';
 import type {
   Client,
   ClientWithDetails,
@@ -70,6 +71,10 @@ export interface ClientDetailContextValue {
   undoClearance: (accountId: string) => Promise<void>;
   /** Forfeits an account/lot, transitioning it into the grace period. */
   forfeitLot: (propertyId: string, reason?: string) => Promise<void>;
+  canEditClient: boolean;
+  canDeleteClient: boolean;
+  canClearBilling: boolean;
+  canAssignProperty: boolean;
 }
 
 const ClientDetailContext = createContext<ClientDetailContextValue | null>(null);
@@ -87,6 +92,11 @@ export function ClientDetailProvider({
   initialClient: ClientWithDetails;
   children: ReactNode;
 }) {
+  const { isSystemAdmin, hasPermission } = useSession();
+  const canEditClient = hasPermission('clients.update');
+  const canDeleteClient = Boolean(isSystemAdmin || hasPermission('clients.delete'));
+  const canClearBilling = hasPermission('billing.update');
+  const canAssignProperty = hasPermission('properties.update');
   const router = useRouter();
   const [client, setClient] = useState<ClientWithDetails>(initialClient);
 
@@ -404,6 +414,10 @@ export function ClientDetailProvider({
     clearAccount,
     undoClearance,
     forfeitLot,
+    canEditClient,
+    canDeleteClient,
+    canClearBilling,
+    canAssignProperty,
   };
 
   return createElement(ClientDetailContext.Provider, { value }, children);

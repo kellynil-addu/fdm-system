@@ -37,6 +37,7 @@ import {
 } from '@/lib/actions/project-areas';
 import { parseRing, calculatePolygonAreaSqm, isPolygonContained } from '@/lib/geometry';
 import { getProjectAreaDraft, saveProjectAreaDraft, clearProjectAreaDraft } from '@/lib/storage/map-draft-storage';
+import { useSession } from '@/lib/hooks/use-session';
 import {
   countProjectAreasByView,
   filterProjectAreasByView,
@@ -61,6 +62,8 @@ export interface ProjectAreaMapUnifiedViewProps {
 export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifiedViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { hasPermission } = useSession();
+  const canEditProperties = hasPermission('properties.update');
   const targetLotId = searchParams.get('lot');
   const targetProjectAreaId = searchParams.get('projectArea');
 
@@ -914,7 +917,7 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
         </div>
 
         {/* Floating Map Editor button at top-right when editor is NOT active */}
-        {!isEditorActive && (
+        {!isEditorActive && canEditProperties && (
           <div className="absolute top-4 right-16 z-20">
             <Button
               variant="outline"
