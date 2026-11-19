@@ -19,7 +19,6 @@ export function SidebarNav() {
   const pathname = usePathname();
   const workflow = DASHBOARD_WORKFLOW.filter((item) => hasPermission(item.permission));
   const tools = [
-    { title: 'Reports', href: '/dashboard/reports', icon: FileText, visible: workflow.length > 0 },
     { title: 'Team & access', href: '/dashboard/admin', icon: UserCog, visible: isSystemAdmin },
     { title: 'Account Settings', href: '/dashboard/settings', icon: Settings, visible: true },
   ].filter((item) => item.visible);

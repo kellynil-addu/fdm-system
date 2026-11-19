@@ -24,7 +24,8 @@ import {
   FileDown,
   Check,
 } from 'lucide-react';
-import { useSession } from '@/lib/hooks/use-session';
+import { useIntents } from '@/lib/hooks/use-session';
+import { either } from '@/lib/capabilities';
 import { getClientReportData } from '@/lib/actions/reports';
 import { downloadClientDocumentsPdf } from '@/lib/download-client-documents';
 import { toast } from 'sonner';
@@ -78,7 +79,12 @@ export function ClientCompactRow({
   gutterL = 'pl-4 sm:pl-6',
   gutterR = 'pr-4 sm:pr-6',
 }: ClientCompactRowProps) {
-  const { isSystemAdmin } = useSession();
+  const intent = useIntents({
+    edit: 'client.edit',
+    archive: 'client.archive',
+    delete: 'client.delete',
+    manageLifecycle: either('client.archive', 'client.delete'),
+  });
   // Selectable row variant for picker dialogs
   if (selectable) {
     return (
@@ -205,26 +211,30 @@ export function ClientCompactRow({
             <DropdownMenuItem icon={<FileDown className="h-4 w-4" />} onSelect={handleExportPdf}>
               Client summary PDF
             </DropdownMenuItem>
-            <DropdownMenuItem icon={<Edit3 className="h-4 w-4" />} onSelect={onOpenEdit}>
+            <DropdownMenuItem
+              hidden={!intent.edit}
+              icon={<Edit3 className="h-4 w-4" />}
+              onSelect={onOpenEdit}
+            >
               Edit client
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            {intent.manageLifecycle && <DropdownMenuSeparator />}
             <DropdownMenuItem
-              hidden={!isArchived}
+              hidden={!isArchived || !intent.archive}
               icon={<ArchiveRestore className="h-4 w-4" />}
               onSelect={onOpenRestore}
             >
               Restore client
             </DropdownMenuItem>
             <DropdownMenuItem
-              hidden={isArchived}
+              hidden={isArchived || !intent.archive}
               icon={<Archive className="h-4 w-4" />}
               onSelect={onOpenArchive}
             >
               Archive client
             </DropdownMenuItem>
             <DropdownMenuItem
-              hidden={!isArchived || !isSystemAdmin}
+              hidden={!isArchived || !intent.delete}
               disabled={!eligibility.isEligibleForDelete}
               disabledReason={eligibility.tooltipReason}
               variant="destructive"

@@ -59,3 +59,4 @@ supabase/schemas
 # wtf
 public/sample*
 screenshots
+*.traineddata

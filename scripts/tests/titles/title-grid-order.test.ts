@@ -2,9 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   titleStatusRank,
   compareTitleStatus,
+  filterTitleRecords,
   type TitleDialogItem,
 } from "@/lib/hooks/use-land-titles";
-import { TITLE_STATUSES, type TitleStatus } from "@/lib/types/title";
+import { TITLE_STATUSES, type TitleStatus, type AccountAwaitingTitle, type LandTitle } from "@/lib/types/title";
 
 /**
  * The `all` view is the only one that mixes stages, so it is the only one whose
@@ -70,5 +71,85 @@ describe("Title grid ordering", () => {
     ];
 
     expect([...sameStage].sort(compareTitleStatus)).toEqual(sameStage);
+  });
+});
+
+describe("Title workflow stage filtering", () => {
+  const awaitingMock = [
+    { account_id: "a1", cleared_at: "2026-01-01" } as unknown as AccountAwaitingTitle,
+  ];
+
+  const titlesMock = [
+    { title_id: "t0", status: "Cleared by Billing" } as unknown as LandTitle,
+    { title_id: "t1", status: "Document Preparation" } as unknown as LandTitle,
+    { title_id: "t2", status: "For Review" } as unknown as LandTitle,
+    { title_id: "t3", status: "For Signature" } as unknown as LandTitle,
+    { title_id: "t4", status: "Clearance Period" } as unknown as LandTitle,
+    { title_id: "t5", status: "Ready for Claim" } as unknown as LandTitle,
+    { title_id: "t6", status: "Released" } as unknown as LandTitle,
+  ];
+
+  it("returns all records in pipeline order when tab is 'all'", () => {
+    const items = filterTitleRecords("all", awaitingMock, titlesMock);
+    expect(items).toHaveLength(8);
+    expect(items.map((i) => (i.type === "awaiting" ? "awaiting" : i.data.status))).toEqual([
+      "awaiting",
+      "Cleared by Billing",
+      "Document Preparation",
+      "For Review",
+      "For Signature",
+      "Clearance Period",
+      "Ready for Claim",
+      "Released",
+    ]);
+  });
+
+  it("returns both awaiting accounts and Cleared by Billing titles when tab is 'intake'", () => {
+    const items = filterTitleRecords("intake", awaitingMock, titlesMock);
+    expect(items).toHaveLength(2);
+    expect(items[0]).toEqual({ type: "awaiting", data: awaitingMock[0] });
+    expect(items[1]).toEqual({ type: "title", data: titlesMock[0] });
+  });
+
+  it("returns only matching titles for preparation stage", () => {
+    const items = filterTitleRecords("preparation", awaitingMock, titlesMock);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual({ type: "title", data: titlesMock[1] });
+  });
+
+  it("returns only matching titles for review stage", () => {
+    const items = filterTitleRecords("review", awaitingMock, titlesMock);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual({ type: "title", data: titlesMock[2] });
+  });
+
+  it("returns only matching titles for signature stage", () => {
+    const items = filterTitleRecords("signature", awaitingMock, titlesMock);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual({ type: "title", data: titlesMock[3] });
+  });
+
+  it("returns only matching titles for clearance stage", () => {
+    const items = filterTitleRecords("clearance", awaitingMock, titlesMock);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual({ type: "title", data: titlesMock[4] });
+  });
+
+  it("returns only matching titles for ready stage", () => {
+    const items = filterTitleRecords("ready", awaitingMock, titlesMock);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual({ type: "title", data: titlesMock[5] });
+  });
+
+  it("returns only matching titles for released stage", () => {
+    const items = filterTitleRecords("released", awaitingMock, titlesMock);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toEqual({ type: "title", data: titlesMock[6] });
+  });
+
+  it("returns empty array when no titles match the stage", () => {
+    const onlyReleased = [{ title_id: "t6", status: "Released" } as unknown as LandTitle];
+    const items = filterTitleRecords("preparation", [], onlyReleased);
+    expect(items).toEqual([]);
   });
 });

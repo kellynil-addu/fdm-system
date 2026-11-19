@@ -21,12 +21,12 @@ export function ClientDetailTabs({
   assignPropertyId,
   assignPlot,
 }: ClientDetailTabsProps) {
-  const { client } = useClientDetail();
+  const { client, canAssignProperty } = useClientDetail();
   const searchParams = useSearchParams();
   const requestedTab = searchParams.get('tab');
 
   // Inactive and archived clients keep their records but cannot take new lots.
-  const canAssign = client.status === 'Active';
+  const canAssign = client.status === 'Active' && canAssignProperty;
   const hasPreSelectedAssignment = Boolean(assignPropertyId || assignPlot);
   const [activeTab, setActiveTab] = useState<string>(
     hasPreSelectedAssignment && canAssign

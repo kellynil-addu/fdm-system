@@ -148,6 +148,17 @@ export interface LedgerSummary {
   nextScheduledAmount?: number;
 }
 
+export interface BillingEvent {
+  event_id: string;
+  account_id: string;
+  client_id?: string | null;
+  property_id?: string | null;
+  event_type: "reservation" | "forfeited" | string;
+  description: string;
+  created_at: string;
+  created_by?: string | null;
+}
+
 // Compatibility type aliases for legacy spec references
 export type BillingAccountSummary = Record<string, unknown>;
 export type BillingTransaction = Record<string, unknown>;

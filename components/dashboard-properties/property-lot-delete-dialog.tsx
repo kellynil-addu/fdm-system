@@ -72,7 +72,7 @@ export function DeletePropertyLotDialog({
               void execute(lot.property_id);
             }}
             disabled={isPending || !eligibility.isEligibleForDelete}
-            className="bg-destructive text-destructive-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_90%,black)]"
+            variant="destructive"
           >
             {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             Delete Property Lot

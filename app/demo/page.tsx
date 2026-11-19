@@ -29,7 +29,7 @@ export default function Page() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <Link
                     href="/demo/dashboard"
-                    className="p-4 rounded-xl border-2 border-primary bg-card hover:bg-muted/30 transition-all flex flex-col justify-between shadow-xs"
+                    className="p-4 rounded-xl border-2 border-primary bg-card hover:bg-[color-mix(in_srgb,var(--muted)_30%,transparent)] transition-all flex flex-col justify-between shadow-xs"
                 >
                     <div>
                         <div className="flex items-center justify-between mb-1">
@@ -48,7 +48,7 @@ export default function Page() {
 
                 <Link
                     href="/dashboard/billing"
-                    className="p-4 rounded-xl border border-primary/40 bg-card hover:bg-muted/30 transition-all flex flex-col justify-between"
+                    className="p-4 rounded-xl border border-[color-mix(in_srgb,var(--primary)_40%,transparent)] bg-card hover:bg-[color-mix(in_srgb,var(--muted)_30%,transparent)] transition-all flex flex-col justify-between"
                 >
                     <div>
                         <div className="flex items-center justify-between mb-1">
@@ -67,7 +67,7 @@ export default function Page() {
 
                 <Link
                     href="/demo/title-dialog"
-                    className="p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-all flex flex-col justify-between"
+                    className="p-4 rounded-xl border border-border bg-card hover:bg-[color-mix(in_srgb,var(--muted)_30%,transparent)] transition-all flex flex-col justify-between"
                 >
                     <div>
                         <div className="flex items-center justify-between mb-1">
@@ -86,7 +86,7 @@ export default function Page() {
 
                 <Link
                     href="/demo/calling-cards"
-                    className="p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-all flex flex-col justify-between"
+                    className="p-4 rounded-xl border border-border bg-card hover:bg-[color-mix(in_srgb,var(--muted)_30%,transparent)] transition-all flex flex-col justify-between"
                 >
                     <div>
                         <div className="flex items-center justify-between mb-1">

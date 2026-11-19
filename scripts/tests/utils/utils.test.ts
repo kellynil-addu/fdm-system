@@ -15,7 +15,7 @@ import {
 import { getPaginationOffsets, buildPaginatedResult } from "@/lib/pagination";
 import { formatActivityTime } from "@/lib/format-activity-time";
 import { getWelcomeActions } from "@/lib/welcome-actions";
-import { buildClientAssignHref, parseAssignPlotParams } from "@/lib/utils/lot-destination";
+import { buildClientAssignHref, lotDestinationHref, parseAssignPlotParams } from "@/lib/utils/lot-destination";
 
 describe("Utility and Pure Guard Functions", () => {
   it("getPaginationOffsets computes SQL query range and clamps page/limit", () => {
@@ -272,6 +272,39 @@ describe("Utility and Pure Guard Functions", () => {
     ).toBeUndefined();
 
     expect(parseAssignPlotParams(undefined)).toBeUndefined();
+  });
+
+  it("lotDestinationHref routes to legal when titled, billing detail when on billing, and map when unassigned", () => {
+    // Missing property ID
+    expect(lotDestinationHref({})).toBeNull();
+    expect(lotDestinationHref({ property_id: null })).toBeNull();
+
+    // Titled lot routes to Legal
+    expect(
+      lotDestinationHref({
+        property_id: "prop-123",
+        title_id: "title-456",
+        account_id: "acc-789",
+      })
+    ).toBe("/dashboard/legal?titleId=title-456");
+
+    // Active billing account routes to dedicated billing detail workspace
+    expect(
+      lotDestinationHref(
+        {
+          property_id: "prop-123",
+          account_id: "dfa1ed81-bd09-48f4-8d55-a82fba1fc119",
+        },
+        "a13bdded-6a21-4b0f-8f1a-5b40505efe62"
+      )
+    ).toBe("/dashboard/billing/dfa1ed81-bd09-48f4-8d55-a82fba1fc119");
+
+    // No account or title routes to property map
+    expect(
+      lotDestinationHref({
+        property_id: "prop-123",
+      })
+    ).toBe("/dashboard/properties/map?lot=prop-123");
   });
 });
 

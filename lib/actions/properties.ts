@@ -388,7 +388,7 @@ export async function assignPropertyClient(
       status,
       total_contract_price: options?.total_contract_price,
     },
-    handler: async (validatedData, { supabase }) => {
+    handler: async (validatedData, { supabase, userId }) => {
       const { propertyId: targetLotId, clientId: targetClientId } = validatedData;
 
       // Cancel active ledger account and reset to Open if clearing client; reject if lot has a land title
@@ -450,9 +450,9 @@ export async function assignPropertyClient(
 
       const { data: lot, error: lotErr } = await supabase
         .from("property_lot")
-        .select("area_size, price_per_sqm")
+        .select("area_size, price_per_sqm, block_number, lot_number, location")
         .eq("property_id", targetLotId)
-        .single<{ area_size: number; price_per_sqm: number }>();
+        .single<{ area_size: number; price_per_sqm: number; block_number: number; lot_number: number; location: string }>();
 
       if (lotErr || !lot) {
         throw new Error(`Property lot not found: ${lotErr?.message ?? "Unknown error"}`);
@@ -516,6 +516,18 @@ export async function assignPropertyClient(
         throw new Error(`Failed to update lot status: ${lotUpdateErr.message}`);
       }
 
+      if (nextStatus === "Reserved" && targetClientId) {
+        const lotRef = `Block ${lot.block_number ?? ""} Lot ${lot.lot_number ?? ""} (${lot.location ?? "property lot"})`;
+        await supabase.from("billing_event").insert({
+          account_id: activeAccountId,
+          client_id: targetClientId,
+          property_id: targetLotId,
+          event_type: "reservation",
+          description: `Reserved ${lotRef} · TCP: ₱${tcp.toLocaleString("en-PH")}`,
+          created_by: userId,
+        });
+      }
+
       return getPropertyLotById(targetLotId);
     },
   });
@@ -535,7 +547,7 @@ export async function assignPropertyParties(
       status,
       total_contract_price: options?.total_contract_price,
     },
-    handler: async (validatedData, { supabase }) => {
+    handler: async (validatedData, { supabase, userId }) => {
       const { propertyId: targetLotId, parties: validParties } = validatedData;
 
       await assertClientsActive(supabase, validParties.map((p) => p.client_id));
@@ -543,9 +555,9 @@ export async function assignPropertyParties(
 
       const { data: lot, error: lotErr } = await supabase
         .from("property_lot")
-        .select("area_size, price_per_sqm")
+        .select("area_size, price_per_sqm, block_number, lot_number, location")
         .eq("property_id", targetLotId)
-        .single<{ area_size: number; price_per_sqm: number }>();
+        .single<{ area_size: number; price_per_sqm: number; block_number: number; lot_number: number; location: string }>();
 
       if (lotErr || !lot) {
         throw new Error(`Property lot not found: ${lotErr?.message ?? "Unknown error"}`);
@@ -602,6 +614,19 @@ export async function assignPropertyParties(
 
       if (lotUpdateErr) {
         throw new Error(`Failed to update lot status: ${lotUpdateErr.message}`);
+      }
+
+      if (nextStatus === "Reserved") {
+        const primary = partyRows.find((p) => p.is_primary) ?? partyRows[0];
+        const lotRef = `Block ${lot.block_number ?? ""} Lot ${lot.lot_number ?? ""} (${lot.location ?? "property lot"})`;
+        await supabase.from("billing_event").insert({
+          account_id: newAccount.account_id,
+          client_id: primary?.client_id ?? null,
+          property_id: targetLotId,
+          event_type: "reservation",
+          description: `Reserved ${lotRef} · TCP: ₱${tcp.toLocaleString("en-PH")}`,
+          created_by: userId,
+        });
       }
 
       return getPropertyLotById(targetLotId);
@@ -865,7 +890,7 @@ export async function forfeitPropertyLot(
   return propertyWrite.run({
     schema: forfeitPropertyLotSchema,
     input,
-    handler: async (validatedInput, { supabase }) => {
+    handler: async (validatedInput, { supabase, userId }) => {
       const { propertyId, reason, forfeitedAt } = validatedInput;
 
       const { data: existingTitle, error: titleErr } = await supabase
@@ -912,6 +937,34 @@ export async function forfeitPropertyLot(
       if (updateErr) {
         throw new Error(`Failed to forfeit ledger account: ${updateErr.message}`);
       }
+
+      const { data: party } = await supabase
+        .from("account_party")
+        .select("client_id")
+        .eq("account_id", activeAccount.account_id)
+        .order("is_primary", { ascending: false })
+        .limit(1)
+        .maybeSingle<{ client_id: string }>();
+
+      const { data: lot } = await supabase
+        .from("property_lot")
+        .select("block_number, lot_number, location")
+        .eq("property_id", propertyId)
+        .maybeSingle<{ block_number: number; lot_number: number; location: string }>();
+
+      const lotRef = lot
+        ? `Block ${lot.block_number} Lot ${lot.lot_number} (${lot.location})`
+        : "property lot";
+
+      // Log forfeiture to billing audit log
+      await supabase.from("billing_event").insert({
+        account_id: activeAccount.account_id,
+        client_id: party?.client_id ?? null,
+        property_id: propertyId,
+        event_type: "forfeited",
+        description: `Ledger forfeited for ${lotRef}${reason ? ` · Reason: ${reason}` : ""}`,
+        created_by: userId,
+      });
 
       return getPropertyLotById(propertyId);
     },

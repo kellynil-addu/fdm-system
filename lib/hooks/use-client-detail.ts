@@ -27,11 +27,13 @@ import {
   undoBillingClearance as undoBillingClearanceAction,
 } from '@/lib/actions/billing';
 import { forfeitPropertyLot as forfeitPropertyLotAction } from '@/lib/actions/properties';
+import { useSession, useResourcePermissions, useIntents } from '@/lib/hooks/use-session';
 import type {
   Client,
   ClientWithDetails,
   ContactInfo,
   ClientLog,
+  ClientTimelineEvent,
   ClientDocument,
   CreateClientLogInput,
   CivilStatus,
@@ -70,6 +72,16 @@ export interface ClientDetailContextValue {
   undoClearance: (accountId: string) => Promise<void>;
   /** Forfeits an account/lot, transitioning it into the grace period. */
   forfeitLot: (propertyId: string, reason?: string) => Promise<void>;
+  intent: {
+    edit: boolean;
+    delete: boolean;
+    clearBilling: boolean;
+    assignProperty: boolean;
+  };
+  canEditClient: boolean;
+  canDeleteClient: boolean;
+  canClearBilling: boolean;
+  canAssignProperty: boolean;
 }
 
 const ClientDetailContext = createContext<ClientDetailContextValue | null>(null);
@@ -87,6 +99,16 @@ export function ClientDetailProvider({
   initialClient: ClientWithDetails;
   children: ReactNode;
 }) {
+  const intent = useIntents({
+    edit: 'client.edit',
+    delete: 'client.delete',
+    clearBilling: 'billing.clear',
+    assignProperty: 'property.assign',
+  });
+  const canEditClient = intent.edit;
+  const canDeleteClient = intent.delete;
+  const canClearBilling = intent.clearBilling;
+  const canAssignProperty = intent.assignProperty;
   const router = useRouter();
   const [client, setClient] = useState<ClientWithDetails>(initialClient);
 
@@ -266,10 +288,23 @@ export function ClientDetailProvider({
   const addActivity = useCallback(
     async (input: CreateClientLogInput): Promise<ClientLog> => {
       const created = await createClientLogAction(client.client_id, input);
-      setClient((prev) => ({
-        ...prev,
-        client_log: [created, ...prev.client_log],
-      }));
+      setClient((prev) => {
+        const newTimelineEvent: ClientTimelineEvent = {
+          id: created.log_id,
+          category: 'touchpoint',
+          isTouchpoint: true,
+          eventType: created.event_type,
+          title: created.event_type,
+          description: created.description,
+          timestamp: created.time,
+          performerName: created.performer_name || 'Staff member',
+        };
+        return {
+          ...prev,
+          client_log: [created, ...prev.client_log],
+          activity_timeline: [newTimelineEvent, ...(prev.activity_timeline || [])],
+        };
+      });
       notifyActivityUpdated();
       router.refresh();
       return created;
@@ -404,6 +439,11 @@ export function ClientDetailProvider({
     clearAccount,
     undoClearance,
     forfeitLot,
+    intent,
+    canEditClient,
+    canDeleteClient,
+    canClearBilling,
+    canAssignProperty,
   };
 
   return createElement(ClientDetailContext.Provider, { value }, children);

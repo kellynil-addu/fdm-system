@@ -80,7 +80,7 @@ export function TitleActionCard({
                     'flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-2 text-xs transition-colors w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     isSelected
                       ? 'border-primary bg-sidebar-accent font-semibold text-foreground shadow-2xs'
-                      : 'border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                      : 'border-border bg-background text-muted-foreground hover:bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] hover:text-foreground'
                   )}
                 >
                   <div className="flex items-center gap-1.5 min-w-0">
@@ -122,7 +122,7 @@ export function TitleActionCard({
                     key={item.id}
                     className={cn(
                       isFullWidth
-                        ? 'rounded-lg border border-border/70 p-3 hover:bg-muted/50 transition-colors'
+                        ? 'rounded-lg border border-[color-mix(in_srgb,var(--border)_70%,transparent)] p-3 hover:bg-[color-mix(in_srgb,var(--muted)_50%,transparent)] transition-colors'
                         : 'py-3 hover:bg-muted rounded-md'
                     )}
                   >

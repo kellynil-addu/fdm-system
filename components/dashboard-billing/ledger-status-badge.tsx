@@ -73,7 +73,7 @@ export function LedgerStatusBadge({ summary, compact = true }: LedgerStatusBadge
     if (noticeMeta) {
       const { label, Icon, toneClass } = noticeMeta;
       return (
-        <span className="inline-flex flex-col items-start gap-0.5 px-2 py-1 rounded border bg-destructive/10 text-destructive border-destructive/20">
+        <span className="inline-flex flex-col items-start gap-0.5 px-2 py-1 rounded border bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] text-destructive border-[color-mix(in_srgb,var(--destructive)_20%,transparent)]">
           <span className="inline-flex items-center text-xs font-semibold leading-tight">
             <span className="w-1.5 h-1.5 rounded-full bg-destructive mr-1.5 animate-pulse shrink-0" />
             {summary.monthsOverdue}m Overdue
@@ -87,7 +87,7 @@ export function LedgerStatusBadge({ summary, compact = true }: LedgerStatusBadge
     }
 
     return (
-      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-destructive/10 text-destructive border border-destructive/20">
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] text-destructive border border-[color-mix(in_srgb,var(--destructive)_20%,transparent)]">
         <span className="w-1.5 h-1.5 rounded-full bg-destructive mr-1.5 animate-pulse" />
         {summary.monthsOverdue}m Overdue
       </span>

@@ -53,6 +53,8 @@ import {
   useClients,
   ARCHIVED_STATUS,
 } from '@/lib/hooks/use-clients-page';
+import { useIntents } from '@/lib/hooks/use-session';
+import { either } from '@/lib/capabilities';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { useDialogPresence } from '@/lib/hooks/use-dialog-presence';
 import { getArchiveEligibility } from '@/lib/utils/archive-rules';
@@ -152,6 +154,7 @@ function EmptyState({
   controller: { isFiltered: boolean; clearAll: () => void };
   onCreate: () => void;
 }) {
+  const intent = useIntents({ create: 'client.create' });
   const Icon = controller.isFiltered ? SearchX : Users;
   return (
     <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">
@@ -165,7 +168,9 @@ function EmptyState({
         <p className="max-w-sm text-sm text-muted-foreground">
           {controller.isFiltered
             ? 'Try a different search term, or clear the filters to view all clients.'
-            : 'Add the first client to start maintaining client records and contact information.'}
+            : intent.create
+              ? 'Add the first client to start maintaining client records and contact information.'
+              : 'No client records have been registered in the system yet.'}
         </p>
       </div>
       {controller.isFiltered ? (
@@ -177,7 +182,7 @@ function EmptyState({
           <X className="h-3.5 w-3.5" />
           Clear filters
         </Button>
-      ) : (
+      ) : intent.create ? (
         <Button
           onClick={onCreate}
           className="gap-2 bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
@@ -185,7 +190,7 @@ function EmptyState({
           <Plus className="h-4 w-4" />
           New Client
         </Button>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -279,7 +284,13 @@ function ClientRowActions({
   onRestore: () => Promise<void>;
 }) {
   const router = useRouter();
-  const { openDialog, isSystemAdmin } = useClients();
+  const { openDialog } = useClients();
+  const intent = useIntents({
+    edit: 'client.edit',
+    archive: 'client.archive',
+    delete: 'client.delete',
+    manageLifecycle: either('client.archive', 'client.delete'),
+  });
 
   return (
     // The card owns Enter and Space for its own activation, so the menu has to
@@ -336,14 +347,15 @@ function ClientRowActions({
             Client summary PDF
           </DropdownMenuItem>
           <DropdownMenuItem
+            hidden={!intent.edit}
             icon={<Edit3 className="h-4 w-4" />}
             onSelect={() => openDialog({ type: 'edit', client })}
           >
             Edit client
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {intent.manageLifecycle && <DropdownMenuSeparator />}
           <DropdownMenuItem
-            hidden={!isArchived}
+            hidden={!isArchived || !intent.archive}
             icon={<ArchiveRestore className="h-4 w-4" />}
             disabled={isRestoring}
             onSelect={(e) => {
@@ -354,14 +366,14 @@ function ClientRowActions({
             Restore client
           </DropdownMenuItem>
           <DropdownMenuItem
-            hidden={isArchived}
+            hidden={isArchived || !intent.archive}
             icon={<Archive className="h-4 w-4" />}
             onSelect={() => openDialog({ type: 'archive', client })}
           >
             Archive client
           </DropdownMenuItem>
           <DropdownMenuItem
-            hidden={!isArchived || !isSystemAdmin}
+            hidden={!isArchived || !intent.delete}
             disabled={!eligibility.isEligibleForDelete}
             disabledReason={eligibility.tooltipReason}
             variant="destructive"
@@ -385,6 +397,7 @@ function ClientsContent() {
     missingDocumentAlerts,
     restoreClient,
   } = useClients();
+  const intent = useIntents({ create: 'client.create' });
 
   const { rendered: dialog, isOpen: isDialogOpen } = useDialogPresence(activeDialog);
 
@@ -428,14 +441,16 @@ function ClientsContent() {
                 <FileSearch className="h-4 w-4" />
                 Search documents
               </Button>
-              <Button
-                responsive
-                onClick={() => openDialog({ type: 'create' })}
-                className="min-h-10 gap-2"
-              >
-                <Plus className="h-4 w-4" />
-                New Client
-              </Button>
+              {intent.create && (
+                <Button
+                  responsive
+                  onClick={() => openDialog({ type: 'create' })}
+                  className="min-h-10 gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Client
+                </Button>
+              )}
             </div>
           </div>
 

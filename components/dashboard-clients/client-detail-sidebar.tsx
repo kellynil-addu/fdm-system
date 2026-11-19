@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -49,13 +49,21 @@ import { toast } from 'sonner';
 import { ActivityTime } from '@/components/shared/activity-time';
 import { useClientDetail } from '@/lib/hooks/use-client-detail';
 import { ClientFloatingEditor } from './client-floating-editor';
+import { cn } from '@/lib/utils';
 import {
   GENDERS,
   type CivilStatus,
   type Gender,
+  type ClientTimelineEvent,
 } from '@/lib/types/client';
 
 const ACTIVITY_TYPES = ['Call', 'Meeting', 'Email', 'Note', 'Follow-up'];
+const FILTER_TABS = [
+  { id: 'all', label: 'All' },
+  { id: 'touchpoint', label: 'Touchpoints' },
+  { id: 'billing', label: 'Billing' },
+  { id: 'legal', label: 'Legal' },
+] as const;
 
 function contactIcon(type: string) {
   const lowered = type.toLowerCase();
@@ -83,6 +91,7 @@ export function ClientDetailSidebar() {
     deleteContact,
     setPrimaryContact,
     addActivity,
+    canEditClient,
   } = useClientDetail();
 
   // Activity state
@@ -91,6 +100,36 @@ export function ClientDetailSidebar() {
   const [activityDescription, setActivityDescription] = useState('');
   const [isSubmittingActivity, setIsSubmittingActivity] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [timelineFilter, setTimelineFilter] = useState<(typeof FILTER_TABS)[number]['id']>('all');
+
+  const timelineEvents = useMemo<ClientTimelineEvent[]>(() => {
+    if (client.activity_timeline) return client.activity_timeline;
+    return client.client_log.map((log) => ({
+      id: log.log_id,
+      category: 'touchpoint',
+      isTouchpoint: true,
+      eventType: log.event_type,
+      title: log.event_type,
+      description: log.description,
+      timestamp: log.time,
+      performerName: log.performer_name ?? (log.performed_by ? 'Staff member' : 'System'),
+    }));
+  }, [client.activity_timeline, client.client_log]);
+
+  const filterCounts = useMemo(() => {
+    const counts = { all: timelineEvents.length, touchpoint: 0, billing: 0, legal: 0 };
+    for (const ev of timelineEvents) {
+      if (ev.category in counts) {
+        counts[ev.category as keyof typeof counts]++;
+      }
+    }
+    return counts;
+  }, [timelineEvents]);
+
+  const filteredTimeline = useMemo(() => {
+    if (timelineFilter === 'all') return timelineEvents;
+    return timelineEvents.filter((ev) => ev.category === timelineFilter);
+  }, [timelineEvents, timelineFilter]);
 
   async function handleUpdateAddress(address: string) {
     try {
@@ -305,13 +344,15 @@ export function ClientDetailSidebar() {
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </Button>
-              <ClientFloatingEditor
-                mode="text"
-                title="Edit address"
-                initialValue={client.address || ''}
-                placeholder="Davao City, Philippines"
-                onSave={handleUpdateAddress}
-              />
+              {canEditClient && (
+                <ClientFloatingEditor
+                  mode="text"
+                  title="Edit address"
+                  initialValue={client.address || ''}
+                  placeholder="Davao City, Philippines"
+                  onSave={handleUpdateAddress}
+                />
+              )}
             </div>
           </div>
 
@@ -341,13 +382,15 @@ export function ClientDetailSidebar() {
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </Button>
-              <ClientFloatingEditor
-                mode="text"
-                title="Edit TIN number"
-                initialValue={client.tin_number || ''}
-                placeholder="123-456-789"
-                onSave={handleUpdateTin}
-              />
+              {canEditClient && (
+                <ClientFloatingEditor
+                  mode="text"
+                  title="Edit TIN number"
+                  initialValue={client.tin_number || ''}
+                  placeholder="123-456-789"
+                  onSave={handleUpdateTin}
+                />
+              )}
             </div>
           </div>
 
@@ -380,14 +423,16 @@ export function ClientDetailSidebar() {
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </Button>
-              <ClientFloatingEditor
-                mode="civil-status"
-                title="Edit civil status"
-                initialCivilStatus={client.civil_status || 'Single'}
-                initialSpouseName={client.spouse_name || ''}
-                initialSpouseContact={client.spouse_contact || []}
-                onSave={handleUpdateCivilStatus}
-              />
+              {canEditClient && (
+                <ClientFloatingEditor
+                  mode="civil-status"
+                  title="Edit civil status"
+                  initialCivilStatus={client.civil_status || 'Single'}
+                  initialSpouseName={client.spouse_name || ''}
+                  initialSpouseContact={client.spouse_contact || []}
+                  onSave={handleUpdateCivilStatus}
+                />
+              )}
             </div>
           </div>
 
@@ -417,13 +462,15 @@ export function ClientDetailSidebar() {
                   <Copy className="h-3.5 w-3.5" />
                 )}
               </Button>
-              <ClientFloatingEditor
-                mode="select"
-                title="Edit gender"
-                initialValue={client.gender || 'Male'}
-                options={GENDERS}
-                onSave={handleUpdateGender}
-              />
+              {canEditClient && (
+                <ClientFloatingEditor
+                  mode="select"
+                  title="Edit gender"
+                  initialValue={client.gender || 'Male'}
+                  options={GENDERS}
+                  onSave={handleUpdateGender}
+                />
+              )}
             </div>
           </div>
 
@@ -469,41 +516,45 @@ export function ClientDetailSidebar() {
                       <Copy className="h-3.5 w-3.5" />
                     )}
                   </Button>
-                  <ClientFloatingEditor
-                    mode="contact-edit"
-                    title="Edit contact"
-                    initialType={contact.type}
-                    initialValue={contact.value}
-                    onSave={(type, val) => handleUpdateContact(contact.contact_id, type, val)}
-                  />
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                        aria-label={`Actions for ${contact.value}`}
-                      >
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-44">
-                      <DropdownMenuItem
-                        disabled={contact.is_primary}
-                        icon={<Star className="h-4 w-4" />}
-                        onSelect={() => handleSetPrimaryContact(contact.contact_id)}
-                      >
-                        {contact.is_primary ? 'Primary contact' : 'Set as primary'}
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        icon={<Trash2 className="h-4 w-4" />}
-                        onSelect={() => handleDeleteContact(contact.contact_id)}
-                      >
-                        Delete contact
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {canEditClient && (
+                    <>
+                      <ClientFloatingEditor
+                        mode="contact-edit"
+                        title="Edit contact"
+                        initialType={contact.type}
+                        initialValue={contact.value}
+                        onSave={(type, val) => handleUpdateContact(contact.contact_id, type, val)}
+                      />
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            aria-label={`Actions for ${contact.value}`}
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          <DropdownMenuItem
+                            disabled={contact.is_primary}
+                            icon={<Star className="h-4 w-4" />}
+                            onSelect={() => handleSetPrimaryContact(contact.contact_id)}
+                          >
+                            {contact.is_primary ? 'Primary contact' : 'Set as primary'}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            variant="destructive"
+                            icon={<Trash2 className="h-4 w-4" />}
+                            onSelect={() => handleDeleteContact(contact.contact_id)}
+                          >
+                            Delete contact
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </>
+                  )}
                 </div>
               </div>
             );
@@ -518,19 +569,21 @@ export function ClientDetailSidebar() {
         </div>
 
         {/* Add Contact Button with Floating Popup */}
-        <div className="border-t border-border-warm-subtle bg-card p-1.5">
-          <ClientFloatingEditor
-            mode="contact-add"
-            title="Add contact"
-            onSave={handleAddContact}
-            trigger={
-              <Button variant="ghost" size="sm" className="h-7 w-full gap-1.5 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground">
-                <Plus className="h-3 w-3" />
-                Add contact
-              </Button>
-            }
-          />
-        </div>
+        {canEditClient && (
+          <div className="border-t border-border-warm-subtle bg-card p-1.5">
+            <ClientFloatingEditor
+              mode="contact-add"
+              title="Add contact"
+              onSave={handleAddContact}
+              trigger={
+                <Button variant="ghost" size="sm" className="h-7 w-full gap-1.5 text-xs text-muted-foreground hover:bg-row-hover hover:text-foreground">
+                  <Plus className="h-3 w-3" />
+                  Add contact
+                </Button>
+              }
+            />
+          </div>
+        )}
       </Card>
 
         {/* Divider line before Activity History */}
@@ -540,7 +593,8 @@ export function ClientDetailSidebar() {
         <div className="flex flex-col pb-6 pt-0.5">
           <div className="flex items-center justify-between gap-3 pb-2.5">
             <h3 className="text-xs font-semibold text-foreground">Activity history</h3>
-            <Popover open={isAddingActivity} onOpenChange={setIsAddingActivity}>
+            {canEditClient && (
+              <Popover open={isAddingActivity} onOpenChange={setIsAddingActivity}>
               <PopoverTrigger asChild>
                 <Button
                   type="button"
@@ -639,36 +693,114 @@ export function ClientDetailSidebar() {
                 </form>
               </PopoverContent>
             </Popover>
+          )}
+          </div>
+
+          {/* Category filter pills */}
+          <div
+            role="group"
+            aria-label="Filter activity by category"
+            className="mb-3 flex flex-wrap items-center gap-1 rounded-lg bg-row-hover p-1"
+          >
+            {FILTER_TABS.map((tab) => {
+              const isActive = timelineFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => setTimelineFilter(tab.id)}
+                  className={cn(
+                    'flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+                    isActive
+                      ? 'bg-card font-semibold text-foreground shadow-xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  <span>{tab.label}</span>
+                  <span className="text-[10px] tabular-nums text-muted-foreground">
+                    ({filterCounts[tab.id]})
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           <div>
-            {client.client_log.length === 0 ? (
+            {timelineEvents.length === 0 ? (
               <p className="rounded-xl border border-dashed border-border-warm bg-row-hover px-3 py-6 text-center text-xs text-muted-foreground">
                 No activity recorded yet
               </p>
+            ) : filteredTimeline.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border-warm bg-row-hover px-3 py-6 text-center text-xs text-muted-foreground">
+                No {timelineFilter === 'touchpoint' ? 'touchpoint' : timelineFilter} activity recorded
+              </p>
             ) : (
               <ol className="relative space-y-3.5 border-l-2 border-border-warm pl-4 ml-1.5">
-                {client.client_log.map((log) => (
-                  <li key={log.log_id} className="relative">
-                    <span
-                      aria-hidden="true"
-                      className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full bg-border-warm ring-2 ring-background"
-                    />
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="text-xs font-semibold text-foreground">
-                        {log.event_type}
-                      </span>
-                      <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                        <Clock className="h-3 w-3" />
-                        <ActivityTime timestamp={log.time} />
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                      {log.description || 'No description provided'}
-                    </p>
-                    <p className="mt-1 text-[11px] text-muted-foreground">Recorded by {log.performer_name ?? (log.performed_by ? 'Staff member' : 'System')}</p>
-                  </li>
-                ))}
+                {filteredTimeline.map((item) => {
+                  if (item.isTouchpoint) {
+                    return (
+                      <li key={item.id} className="relative">
+                        <span
+                          aria-hidden="true"
+                          className="absolute -left-[22px] top-1.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-background"
+                        />
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <span className="text-xs font-semibold text-foreground">
+                            {item.title}
+                          </span>
+                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                            <Clock className="h-3 w-3" />
+                            <ActivityTime timestamp={item.timestamp} />
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs leading-relaxed text-foreground">
+                          {item.description || 'No description provided'}
+                        </p>
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Recorded by {item.performerName ?? 'Staff member'}
+                        </p>
+                      </li>
+                    );
+                  }
+
+                  return (
+                    <li key={item.id} className="relative">
+                      <span
+                        aria-hidden="true"
+                        className="absolute -left-[21px] top-1.5 h-2 w-2 rounded-full border border-border-warm bg-background ring-2 ring-background"
+                      />
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                            [{item.category === 'billing' ? 'Billing' : 'Legal'}]
+                          </span>
+                          <span className="text-xs font-medium text-foreground">
+                            {item.title}
+                          </span>
+                        </div>
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Clock className="h-3 w-3" />
+                          <ActivityTime timestamp={item.timestamp} />
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                        {item.description}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 text-[11px] text-muted-foreground">
+                        <span>Processed by {item.performerName ?? 'System'}</span>
+                        {item.href && (
+                          <Link
+                            href={item.href}
+                            className="font-medium text-primary hover:underline"
+                          >
+                            View →
+                          </Link>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ol>
             )}
           </div>

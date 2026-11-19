@@ -4,7 +4,7 @@ import { createContext, createElement, useCallback, useContext, useEffect, useSt
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Archive } from 'lucide-react';
-import { useSession } from '@/lib/hooks/use-session';
+import { useSession, useIntents } from '@/lib/hooks/use-session';
 import {
   useListController,
   type ListControllerValue,
@@ -21,6 +21,7 @@ import {
   reopenPropertyLotForSale,
 } from '@/lib/actions/properties';
 import type { ActionResult } from '@/lib/actions/action-result';
+import { notifyActivityUpdated } from '@/lib/activity-events';
 import type {
   PropertyLot,
   PropertyLotWithClient,
@@ -87,6 +88,15 @@ interface PropertyLotsContextValue {
   reopenLot: (propertyId: string, allowEarlyReopen?: boolean) => Promise<ActionResult<PropertyLotWithClient>>;
   projectAreas: ProjectArea[];
   isSystemAdmin: boolean;
+  intent: {
+    create: boolean;
+    edit: boolean;
+    delete: boolean;
+    assign: boolean;
+  };
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
 const PropertyLotsContext = createContext<PropertyLotsContextValue | null>(null);
@@ -129,6 +139,15 @@ export function PropertyLotsProvider({
   onProjectAreaFilterChange?: (projectAreaId: string | null) => void;
 }) {
   const { isSystemAdmin } = useSession();
+  const intent = useIntents({
+    create: 'property.create',
+    edit: 'property.edit',
+    delete: 'property.delete',
+    assign: 'property.assign',
+  });
+  const canCreate = intent.create;
+  const canEdit = intent.edit;
+  const canDelete = intent.delete;
   const router = useRouter();
   const [lots, setLots] = useState<PropertyLotWithClient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -261,7 +280,14 @@ export function PropertyLotsProvider({
     };
   }, [projectAreas]);
 
-  const openDialog = useCallback((dialog: PropertyDialog) => setActiveDialog(dialog), []);
+  const openDialog = useCallback(
+    (dialog: PropertyDialog) => {
+      if (dialog?.type === 'create' && !canCreate) return;
+      if (dialog?.type === 'assign' && !canEdit) return;
+      setActiveDialog(dialog);
+    },
+    [canCreate, canEdit]
+  );
   const closeDialog = useCallback(() => setActiveDialog(null), []);
 
   const createLot = useCallback(
@@ -298,6 +324,7 @@ export function PropertyLotsProvider({
       setLots((prev) =>
         prev.map((lot) => (lot.property_id === propertyId ? updated : lot)),
       );
+      notifyActivityUpdated();
       router.refresh();
       return result;
     },
@@ -376,6 +403,7 @@ export function PropertyLotsProvider({
           ? prev.map((lot) => (lot.property_id === propertyId ? updated : lot))
           : [updated, ...prev]
       );
+      notifyActivityUpdated();
       router.refresh();
       return result;
     },
@@ -392,6 +420,7 @@ export function PropertyLotsProvider({
           ? prev.map((lot) => (lot.property_id === propertyId ? updated : lot))
           : [updated, ...prev]
       );
+      notifyActivityUpdated();
       router.refresh();
       return result;
     },
@@ -417,6 +446,10 @@ export function PropertyLotsProvider({
     reopenLot,
     projectAreas,
     isSystemAdmin,
+    intent,
+    canCreate,
+    canEdit,
+    canDelete,
   };
 
   return createElement(PropertyLotsContext.Provider, { value }, children);

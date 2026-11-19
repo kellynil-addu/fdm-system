@@ -1,6 +1,8 @@
 import { vi } from "vitest";
 import dns from "node:dns";
 
+process.env.__NEXT_EXPERIMENTAL_AUTH_INTERRUPTS = "true";
+
 if (typeof dns.setDefaultResultOrder === "function") {
   dns.setDefaultResultOrder("ipv4first");
 }

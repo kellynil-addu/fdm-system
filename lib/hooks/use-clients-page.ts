@@ -22,7 +22,8 @@ import {
 import { searchDocumentText } from '@/lib/actions/search-index';
 import type { DocumentSearchHit } from '@/lib/types/search';
 import type { ActionResult } from '@/lib/actions/action-result';
-import { useSession } from '@/lib/hooks/use-session';
+import { useSession, useIntents } from '@/lib/hooks/use-session';
+import { either } from '@/lib/capabilities';
 import type {
   ClientListItem,
   ClientDocumentNotification,
@@ -71,6 +72,17 @@ interface ClientsContextValue {
   /** Clients whose required paperwork is incomplete. */
   missingDocumentAlerts: ClientDocumentNotification[];
   isSystemAdmin: boolean;
+  intent: {
+    create: boolean;
+    edit: boolean;
+    archive: boolean;
+    delete: boolean;
+    manageLifecycle: boolean;
+  };
+  canCreate: boolean;
+  canEdit: boolean;
+  canArchive: boolean;
+  canDelete: boolean;
 }
 
 const ClientsContext = createContext<ClientsContextValue | null>(null);
@@ -99,6 +111,17 @@ export function ClientsProvider({
   initialClients?: ClientListItem[];
 }) {
   const { isSystemAdmin } = useSession();
+  const intent = useIntents({
+    create: 'client.create',
+    edit: 'client.edit',
+    archive: 'client.archive',
+    delete: 'client.delete',
+    manageLifecycle: either('client.archive', 'client.delete'),
+  });
+  const canCreate = intent.create;
+  const canEdit = intent.edit;
+  const canArchive = intent.archive;
+  const canDelete = intent.delete;
   const router = useRouter();
   const requestedClient = useSearchParams().get('client');
   const [clients, setClients] = useState<ClientListItem[]>(initialClients);
@@ -226,7 +249,16 @@ export function ClientsProvider({
     },
   });
 
-  const openDialog = useCallback((dialog: ClientDialog) => setActiveDialog(dialog), []);
+  const openDialog = useCallback(
+    (dialog: ClientDialog) => {
+      if (dialog?.type === 'create' && !canCreate) return;
+      if (dialog?.type === 'edit' && !canEdit) return;
+      if (dialog?.type === 'archive' && !canArchive) return;
+      if (dialog?.type === 'delete' && !canDelete) return;
+      setActiveDialog(dialog);
+    },
+    [canCreate, canEdit, canArchive, canDelete]
+  );
   const closeDialog = useCallback(() => setActiveDialog(null), []);
 
   const createClient = useCallback(async (input: CreateClientInput): Promise<ActionResult<ClientListItem>> => {
@@ -369,6 +401,11 @@ export function ClientsProvider({
         searchDocuments,
         missingDocumentAlerts,
         isSystemAdmin: Boolean(isSystemAdmin),
+        intent,
+        canCreate,
+        canEdit,
+        canArchive,
+        canDelete,
       },
     },
     children

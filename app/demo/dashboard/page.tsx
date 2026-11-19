@@ -485,7 +485,7 @@ function UniversalActivityCard() {
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             Live workspace feed
           </span>
-          <Link href="/dashboard/reports" className="font-medium text-primary hover:underline">
+          <Link href="/dashboard/settings/audit-logs" className="font-medium text-primary hover:underline">
             View Audit Log &rarr;
           </Link>
         </div>
@@ -564,7 +564,7 @@ function BillingActionCard({ isFullWidth }: { isFullWidth?: boolean }) {
                   key={item.id}
                   className={cn(
                     isFullWidth
-                      ? "rounded-lg border border-border/70 p-3 hover:bg-muted/50 transition-colors"
+                      ? "rounded-lg border border-[color-mix(in_srgb,var(--border)_70%,transparent)] p-3 hover:bg-[color-mix(in_srgb,var(--muted)_50%,transparent)] transition-colors"
                       : "py-3 hover:bg-muted rounded-md"
                   )}
                 >
@@ -658,7 +658,7 @@ function DynamicTitleActionCard({ isFullWidth }: { isFullWidth?: boolean }) {
                     'flex items-center justify-between gap-1.5 rounded-lg border px-2.5 py-2 text-xs transition-colors w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                     isSelected
                       ? 'border-primary bg-sidebar-accent font-semibold text-foreground shadow-2xs'
-                      : 'border-border bg-background text-muted-foreground hover:bg-muted/40 hover:text-foreground'
+                      : 'border-border bg-background text-muted-foreground hover:bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] hover:text-foreground'
                   )}
                 >
                   <div className="flex items-center gap-1.5 min-w-0">
@@ -693,7 +693,7 @@ function DynamicTitleActionCard({ isFullWidth }: { isFullWidth?: boolean }) {
                   key={item.id}
                   className={cn(
                     isFullWidth
-                      ? "rounded-lg border border-border/70 p-3 hover:bg-muted/50 transition-colors"
+                      ? "rounded-lg border border-[color-mix(in_srgb,var(--border)_70%,transparent)] p-3 hover:bg-[color-mix(in_srgb,var(--muted)_50%,transparent)] transition-colors"
                       : "py-3 hover:bg-muted rounded-md"
                   )}
                 >
@@ -807,7 +807,7 @@ function ClientFollowUpsCard({ isFullWidth }: { isFullWidth?: boolean }) {
                   key={item.clientId}
                   className={cn(
                     isFullWidth
-                      ? "rounded-lg border border-border/70 p-3 hover:bg-muted/50 transition-colors"
+                      ? "rounded-lg border border-[color-mix(in_srgb,var(--border)_70%,transparent)] p-3 hover:bg-[color-mix(in_srgb,var(--muted)_50%,transparent)] transition-colors"
                       : "py-3 hover:bg-muted rounded-md"
                   )}
                 >
@@ -1059,7 +1059,7 @@ export default function DashboardDemoPage() {
                   className={cn(
                     "px-2 py-0.5 rounded text-[11px] font-medium border transition-colors",
                     permissions.canReadBilling
-                      ? "bg-primary/10 border-primary text-primary"
+                      ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] border-primary text-primary"
                       : "bg-muted text-muted-foreground border-transparent line-through"
                   )}
                   title="Toggle Billing Permission"
@@ -1072,7 +1072,7 @@ export default function DashboardDemoPage() {
                   className={cn(
                     "px-2 py-0.5 rounded text-[11px] font-medium border transition-colors",
                     permissions.canReadTitles
-                      ? "bg-primary/10 border-primary text-primary"
+                      ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] border-primary text-primary"
                       : "bg-muted text-muted-foreground border-transparent line-through"
                   )}
                   title="Toggle Titles Permission"
@@ -1085,7 +1085,7 @@ export default function DashboardDemoPage() {
                   className={cn(
                     "px-2 py-0.5 rounded text-[11px] font-medium border transition-colors",
                     permissions.canReadClients
-                      ? "bg-primary/10 border-primary text-primary"
+                      ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] border-primary text-primary"
                       : "bg-muted text-muted-foreground border-transparent line-through"
                   )}
                   title="Toggle Clients Permission"
@@ -1098,7 +1098,7 @@ export default function DashboardDemoPage() {
                   className={cn(
                     "px-2 py-0.5 rounded text-[11px] font-medium border transition-colors",
                     permissions.canReadProperties
-                      ? "bg-primary/10 border-primary text-primary"
+                      ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] border-primary text-primary"
                       : "bg-muted text-muted-foreground border-transparent line-through"
                   )}
                   title="Toggle Properties Permission"
@@ -1109,7 +1109,7 @@ export default function DashboardDemoPage() {
             </div>
           </div>
 
-          <div className="mt-3 border-t border-border/60 pt-2.5 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
+          <div className="mt-3 border-t border-[color-mix(in_srgb,var(--border)_60%,transparent)] pt-2.5 text-xs text-muted-foreground flex flex-wrap items-center justify-between gap-2">
             <span>
               <strong className="text-foreground">Dynamic Role Adaptability:</strong> When a user lacks permission for one module in a section, that card is hidden and the remaining card expands to full-width, automatically converting its internal list into a comfortable 2-column grid!
             </span>
@@ -1182,7 +1182,7 @@ export default function DashboardDemoPage() {
           {/* ROW 2: WIND-DOWN OPERATIONS (Billing & Titles) */}
           {hasWindDown && (
             <section aria-labelledby="wind-down-heading" className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-border/60 pb-2">
+              <div className="flex items-center gap-2 border-b border-[color-mix(in_srgb,var(--border)_60%,transparent)] pb-2">
                 <Briefcase className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
                 <h2 id="wind-down-heading" className="text-base font-semibold tracking-tight text-foreground">
                   Wind-Down Operations
@@ -1202,7 +1202,7 @@ export default function DashboardDemoPage() {
           {/* ROW 3: CLIENT RECORDS & PROPERTY PORTFOLIO */}
           {hasRecordsAndPortfolio && (
             <section aria-labelledby="records-properties-heading" className="space-y-3">
-              <div className="flex items-center gap-2 border-b border-border/60 pb-2">
+              <div className="flex items-center gap-2 border-b border-[color-mix(in_srgb,var(--border)_60%,transparent)] pb-2">
                 <Layers className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
                 <h2 id="records-properties-heading" className="text-base font-semibold tracking-tight text-foreground">
                   Records &amp; Property Portfolio

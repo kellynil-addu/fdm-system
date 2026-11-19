@@ -104,7 +104,7 @@ export function ClientFollowUps({
                           key={`${item.clientId}-${idx}`}
                           className={cn(
                             isFullWidth
-                              ? 'rounded-lg border border-border/70 p-3 hover:bg-muted/50 transition-colors'
+                              ? 'rounded-lg border border-[color-mix(in_srgb,var(--border)_70%,transparent)] p-3 hover:bg-[color-mix(in_srgb,var(--muted)_50%,transparent)] transition-colors'
                               : 'py-3 hover:bg-muted rounded-md'
                           )}
                         >

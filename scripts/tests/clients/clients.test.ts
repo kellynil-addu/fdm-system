@@ -21,6 +21,7 @@ import {
   loginAsAdmin,
   logoutUser,
   hardDeleteTestClient,
+  getTestAdminClient,
   runTrackedCleanups,
 } from "../framework/session";
 import { unwrap } from "../framework/action-helper";
@@ -327,6 +328,49 @@ describe("Client Management Actions", () => {
     const clientItem = listResult.data.find((c) => c.client_id === client.client_id);
     expect(clientItem?.latest_activity).not.toBeNull();
     expect(clientItem?.latest_activity?.performer_name).not.toBe("System");
+  });
+
+  it("getClientById returns activity_timeline unifying touchpoints and module events", async () => {
+    const client = unwrap(await createClient({
+      full_name: faker.person.fullName(),
+      contacts: [{ type: "Email", value: faker.internet.email(), is_primary: true }],
+    }));
+    testClientIds.push(client.client_id);
+
+    const logEntry = await createClientLog(client.client_id, {
+      event_type: "Call",
+      description: "Discussed installment terms",
+    });
+
+    const admin = getTestAdminClient();
+    const { data: accounts } = await admin.from("ledger_account").select("account_id").limit(1);
+    const accountId = accounts?.[0]?.account_id;
+
+    if (accountId) {
+      await admin.from("billing_event").insert({
+        client_id: client.client_id,
+        account_id: accountId,
+        event_type: "reservation",
+        description: "Reserved Block 1 Lot 1",
+      });
+    }
+
+    const profile = await getClientById(client.client_id);
+    expect(profile.activity_timeline).toBeDefined();
+
+    const touchpoint = profile.activity_timeline!.find((e) => e.id === logEntry.log_id);
+    expect(touchpoint).toBeDefined();
+    expect(touchpoint!.isTouchpoint).toBe(true);
+    expect(touchpoint!.category).toBe("touchpoint");
+    expect(touchpoint!.title).toBe("Call");
+
+    if (accountId) {
+      const billingEv = profile.activity_timeline!.find((e) => e.category === "billing");
+      expect(billingEv).toBeDefined();
+      expect(billingEv!.isTouchpoint).toBe(false);
+      expect(billingEv!.eventType).toBe("Property Reserved");
+      expect(billingEv!.href).toBe(`/dashboard/billing/${encodeURIComponent(accountId)}`);
+    }
   });
 
   it("deleteClient removes client and all associated relations", async () => {

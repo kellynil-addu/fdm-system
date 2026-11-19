@@ -23,6 +23,7 @@ import {
   buildClientPropertyBillingSummary,
   type RawAccountBillingData,
 } from "@/lib/billing/client-property-billing";
+import { hasPermission } from "@/lib/permissions";
 import {
   type Client,
   type ClientProperty,
@@ -31,6 +32,7 @@ import {
   type ContactInfo,
   type ClientDocument,
   type ClientLog,
+  type ClientTimelineEvent,
   type DocType,
   type CreateContactInfoInput,
   type UpdateContactInfoInput,
@@ -56,9 +58,11 @@ import {
 import { documentFileSchema } from "@/lib/validations/document";
 
 import { getPaginationOffsets, buildPaginatedResult } from "@/lib/pagination";
+import { CAPABILITIES } from "@/lib/capabilities";
 
 const client = createScope(["clients.read"]);
 const clientWrite = client.extend(["clients.update"]);
+const clientArchive = client.extend(CAPABILITIES["client.archive"]);
 const clientDelete = client.extend(["clients.delete"]);
 
 const uploadClientDocumentSchema = z
@@ -408,11 +412,216 @@ async function resolveClientProperties(
   return resolved;
 }
 
+interface BillingEventDbRow {
+  event_id: string;
+  account_id: string;
+  property_id: string | null;
+  event_type: string;
+  description: string;
+  created_at: string;
+  created_by: string | null;
+}
+
+interface BillingPaymentDbRow {
+  payment_id: string;
+  account_id: string;
+  payment_date: string;
+  amount: number;
+  receipt_number: string;
+  payment_method: string;
+  notes: string | null;
+  created_at: string;
+}
+
+interface BillingNoticeDbRow {
+  notice_id: string;
+  account_id: string;
+  stage: string;
+  notice_number: number;
+  notice_date: string;
+  title: string;
+  tracking_number: string | null;
+  overdue_amount: number;
+  created_at: string;
+}
+
+interface TitleHistoryDbRow {
+  history_id: string;
+  title_id: string;
+  status: string;
+  changed_at: string;
+  changed_by: string | null;
+  title: {
+    title_id: string;
+    property: { location: string; block_number: number; lot_number: number } | null;
+  } | null;
+}
+
+async function resolveClientTimelineEvents(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  clientId: string,
+  userId?: string,
+  clientLogs: ClientLog[] = []
+): Promise<ClientTimelineEvent[]> {
+  const [canReadBilling, canReadTitles] = userId
+    ? await Promise.all([
+        hasPermission("billing.read", userId),
+        hasPermission("legal.read", userId),
+      ])
+    : [false, false];
+
+  const { data: partyRows } = await supabase
+    .from("account_party")
+    .select("account_id")
+    .eq("client_id", clientId);
+  const accountIds = (partyRows ?? []).map((p) => p.account_id);
+
+  const { data: titleRows } = canReadTitles
+    ? await supabase.from("land_title").select("title_id").eq("client_id", clientId)
+    : { data: [] };
+  const titleIds = (titleRows ?? []).map((t) => t.title_id);
+
+  const [billingEventsRes, paymentsRes, noticesRes, titlesHistoryRes] = await Promise.all([
+    canReadBilling
+      ? supabase
+          .from("billing_event")
+          .select("event_id, account_id, property_id, event_type, description, created_at, created_by")
+          .eq("client_id", clientId)
+          .order("created_at", { ascending: false })
+          .returns<BillingEventDbRow[]>()
+      : Promise.resolve({ data: [], error: null }),
+    canReadBilling && accountIds.length > 0
+      ? supabase
+          .from("billing_payment")
+          .select("payment_id, account_id, payment_date, amount, receipt_number, payment_method, notes, created_at")
+          .in("account_id", accountIds)
+          .order("created_at", { ascending: false })
+          .returns<BillingPaymentDbRow[]>()
+      : Promise.resolve({ data: [], error: null }),
+    canReadBilling && accountIds.length > 0
+      ? supabase
+          .from("billing_notice_event")
+          .select("notice_id, account_id, stage, notice_number, notice_date, title, tracking_number, overdue_amount, created_at")
+          .in("account_id", accountIds)
+          .order("created_at", { ascending: false })
+          .returns<BillingNoticeDbRow[]>()
+      : Promise.resolve({ data: [], error: null }),
+    canReadTitles && titleIds.length > 0
+      ? supabase
+          .from("land_title_status_history")
+          .select("history_id, title_id, status, changed_at, changed_by, title:land_title(title_id, property:property_id(location, block_number, lot_number))")
+          .in("title_id", titleIds)
+          .order("changed_at", { ascending: false })
+          .returns<TitleHistoryDbRow[]>()
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  const billingEvents = (billingEventsRes.data ?? []) as BillingEventDbRow[];
+  const payments = (paymentsRes.data ?? []) as BillingPaymentDbRow[];
+  const notices = (noticesRes.data ?? []) as BillingNoticeDbRow[];
+  const titleHistories = (titlesHistoryRes.data ?? []) as TitleHistoryDbRow[];
+
+  const actorIds = [
+    ...clientLogs.map((l) => l.performed_by),
+    ...billingEvents.map((b) => b.created_by),
+    ...titleHistories.map((t) => t.changed_by),
+  ].filter((id): id is string => Boolean(id));
+
+  const names = await resolveUserNames(supabase, actorIds);
+
+  const touchpointEvents: ClientTimelineEvent[] = clientLogs.map((log) => ({
+    id: log.log_id,
+    category: "touchpoint",
+    isTouchpoint: true,
+    eventType: log.event_type,
+    title: log.event_type,
+    description: log.description,
+    timestamp: log.time,
+    performerName: log.performed_by ? names.get(log.performed_by) ?? "Staff member" : "System",
+  }));
+
+  const billingMilestones: ClientTimelineEvent[] = billingEvents.map((row) => ({
+    id: row.event_id,
+    category: "billing",
+    isTouchpoint: false,
+    eventType: row.event_type === "reservation" ? "Property Reserved" : "Ledger Forfeited",
+    title: row.event_type === "reservation" ? "Property Reserved" : "Ledger Forfeited",
+    description: row.description,
+    timestamp: row.created_at,
+    performerName: row.created_by ? names.get(row.created_by) ?? "Staff member" : "System",
+    href: `/dashboard/billing/${encodeURIComponent(row.account_id)}`,
+  }));
+
+  const paymentEvents: ClientTimelineEvent[] = payments.map((p) => {
+    const method = p.payment_method ? p.payment_method.charAt(0).toUpperCase() + p.payment_method.slice(1) : "Cash";
+    return {
+      id: p.payment_id,
+      category: "billing",
+      isTouchpoint: false,
+      eventType: "Payment Posted",
+      title: "Payment Posted",
+      description: `₱${Number(p.amount).toLocaleString("en-PH", { minimumFractionDigits: 2 })} via ${method} (OR #${p.receipt_number})${p.notes ? ` · ${p.notes}` : ""}`,
+      timestamp: p.created_at || p.payment_date,
+      performerName: "Billing",
+      href: `/dashboard/billing/${encodeURIComponent(p.account_id)}`,
+    };
+  });
+
+  const noticeEvents: ClientTimelineEvent[] = notices.map((n) => {
+    const stageName =
+      n.stage === "first_notice" ? "1st Notice" :
+      n.stage === "second_notice" ? "2nd Notice" :
+      n.stage === "final_demand" ? "Final Demand" : "Notice";
+    return {
+      id: n.notice_id,
+      category: "billing",
+      isTouchpoint: false,
+      eventType: `${stageName} Sent`,
+      title: n.title || `${stageName} Sent`,
+      description: `${n.title}${n.tracking_number ? ` · Postal tracking: ${n.tracking_number}` : ""}${n.overdue_amount ? ` · Arrears: ₱${Number(n.overdue_amount).toLocaleString("en-PH")}` : ""}`,
+      timestamp: n.created_at || n.notice_date,
+      performerName: "Billing Collections",
+      href: `/dashboard/billing/${encodeURIComponent(n.account_id)}`,
+    };
+  });
+
+  const titleEvents: ClientTimelineEvent[] = titleHistories.map((t) => {
+    const prop = t.title?.property;
+    const lotDesc = prop ? `Block ${prop.block_number} Lot ${prop.lot_number} (${prop.location})` : "Property lot";
+    const statusTab =
+      t.status === "Cleared by Billing" ? "intake" :
+      t.status === "Document Preparation" ? "preparation" :
+      t.status === "For Review" ? "review" :
+      t.status === "For Signature" ? "signature" :
+      t.status === "Clearance Period" ? "clearance" :
+      t.status === "Ready for Claim" ? "ready" : "released";
+    return {
+      id: t.history_id,
+      category: "legal",
+      isTouchpoint: false,
+      eventType: `Title: ${t.status}`,
+      title: `Title ${t.status}`,
+      description: `Status advanced to "${t.status}" · ${lotDesc}`,
+      timestamp: t.changed_at,
+      performerName: t.changed_by ? names.get(t.changed_by) ?? "Staff member" : "System",
+      href: `/dashboard/legal?status=${statusTab}&titleId=${encodeURIComponent(t.title_id)}`,
+    };
+  });
+
+  return [
+    ...touchpointEvents,
+    ...billingMilestones,
+    ...paymentEvents,
+    ...noticeEvents,
+    ...titleEvents,
+  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
 export async function getClientById(clientId: string): Promise<ClientWithDetails> {
   return client.query({
     schema: uuidSchema,
     input: clientId,
-    handler: async (validId, { supabase }) => {
+    handler: async (validId, { supabase, userId }) => {
       const { data: row, error } = await supabase
         .from("client")
         .select(
@@ -427,12 +636,17 @@ export async function getClientById(clientId: string): Promise<ClientWithDetails
 
       const { documents, ...data } = row;
       const names = await resolveUserNames(supabase, data.client_log.flatMap(log => log.performed_by ? [log.performed_by] : []));
+      const formattedLogs = data.client_log
+        .map(log => ({ ...log, performer_name: log.performed_by ? names.get(log.performed_by) ?? 'Staff member' : 'System' }))
+        .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+
+      const timeline = await resolveClientTimelineEvents(supabase, validId, userId, data.client_log);
+
       return {
         ...data,
         client_document: toClientDocuments(documents),
-        client_log: data.client_log
-          .map(log => ({ ...log, performer_name: log.performed_by ? names.get(log.performed_by) ?? 'Staff member' : 'System' }))
-          .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()),
+        client_log: formattedLogs,
+        activity_timeline: timeline,
         properties: await resolveClientProperties(supabase, validId),
       };
     },
@@ -511,7 +725,7 @@ export async function updateClient(
 }
 
 export async function archiveClient(clientId: string): Promise<ActionResult<Client>> {
-  return clientWrite.run({
+  return clientArchive.run({
     schema: uuidSchema,
     input: clientId,
     handler: async (validId, { supabase }) => {
@@ -532,7 +746,7 @@ export async function archiveClient(clientId: string): Promise<ActionResult<Clie
 }
 
 export async function unarchiveClient(clientId: string): Promise<ActionResult<Client>> {
-  return clientWrite.run({
+  return clientArchive.run({
     schema: uuidSchema,
     input: clientId,
     handler: async (validId, { supabase }) => {

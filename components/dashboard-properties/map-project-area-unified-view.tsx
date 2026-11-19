@@ -37,6 +37,7 @@ import {
 } from '@/lib/actions/project-areas';
 import { parseRing, calculatePolygonAreaSqm, isPolygonContained } from '@/lib/geometry';
 import { getProjectAreaDraft, saveProjectAreaDraft, clearProjectAreaDraft } from '@/lib/storage/map-draft-storage';
+import { useResourcePermissions } from '@/lib/hooks/use-session';
 import {
   countProjectAreasByView,
   filterProjectAreasByView,
@@ -61,6 +62,7 @@ export interface ProjectAreaMapUnifiedViewProps {
 export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifiedViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { canEdit: canEditProperties } = useResourcePermissions('properties');
   const targetLotId = searchParams.get('lot');
   const targetProjectAreaId = searchParams.get('projectArea');
 
@@ -914,7 +916,7 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
         </div>
 
         {/* Floating Map Editor button at top-right when editor is NOT active */}
-        {!isEditorActive && (
+        {!isEditorActive && canEditProperties && (
           <div className="absolute top-4 right-16 z-20">
             <Button
               variant="outline"
@@ -1058,7 +1060,7 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
               <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleConfirmEditorEntry}
-                className="bg-primary text-xs font-semibold text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
+                className="text-xs font-semibold"
               >
                 Enter Editor
               </AlertDialogAction>

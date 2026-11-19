@@ -1,3 +1,5 @@
+import type { CapabilityOrRule } from "@/lib/capabilities";
+
 export interface SessionUser {
   id: string;
   email?: string;
@@ -18,6 +20,7 @@ export interface SessionContextValue {
   roles: string[];
   permissions: string[];
   isSystemAdmin: boolean;
+  can: (rule: CapabilityOrRule) => boolean;
   hasPermission: (permission: string) => boolean;
   hasRole: (role: string) => boolean;
 }

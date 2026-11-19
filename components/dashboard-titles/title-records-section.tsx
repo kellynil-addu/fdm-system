@@ -55,10 +55,17 @@ function EmptyState({
               : 'Try a different search term.'}
           </p>
         </div>
-        <Button variant="quiet" onClick={onClearSearch} className="gap-1.5">
-          <X className="h-3.5 w-3.5" />
-          Clear search
-        </Button>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Button variant="quiet" onClick={onClearSearch} className="gap-1.5">
+            <X className="h-3.5 w-3.5" />
+            Clear search
+          </Button>
+          {canViewAll && (
+            <Button variant="quiet" onClick={onViewAll} className="gap-1.5 text-xs">
+              View all records{typeof totalCount === 'number' && totalCount > 0 ? ` (${totalCount})` : ''}
+            </Button>
+          )}
+        </div>
       </div>
     );
   }
@@ -148,6 +155,7 @@ function TitleRecordsContent() {
             onChange={setTab}
             ariaLabel="Title release workflow"
             fallbackLabel="All stages"
+            allOption={{ value: 'all', label: 'All stages', count: counts.all }}
           />
         </div>
         <span className="text-xs text-muted-foreground">
@@ -290,7 +298,7 @@ function TitleRecordsContent() {
         <CardTableFooter>
           <p className="text-xs text-muted-foreground" aria-live="polite">
             {isSearching
-              ? `Showing ${cardItems.length} of ${counts.all} records`
+              ? `Showing ${cardItems.length} of ${tab === 'all' ? counts.all : counts[tab]} records`
               : `${cardItems.length} records`}
           </p>
         </CardTableFooter>

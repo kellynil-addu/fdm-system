@@ -5,7 +5,7 @@ import { hasPermission } from "@/lib/permissions";
 
 export interface RecentActivityItem {
   id: string;
-  kind: "client" | "title";
+  kind: "client" | "title" | "billing";
   label: string;
   detail: string;
   timestamp: string;
@@ -39,18 +39,30 @@ interface TitleActivityRow {
   } | null;
 }
 
+interface BillingActivityRow {
+  event_id: string;
+  account_id: string;
+  event_type: string;
+  description: string;
+  created_at: string;
+  created_by: string | null;
+  client: { client_id: string; full_name: string } | null;
+  property: { location: string; block_number: number; lot_number: number } | null;
+}
+
 const recentActivityScope = createScope([]);
 
 export async function getRecentActivity(): Promise<RecentActivityItem[]> {
   return recentActivityScope.query(async ({ supabase, userId }) => {
     if (!userId) return [];
 
-    const [canReadClients, canReadTitles] = await Promise.all([
+    const [canReadClients, canReadTitles, canReadBilling] = await Promise.all([
       hasPermission("clients.read", userId),
       hasPermission("legal.read", userId),
+      hasPermission("billing.read", userId),
     ]);
 
-    const [clientResult, titleResult] = await Promise.all([
+    const [clientResult, titleResult, billingResult] = await Promise.all([
       canReadClients
         ? supabase
             .from("client_log")
@@ -67,6 +79,14 @@ export async function getRecentActivity(): Promise<RecentActivityItem[]> {
             .limit(8)
             .returns<TitleActivityRow[]>()
         : Promise.resolve({ data: [], error: null }),
+      canReadBilling
+        ? supabase
+            .from("billing_event")
+            .select("event_id, account_id, event_type, description, created_at, created_by, client:client_id(client_id, full_name), property:property_id(location, block_number, lot_number)")
+            .order("created_at", { ascending: false })
+            .limit(8)
+            .returns<BillingActivityRow[]>()
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     if (clientResult.error) {
@@ -75,13 +95,18 @@ export async function getRecentActivity(): Promise<RecentActivityItem[]> {
     if (titleResult.error) {
       console.error("Recent title activity failed:", titleResult.error.message);
     }
+    if (billingResult.error) {
+      console.error("Recent billing activity failed:", billingResult.error.message);
+    }
 
     const clientRows = (clientResult.data ?? []) as ClientActivityRow[];
     const titleRows = (titleResult.data ?? []) as TitleActivityRow[];
+    const billingRows = (billingResult.data ?? []) as BillingActivityRow[];
 
     const actorIds = [
       ...clientRows.map((row) => row.performed_by),
       ...titleRows.map((row) => row.changed_by),
+      ...billingRows.map((row) => row.created_by),
     ].filter((id): id is string => Boolean(id));
     const namesResult = actorIds.length
       ? await supabase.rpc("get_user_names", { p_user_ids: [...new Set(actorIds)] })
@@ -129,7 +154,21 @@ export async function getRecentActivity(): Promise<RecentActivityItem[]> {
         }];
       });
 
-    return [...clientItems, ...titleItems]
+    const billingItems: RecentActivityItem[] = billingRows.map((row) => {
+      const clientName = row.client?.full_name;
+      const detail = clientName ? `${clientName} · ${row.description}` : row.description;
+      return {
+        id: row.event_id,
+        kind: "billing",
+        label: row.event_type === "reservation" ? "Property Reserved" : "Ledger Forfeited",
+        detail,
+        timestamp: row.created_at,
+        actor: row.created_by ? names.get(row.created_by) ?? "Staff member" : "System",
+        href: `/dashboard/billing/${encodeURIComponent(row.account_id)}`,
+      };
+    });
+
+    return [...clientItems, ...titleItems, ...billingItems]
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 10);
   });
