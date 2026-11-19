@@ -20,6 +20,7 @@ import { uuidSchema } from "@/lib/validations/client";
 import {
   createBillingLedgerSchema,
   postBillingPaymentSchema,
+  updateBillingPaymentSchema,
   voidBillingPaymentSchema,
   updateBillingPoliciesSchema,
   recordBillingNoticeSchema,
@@ -640,6 +641,67 @@ export async function postBillingPayment(
 
       if (error || !data) {
         throw new Error(`Failed to record payment: ${error?.message || "Unknown error"}`);
+      }
+
+      return { paymentId: data.payment_id };
+    },
+  });
+}
+
+/**
+ * Corrects a posted payment (OR/CR) in place. The edit form submits every
+ * field, so this is a full replace of the editable columns rather than a
+ * partial patch; an empty notes field clears the stored note.
+ */
+export async function updateBillingPayment(
+  input: unknown
+): Promise<ActionResult<{ paymentId: string }>> {
+  return billingUpdate.run({
+    schema: updateBillingPaymentSchema,
+    input,
+    handler: async (validatedInput, { supabase }) => {
+      const {
+        paymentId,
+        paymentDate,
+        amount,
+        receiptNumber,
+        paymentMethod,
+        waivePenalty,
+        notes,
+      } = validatedInput;
+
+      const { data: payment, error: pErr } = await supabase
+        .from("billing_payment")
+        .select("account_id")
+        .eq("payment_id", paymentId)
+        .maybeSingle<{ account_id: string }>();
+
+      if (pErr || !payment) {
+        throw new Error("Payment record not found.");
+      }
+
+      await assertLedgerEditable(payment.account_id, supabase);
+
+      const { data, error } = await supabase
+        .from("billing_payment")
+        .update({
+          payment_date: paymentDate,
+          amount,
+          receipt_number: receiptNumber.trim().toUpperCase(),
+          payment_method: paymentMethod,
+          waive_penalty: waivePenalty,
+          notes: notes?.trim() || null,
+        })
+        .eq("payment_id", paymentId)
+        .select("payment_id")
+        .maybeSingle<{ payment_id: string }>();
+
+      if (error) {
+        throw new Error(`Failed to update payment: ${error.message}`);
+      }
+      if (!data) {
+        // RLS filtered the row out: the caller lacks billing.update on it.
+        throw new Error("Payment could not be updated.");
       }
 
       return { paymentId: data.payment_id };

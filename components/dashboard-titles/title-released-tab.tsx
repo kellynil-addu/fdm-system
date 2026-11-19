@@ -203,7 +203,7 @@ export function TitleReleasedTab({ title }: TitleReleasedTabProps) {
             {title.release_remarks && (
               <div className="space-y-0.5 pt-1">
                 <span className="text-xs text-muted-foreground">Receipt Remarks:</span>
-                <p className="text-xs text-foreground bg-muted/40 p-2 rounded-md border border-border">
+                <p className="text-xs text-foreground bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] p-2 rounded-md border border-border">
                   {title.release_remarks}
                 </p>
               </div>
@@ -239,7 +239,7 @@ export function TitleReleasedTab({ title }: TitleReleasedTabProps) {
             <div className="pt-2">
               <span className="text-xs text-muted-foreground block mb-1.5">Signed Clearance Attachment</span>
               {title.release_attachment ? (
-                <div className="flex items-center justify-between rounded-md border border-border bg-muted/40 p-2.5 text-xs">
+                <div className="flex items-center justify-between rounded-md border border-border bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] p-2.5 text-xs">
                   <div className="flex items-center gap-2 min-w-0">
                     <FileText className="h-4 w-4 text-primary shrink-0" />
                     <div className="min-w-0">

@@ -192,7 +192,7 @@ export function BillingDashboardView({
     if (s.totalPenaltyDue > 0) parts.push(`${formatCurrency(s.totalPenaltyDue)} pen`);
 
     return (
-      <span className={s.totalPenaltyDue > 0 || s.arrearsPrincipal > 0 ? "text-foreground/80" : "text-muted-foreground"}>
+      <span className={s.totalPenaltyDue > 0 || s.arrearsPrincipal > 0 ? "text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]" : "text-muted-foreground"}>
         {parts.join(" + ")}
       </span>
     );
@@ -231,8 +231,11 @@ export function BillingDashboardView({
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-card p-4 rounded-xl border border-border-warm shadow-xs">
+      {/* 4 columns only from xl: a 9-digit peso amount at text-xl measures 181px
+          and needs a ~215px card, which md/lg widths (with the 240px sidebar)
+          don't provide. min-w-0 + overflow-wrap keep larger values inside. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="min-w-0 bg-card p-4 rounded-xl border border-border-warm shadow-xs">
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1 flex items-center font-medium">
             <span>Total Due Now</span>
             <HelpTip
@@ -240,7 +243,7 @@ export function BillingDashboardView({
               text="Combined total owed right now across all contracts: overdue months, late penalties, and this month's open installment."
             />
           </div>
-          <div className="text-xl font-mono font-bold text-foreground tabular-nums">
+          <div className="text-xl font-mono font-bold [overflow-wrap:anywhere] text-foreground tabular-nums">
             {formatCurrency(metrics.totalPayableNow)}
           </div>
           <div className="text-xs text-muted-foreground mt-1">
@@ -249,11 +252,11 @@ export function BillingDashboardView({
           </div>
         </div>
 
-        <div className="bg-card p-4 rounded-xl border border-border-warm shadow-xs">
+        <div className="min-w-0 bg-card p-4 rounded-xl border border-border-warm shadow-xs">
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1 font-medium">
             Late Penalties
           </div>
-          <div className="text-xl font-mono font-bold text-destructive tabular-nums">
+          <div className="text-xl font-mono font-bold [overflow-wrap:anywhere] text-destructive tabular-nums">
             {formatCurrency(metrics.totalPenaltyDue)}
           </div>
           <div className="text-xs text-muted-foreground mt-1">
@@ -262,7 +265,7 @@ export function BillingDashboardView({
           </div>
         </div>
 
-        <div className="bg-card p-4 rounded-xl border border-border-warm shadow-xs">
+        <div className="min-w-0 bg-card p-4 rounded-xl border border-border-warm shadow-xs">
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1 flex items-center font-medium">
             <span>Contract Balance</span>
             <HelpTip
@@ -270,7 +273,7 @@ export function BillingDashboardView({
               text="Total remaining balance across all contracts, including future months that are not due yet."
             />
           </div>
-          <div className="text-xl font-mono font-bold text-foreground tabular-nums">
+          <div className="text-xl font-mono font-bold [overflow-wrap:anywhere] text-foreground tabular-nums">
             {formatCurrency(metrics.totalReceivables)}
           </div>
           <div className="text-xs text-muted-foreground mt-1">
@@ -278,11 +281,11 @@ export function BillingDashboardView({
           </div>
         </div>
 
-        <div className="bg-card p-4 rounded-xl border border-border-warm shadow-xs">
+        <div className="min-w-0 bg-card p-4 rounded-xl border border-border-warm shadow-xs">
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-1 font-medium">
             Total Collected
           </div>
-          <div className="text-xl font-mono font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
+          <div className="text-xl font-mono font-bold [overflow-wrap:anywhere] text-emerald-600 dark:text-emerald-400 tabular-nums">
             {formatCurrency(metrics.totalCollected)}
           </div>
           <div className="text-xs text-muted-foreground mt-1">
@@ -309,7 +312,7 @@ export function BillingDashboardView({
             className={`px-3 py-1.5 rounded-md transition-colors ${
               filterStatus === "overdue"
                 ? "bg-destructive text-destructive-foreground font-medium"
-                : "text-destructive hover:bg-destructive/10"
+                : "text-destructive hover:bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)]"
             }`}
           >
             Overdue ({metrics.overdueCount})
@@ -385,7 +388,7 @@ export function BillingDashboardView({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-border-warm bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              <tr className="border-b border-border-warm bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <th className="py-2.5 px-4 w-36">
                   <div className="flex items-center space-x-1">
                     <span>Status</span>
@@ -416,7 +419,7 @@ export function BillingDashboardView({
                 </th>
                 <th
                   onClick={() => toggleSort("payable")}
-                  className="py-2.5 px-4 text-right cursor-pointer hover:text-foreground bg-muted/30 border-l border-border-warm"
+                  className="py-2.5 px-4 text-right cursor-pointer hover:text-foreground bg-[color-mix(in_srgb,var(--muted)_30%,transparent)] border-l border-border-warm"
                 >
                   <div className="flex items-center justify-end space-x-1">
                     <span>
@@ -452,7 +455,7 @@ export function BillingDashboardView({
                 filteredSummaries.map((s) => (
                   <tr
                     key={s.ledger.id}
-                    className="hover:bg-muted/40 transition-colors group cursor-pointer"
+                    className="hover:bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] transition-colors group cursor-pointer"
                     onClick={() => router.push(`/dashboard/billing/${s.ledger.id}`)}
                   >
                     <td className="py-3 px-4 align-top">
@@ -486,7 +489,7 @@ export function BillingDashboardView({
                         ? formatDate(s.currentTermDueDate)
                         : "-"}
                     </td>
-                    <td className="py-3 px-4 align-top text-right bg-muted/20 border-l border-border-warm">
+                    <td className="py-3 px-4 align-top text-right bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] border-l border-border-warm">
                       <div
                         className={`text-sm font-mono font-bold tabular-nums ${
                           s.status === "overdue"
@@ -503,7 +506,7 @@ export function BillingDashboardView({
                       <div className="text-[11px] mt-0.5">{renderDueBreakdown(s)}</div>
                     </td>
                     <td className="py-3 px-4 align-top text-right border-l border-border-warm">
-                      <div className="font-mono font-semibold tabular-nums text-foreground/90">
+                      <div className="font-mono font-semibold tabular-nums text-[color-mix(in_srgb,var(--foreground)_90%,transparent)]">
                         {formatCurrency(s.tspOutstandingBalance)}
                       </div>
                       <div className="text-[11px] text-muted-foreground mt-0.5">

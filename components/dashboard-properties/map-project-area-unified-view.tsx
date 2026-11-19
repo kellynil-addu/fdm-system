@@ -1058,7 +1058,7 @@ export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifie
               <AlertDialogCancel className="text-xs">Cancel</AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleConfirmEditorEntry}
-                className="bg-primary text-xs font-semibold text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
+                className="text-xs font-semibold"
               >
                 Enter Editor
               </AlertDialogAction>
