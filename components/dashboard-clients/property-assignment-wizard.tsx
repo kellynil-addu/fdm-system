@@ -29,6 +29,7 @@ import {
   assignPropertyFullyPaid,
 } from '@/lib/actions/properties';
 import { createBillingLedger } from '@/lib/actions/billing';
+import { notifyActivityUpdated } from '@/lib/activity-events';
 import { formatCurrency } from '@/lib/billing/ledger-engine';
 import { getProjectAreas, getProjectAreaWithLots } from '@/lib/actions/project-areas';
 import { getClientRequirements, formatMissingRequirements } from '@/lib/utils/client-requirements';
@@ -486,6 +487,7 @@ export function PropertyAssignmentWizard({
           ? `Opened Block ${selectedLotDetails.blockNumber} Lot ${selectedLotDetails.lotNumber} and created contract ledger`
           : `Property assigned and contract ledger created with ${termMonths}-month installment schedule`;
         toast.success(actionText);
+        notifyActivityUpdated();
       } else if (selectedStage === 'legal-processing') {
         const result = await assignPropertyFullyPaid(targetPropertyId, client.client_id);
 

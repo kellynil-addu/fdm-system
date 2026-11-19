@@ -116,6 +116,43 @@ export function compareTitleStatus(a: TitleDialogItem, b: TitleDialogItem): numb
   return titleStatusRank(a) - titleStatusRank(b);
 }
 
+/** Filters awaiting accounts and land titles by workflow stage tab in pipeline order. */
+export function filterTitleRecords(
+  tab: LegalTab,
+  awaiting: AccountAwaitingTitle[],
+  titles: LandTitle[]
+): TitleDialogItem[] {
+  const filteredAwaiting = tab === 'all' || tab === 'intake' ? awaiting : [];
+  const filteredTitles = (() => {
+    switch (tab) {
+      case 'all':
+        return titles;
+      case 'intake':
+        return titles.filter((t) => t.status === 'Cleared by Billing');
+      case 'preparation':
+        return titles.filter((t) => t.status === 'Document Preparation');
+      case 'review':
+        return titles.filter((t) => t.status === 'For Review');
+      case 'signature':
+        return titles.filter((t) => t.status === 'For Signature');
+      case 'clearance':
+        return titles.filter((t) => t.status === 'Clearance Period');
+      case 'ready':
+        return titles.filter((t) => t.status === 'Ready for Claim');
+      case 'released':
+        return titles.filter((t) => t.status === 'Released');
+      default:
+        return [];
+    }
+  })();
+
+  const items: TitleDialogItem[] = [
+    ...filteredAwaiting.map((data): TitleDialogItem => ({ type: 'awaiting', data })),
+    ...filteredTitles.map((data): TitleDialogItem => ({ type: 'title', data })),
+  ];
+  return items.sort(compareTitleStatus);
+}
+
 export type TitleDialogState =
   | { type: 'detail'; item: TitleDialogItem }
   | null;
@@ -277,7 +314,7 @@ export function LandTitlesProvider({
   const counts = useMemo(
     () => ({
       all: awaiting.length + titles.length,
-      intake: awaiting.length,
+      intake: awaiting.length + titles.filter((t) => t.status === 'Cleared by Billing').length,
       preparation: titles.filter((t) => t.status === 'Document Preparation').length,
       review: titles.filter((t) => t.status === 'For Review').length,
       signature: titles.filter((t) => t.status === 'For Signature').length,
@@ -330,7 +367,7 @@ export function LandTitlesProvider({
       case 'all':
         return visibleTitles;
       case 'intake':
-        return [];
+        return visibleTitles.filter((t) => t.status === 'Cleared by Billing');
       case 'preparation':
         return visibleTitles.filter((t) => t.status === 'Document Preparation');
       case 'review':
@@ -348,21 +385,11 @@ export function LandTitlesProvider({
     }
   }, [tab, visibleTitles]);
 
-  /**
-   * The cards the grid renders, in pipeline order.
-   *
-   * Sorting here rather than in the view keeps the order with the data it
-   * orders. The comparator is stable, so within one stage the records keep the
-   * arrival order they were fetched in — newest first — and the grid only
-   * appears to jump when the stage a record is in actually changes.
-   */
-  const cardItems = useMemo<TitleDialogItem[]>(() => {
-    const items: TitleDialogItem[] = [
-      ...visibleAwaiting.map((data): TitleDialogItem => ({ type: 'awaiting', data })),
-      ...visibleTitles.map((data): TitleDialogItem => ({ type: 'title', data })),
-    ];
-    return items.sort(compareTitleStatus);
-  }, [visibleAwaiting, visibleTitles]);
+  // Pipeline order: intake accounts first, followed by each subsequent workflow stage
+  const cardItems = useMemo<TitleDialogItem[]>(
+    () => filterTitleRecords(tab, visibleAwaiting, visibleTitles),
+    [tab, visibleAwaiting, visibleTitles]
+  );
 
   const createTitle = useCallback(
     async (

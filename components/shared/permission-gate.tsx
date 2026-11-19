@@ -2,32 +2,48 @@
 
 import * as React from 'react';
 import { useSession } from '@/lib/hooks/use-session';
+import {
+  type PermissionRule,
+  type CapabilityName,
+  either,
+  all,
+} from '@/lib/capabilities';
 
 interface PermissionGateProps {
   permission?: string;
-  anyOf?: string[];
-  allOf?: string[];
+  capability?: CapabilityName;
+  rule?: PermissionRule;
+  anyOf?: (string | PermissionRule)[];
+  allOf?: (string | PermissionRule)[];
   fallback?: React.ReactNode;
   children: React.ReactNode;
 }
 
 export function PermissionGate({
   permission,
+  capability,
+  rule,
   anyOf,
   allOf,
   fallback = null,
   children,
 }: PermissionGateProps) {
-  const { hasPermission } = useSession();
+  const { can, hasPermission } = useSession();
 
   let isAllowed = true;
+  if (rule && !can(rule)) {
+    isAllowed = false;
+  }
+  if (capability && !can(capability)) {
+    isAllowed = false;
+  }
   if (permission && !hasPermission(permission)) {
     isAllowed = false;
   }
-  if (anyOf && anyOf.length > 0 && !anyOf.some((p) => hasPermission(p))) {
+  if (anyOf && anyOf.length > 0 && !can(either(...(anyOf as PermissionRule[])))) {
     isAllowed = false;
   }
-  if (allOf && allOf.length > 0 && !allOf.every((p) => hasPermission(p))) {
+  if (allOf && allOf.length > 0 && !can(all(...(allOf as PermissionRule[])))) {
     isAllowed = false;
   }
 

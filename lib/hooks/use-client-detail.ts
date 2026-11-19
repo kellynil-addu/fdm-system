@@ -27,7 +27,7 @@ import {
   undoBillingClearance as undoBillingClearanceAction,
 } from '@/lib/actions/billing';
 import { forfeitPropertyLot as forfeitPropertyLotAction } from '@/lib/actions/properties';
-import { useSession } from '@/lib/hooks/use-session';
+import { useSession, useResourcePermissions, useIntents } from '@/lib/hooks/use-session';
 import type {
   Client,
   ClientWithDetails,
@@ -71,6 +71,12 @@ export interface ClientDetailContextValue {
   undoClearance: (accountId: string) => Promise<void>;
   /** Forfeits an account/lot, transitioning it into the grace period. */
   forfeitLot: (propertyId: string, reason?: string) => Promise<void>;
+  intent: {
+    edit: boolean;
+    delete: boolean;
+    clearBilling: boolean;
+    assignProperty: boolean;
+  };
   canEditClient: boolean;
   canDeleteClient: boolean;
   canClearBilling: boolean;
@@ -92,11 +98,16 @@ export function ClientDetailProvider({
   initialClient: ClientWithDetails;
   children: ReactNode;
 }) {
-  const { isSystemAdmin, hasPermission } = useSession();
-  const canEditClient = hasPermission('clients.update');
-  const canDeleteClient = Boolean(isSystemAdmin || hasPermission('clients.delete'));
-  const canClearBilling = hasPermission('billing.update');
-  const canAssignProperty = hasPermission('properties.update');
+  const intent = useIntents({
+    edit: 'client.edit',
+    delete: 'client.delete',
+    clearBilling: 'billing.clear',
+    assignProperty: 'property.assign',
+  });
+  const canEditClient = intent.edit;
+  const canDeleteClient = intent.delete;
+  const canClearBilling = intent.clearBilling;
+  const canAssignProperty = intent.assignProperty;
   const router = useRouter();
   const [client, setClient] = useState<ClientWithDetails>(initialClient);
 
@@ -414,6 +425,7 @@ export function ClientDetailProvider({
     clearAccount,
     undoClearance,
     forfeitLot,
+    intent,
     canEditClient,
     canDeleteClient,
     canClearBilling,

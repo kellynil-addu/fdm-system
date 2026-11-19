@@ -9,6 +9,7 @@ import {
   evaluateLedger,
 } from "@/lib/billing/ledger-engine";
 import { exportLedgerToExcel } from "@/lib/billing/export-excel";
+import { notifyActivityUpdated } from "@/lib/activity-events";
 import { ExcelSoaDocument } from "@/components/dashboard-billing/excel-soa-document";
 import { PaymentHistoryDocument } from "@/components/dashboard-billing/payment-history-document";
 import {
@@ -928,6 +929,7 @@ export function BillingLedgerDetailView({
 
       setShowForfeitModal(false);
       toast.success("Contract cancelled and property ownership forfeited");
+      notifyActivityUpdated();
       router.refresh();
     } finally {
       setIsSubmitting(false);

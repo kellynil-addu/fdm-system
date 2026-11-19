@@ -4,8 +4,14 @@ import type { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient as createSupabaseServerClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { requirePermission } from "@/lib/actions/auth-guard";
+import { requirePermission, requireRule } from "@/lib/actions/auth-guard";
 import { getUserInfo } from "@/lib/user";
+import {
+  type PermissionRule,
+  type CapabilityOrRule,
+  toRule,
+  all,
+} from "@/lib/capabilities";
 import {
   type ActionResult,
   actionSuccess,
@@ -22,8 +28,21 @@ export interface ScopeOptions {
   admin?: boolean;
 }
 
+function normalizeToRule(
+  input?: CapabilityOrRule | readonly CapabilityOrRule[]
+): PermissionRule | null {
+  if (!input) return null;
+  if (Array.isArray(input)) {
+    if (input.length === 0) return null;
+    const rules = input.map(toRule);
+    if (rules.length === 1) return rules[0];
+    return all(...rules);
+  }
+  return toRule(input as CapabilityOrRule);
+}
+
 export interface RunActionOptions<TSchema extends z.ZodTypeAny, TResult> {
-  permissions?: string[];
+  permissions?: CapabilityOrRule | readonly CapabilityOrRule[];
   schema?: TSchema;
   input?: unknown;
   handler: (
@@ -33,7 +52,7 @@ export interface RunActionOptions<TSchema extends z.ZodTypeAny, TResult> {
 }
 
 export interface QueryOptions<TSchema extends z.ZodTypeAny = z.ZodTypeAny, TResult = unknown> {
-  permissions?: string[];
+  permissions?: CapabilityOrRule | readonly CapabilityOrRule[];
   schema?: TSchema;
   input?: unknown;
   handler: (
@@ -43,17 +62,23 @@ export interface QueryOptions<TSchema extends z.ZodTypeAny = z.ZodTypeAny, TResu
 }
 
 export function createScope(
-  basePermissions: string[] = [],
+  basePermissions?: CapabilityOrRule | readonly CapabilityOrRule[],
   scopeOptions?: ScopeOptions
 ) {
-  const resolveContext = async (extraPermissions: string[] = []): Promise<ActionContext> => {
-    const allPermissions = Array.from(new Set([...basePermissions, ...extraPermissions]));
-    let callerId = "";
+  const baseRule = normalizeToRule(basePermissions);
 
-    if (allPermissions.length > 0) {
-      for (const permission of allPermissions) {
-        callerId = await requirePermission(permission);
-      }
+  const resolveContext = async (
+    extraPermissions?: CapabilityOrRule | readonly CapabilityOrRule[]
+  ): Promise<ActionContext> => {
+    const extraRule = normalizeToRule(extraPermissions);
+    const combinedRule =
+      baseRule && extraRule
+        ? all(baseRule, extraRule)
+        : extraRule ?? baseRule;
+
+    let callerId = "";
+    if (combinedRule) {
+      callerId = await requireRule(combinedRule);
     } else {
       const user = await getUserInfo();
       callerId = user?.id ?? "";
@@ -120,11 +145,16 @@ export function createScope(
   }
 
   return {
-    extend: (additionalPermissions: string[], extendOptions?: ScopeOptions) => {
-      return createScope(
-        [...basePermissions, ...additionalPermissions],
-        extendOptions ?? scopeOptions
-      );
+    extend: (
+      additionalPermissions?: CapabilityOrRule | readonly CapabilityOrRule[],
+      extendOptions?: ScopeOptions
+    ) => {
+      const additionalRule = normalizeToRule(additionalPermissions);
+      const combinedRule =
+        baseRule && additionalRule
+          ? all(baseRule, additionalRule)
+          : additionalRule ?? baseRule ?? undefined;
+      return createScope(combinedRule, extendOptions ?? scopeOptions);
     },
 
     query,

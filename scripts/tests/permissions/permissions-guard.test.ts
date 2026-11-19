@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { faker } from "@faker-js/faker";
 import { hasPermission, getUserPermissions } from "@/lib/permissions";
-import { getAuthorizedCaller, requirePermission } from "@/lib/actions/auth-guard";
+import { getAuthorizedCaller, requirePermission, verifyPageAccess } from "@/lib/actions/auth-guard";
 import { createClient } from "@/lib/actions/clients";
 import { createPropertyLot } from "@/lib/actions/properties";
 import { createClient as createServerSupabaseClient } from "@/lib/supabase/server";
@@ -101,6 +101,34 @@ describe("Permissions & Authorization Guard Actions", () => {
     await expect(requirePermission("clients.delete")).rejects.toThrow(
       "Forbidden: You do not have permission 'clients.delete'."
     );
+  });
+
+  it("verifyPageAccess redirects to login when unauthenticated", async () => {
+    try {
+      await verifyPageAccess("clients.read");
+      expect.unreachable("should have redirected");
+    } catch (error: unknown) {
+      const digest = (error as { digest?: string })?.digest ?? "";
+      expect(digest).toContain("NEXT_REDIRECT");
+    }
+  });
+
+  it("verifyPageAccess throws forbidden interrupt when user lacks permission", async () => {
+    await loginAs(unprivilegedUser.email, unprivilegedUser.password);
+
+    try {
+      await verifyPageAccess("clients.read");
+      expect.unreachable("should have called forbidden()");
+    } catch (error: unknown) {
+      const digest = (error as { digest?: string })?.digest ?? "";
+      expect(digest).toBe("NEXT_HTTP_ERROR_FALLBACK;403");
+    }
+  });
+
+  it("verifyPageAccess returns userId when user has required permission", async () => {
+    const adminSession = await loginAsAdmin();
+    const result = await verifyPageAccess("clients.read");
+    expect(result.userId).toBe(adminSession.user.id);
   });
 
   it("unprivileged user cannot execute client or property mutations", async () => {

@@ -56,7 +56,8 @@ import { ClientAssignModal } from './client-assign-modal';
 import { CreatePropertyLotModal } from './property-lot-create-modal';
 import { DeletePropertyLotDialog } from './property-lot-delete-dialog';
 import { usePropertyLots, lotLabel } from '@/lib/hooks/use-property-lots';
-import { useSession } from '@/lib/hooks/use-session';
+import { useSession, useIntents } from '@/lib/hooks/use-session';
+import { either } from '@/lib/capabilities';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { toast } from 'sonner';
 import { ClientCallingCard } from '@/components/dashboard-clients/client-calling-card';
@@ -345,10 +346,14 @@ export interface PropertyLotDetailViewProps {
 }
 
 export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetailViewProps) {
-  const { updateLot, archiveLot, unarchiveLot, reopenLot, deleteLot, projectAreas, canEdit, canDelete } = usePropertyLots();
-  const { isSystemAdmin } = useSession();
-  const canEditLot = canEdit;
-  const canDeleteLot = canDelete;
+  const { updateLot, archiveLot, unarchiveLot, reopenLot, deleteLot, projectAreas } = usePropertyLots();
+  const intent = useIntents({
+    edit: 'property.edit',
+    delete: 'property.delete',
+    manageLifecycle: either('property.archive', 'property.delete'),
+  });
+  const canEditLot = intent.edit;
+  const canDeleteLot = intent.delete;
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -574,7 +579,7 @@ export function PropertyLotDetailView({ lot, onBack, onClose }: PropertyLotDetai
                   Export PDF report
                 </DropdownMenuItem>
 
-                {(canEditLot || canDeleteLot) && <DropdownMenuSeparator />}
+                {intent.manageLifecycle && <DropdownMenuSeparator />}
 
                 {isArchived ? (
                   <>

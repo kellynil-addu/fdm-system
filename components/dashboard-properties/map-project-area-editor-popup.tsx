@@ -1,7 +1,7 @@
 import { PenTool, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { useSession } from '@/lib/hooks/use-session';
+import { useResourcePermissions } from '@/lib/hooks/use-session';
 import type { LotPlotProperties } from '@/components/dashboard-properties/map-project-area-popup';
 
 export interface MapProjectAreaEditorPopupProps {
@@ -12,12 +12,11 @@ export interface MapProjectAreaEditorPopupProps {
 }
 
 export function MapProjectAreaEditorPopup({ plot, onEditBoundary, onDeletePlot }: MapProjectAreaEditorPopupProps) {
-  const { isSystemAdmin, hasPermission } = useSession();
+  const { canEdit: canUpdateProperty, canDelete } = useResourcePermissions('properties');
 
   const isDraft = plot.status === 'Draft';
-  const canUpdateProperty = hasPermission('properties.update');
   const canEditBoundary = !plot.isProjectAreaArchived && !isDraft && canUpdateProperty;
-  const canDeletePlot = !isDraft && (isSystemAdmin || hasPermission('properties.delete'));
+  const canDeletePlot = !isDraft && canDelete;
 
   return (
     <div className="min-w-[220px] p-3 font-sans" style={{ fontFamily: 'var(--font-geist-sans), sans-serif' }}>

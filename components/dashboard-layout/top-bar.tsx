@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Activity, Bell, ChevronRight, Clock3, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Activity, Bell, ChevronRight, Clock3, PanelLeftClose, PanelLeftOpen, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { logout as signOut } from '@/lib/auth';
@@ -51,53 +51,7 @@ export function useTopBar() {
   return { isLoggingOut, logoutError, handleLogout };
 }
 
-const ROUTE_LABELS: Record<string, string> = {
-  dashboard: 'Dashboard',
-  clients: 'Client records',
-  properties: 'Property inventory',
-  map: 'Project Area Map',
-  admin: 'Team & access',
-  settings: 'Account Settings',
-  billing: 'Billing & ledgers',
-  accounting: 'Accounts Payable',
-  legal: 'Title releases',
-  operations: 'Operations Log',
-};
-
-function getBreadcrumbs(pathname: string) {
-  const segments = pathname.split('/').filter(Boolean);
-  if (segments.length === 0 || segments[0] !== 'dashboard') {
-    return [{ label: 'Dashboard', isCurrent: true }];
-  }
-
-  const items: Array<{ label: string; href?: string; isCurrent?: boolean }> = [];
-  let currentPath = '';
-
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i];
-    currentPath += `/${segment}`;
-    const isLast = i === segments.length - 1;
-
-    let label = ROUTE_LABELS[segment];
-    if (!label) {
-      if (segments[i - 1] === 'clients') {
-        label = 'Client Profile';
-      } else if (segments[i - 1] === 'properties') {
-        label = 'Lot Details';
-      } else {
-        label = segment.charAt(0).toUpperCase() + segment.slice(1);
-      }
-    }
-
-    items.push({
-      label,
-      href: isLast ? undefined : currentPath,
-      isCurrent: isLast,
-    });
-  }
-
-  return items;
-}
+import { getBreadcrumbs } from '@/lib/route-labels';
 
 export function DashboardBreadcrumbs() {
   const pathname = usePathname();
@@ -245,7 +199,13 @@ export function DashboardTopBar({
                     <DropdownMenuItem key={`${item.kind}-${item.id}`} asChild className="cursor-pointer whitespace-normal px-3 py-2.5">
                       <Link href={item.href} className="flex items-start gap-3">
                         <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-sidebar-accent text-accent-blue-foreground">
-                          {item.kind === 'title' ? <Clock3 className="h-3.5 w-3.5" /> : <Activity className="h-3.5 w-3.5" />}
+                          {item.kind === 'title' ? (
+                            <Clock3 className="h-3.5 w-3.5" />
+                          ) : item.kind === 'billing' ? (
+                            <Receipt className="h-3.5 w-3.5" />
+                          ) : (
+                            <Activity className="h-3.5 w-3.5" />
+                          )}
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block text-xs font-semibold text-foreground">{item.label}</span>

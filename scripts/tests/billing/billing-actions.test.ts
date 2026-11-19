@@ -21,6 +21,7 @@ import {
   markAccountClearedByBilling,
   undoBillingClearance,
 } from "@/lib/actions/billing";
+import { getRecentActivity } from "@/lib/actions/recent-activity";
 import {
   loginAsAdmin,
   hardDeleteTestProperty,
@@ -110,6 +111,13 @@ describe("Billing Server Actions End-to-End Integration", () => {
     expect(createRes.success).toBe(true);
     const accountId = unwrap(createRes).accountId;
     expect(accountId).toBeDefined();
+
+    const recentAfterReserve = await getRecentActivity();
+    const reserveActivity = recentAfterReserve.find(
+      (a) => a.kind === "billing" && a.label === "Property Reserved" && a.href.includes(accountId)
+    );
+    expect(reserveActivity).toBeDefined();
+    expect(reserveActivity?.detail).toContain(client.full_name);
 
     // 2. Fetch single ledger and verify initial simulation
     const ledgerDetail = await getBillingLedgerById(accountId, "2024-03-20");
@@ -217,6 +225,13 @@ describe("Billing Server Actions End-to-End Integration", () => {
       forfeitedAt: "2024-03-25",
     });
     expect(forfeitRes.success).toBe(true);
+
+    const recentAfterForfeit = await getRecentActivity();
+    const forfeitActivity = recentAfterForfeit.find(
+      (a) => a.kind === "billing" && a.label === "Ledger Forfeited" && a.href.includes(accountId)
+    );
+    expect(forfeitActivity).toBeDefined();
+    expect(forfeitActivity?.detail).toContain("Unresponsive to notice of cancellation");
 
     const afterForfeit = await getBillingLedgerById(accountId, "2024-03-20");
     expect(afterForfeit?.ledger.status).toBe("Forfeited");

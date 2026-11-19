@@ -37,7 +37,7 @@ import {
 } from '@/lib/actions/project-areas';
 import { parseRing, calculatePolygonAreaSqm, isPolygonContained } from '@/lib/geometry';
 import { getProjectAreaDraft, saveProjectAreaDraft, clearProjectAreaDraft } from '@/lib/storage/map-draft-storage';
-import { useSession } from '@/lib/hooks/use-session';
+import { useResourcePermissions } from '@/lib/hooks/use-session';
 import {
   countProjectAreasByView,
   filterProjectAreasByView,
@@ -62,8 +62,7 @@ export interface ProjectAreaMapUnifiedViewProps {
 export function ProjectAreaMapUnifiedView({ projectAreas }: ProjectAreaMapUnifiedViewProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { hasPermission } = useSession();
-  const canEditProperties = hasPermission('properties.update');
+  const { canEdit: canEditProperties } = useResourcePermissions('properties');
   const targetLotId = searchParams.get('lot');
   const targetProjectAreaId = searchParams.get('projectArea');
 

@@ -30,17 +30,9 @@ export interface LotDestinationInput {
   account_id?: string | null;
 }
 
-/**
- * @param ownerClientId The client on this lot, when the caller is showing it in
- *   the context of that client. Carried through to Billing as a return path, so
- *   a clerk who opened a lot from a client record can get back to it. Omitted
- *   from the URL when the caller has no client in hand, which is the honest
- *   thing to do — inventing a return path that does not exist would strand
- *   them.
- */
 export function lotDestinationHref(
   lot: LotDestinationInput,
-  ownerClientId?: string | null
+  _ownerClientId?: string | null
 ): string | null {
   if (!lot.property_id) return null;
 
@@ -49,9 +41,7 @@ export function lotDestinationHref(
   }
 
   if (lot.account_id) {
-    const params = new URLSearchParams({ account: lot.account_id });
-    if (ownerClientId) params.set('client', ownerClientId);
-    return `/dashboard/billing?${params.toString()}`;
+    return `/dashboard/billing/${encodeURIComponent(lot.account_id)}`;
   }
 
   return `/dashboard/properties/map?lot=${encodeURIComponent(lot.property_id)}`;

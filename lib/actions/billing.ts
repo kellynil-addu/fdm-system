@@ -478,7 +478,7 @@ export async function createBillingLedger(
   return billingCreate.run({
     schema: createBillingLedgerSchema,
     input,
-    handler: async (validatedInput, { supabase }) => {
+    handler: async (validatedInput, { supabase, userId }) => {
       const {
         clientId,
         propertyId,
@@ -561,6 +561,26 @@ export async function createBillingLedger(
         .from("property_lot")
         .update({ status: "Reserved" })
         .eq("property_id", propertyId);
+
+      const { data: lot } = await supabase
+        .from("property_lot")
+        .select("block_number, lot_number, location")
+        .eq("property_id", propertyId)
+        .maybeSingle<{ block_number: number; lot_number: number; location: string }>();
+
+      const lotRef = lot
+        ? `Block ${lot.block_number} Lot ${lot.lot_number} (${lot.location})`
+        : "property lot";
+
+      // Log reservation event to billing audit log
+      await supabase.from("billing_event").insert({
+        account_id: account.account_id,
+        client_id: clientId,
+        property_id: propertyId,
+        event_type: "reservation",
+        description: `Reserved ${lotRef} · TCP: ₱${contractPrice.toLocaleString("en-PH")}`,
+        created_by: userId,
+      });
 
       return { accountId: account.account_id };
     },

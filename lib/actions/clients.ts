@@ -56,9 +56,11 @@ import {
 import { documentFileSchema } from "@/lib/validations/document";
 
 import { getPaginationOffsets, buildPaginatedResult } from "@/lib/pagination";
+import { CAPABILITIES } from "@/lib/capabilities";
 
 const client = createScope(["clients.read"]);
 const clientWrite = client.extend(["clients.update"]);
+const clientArchive = client.extend(CAPABILITIES["client.archive"]);
 const clientDelete = client.extend(["clients.delete"]);
 
 const uploadClientDocumentSchema = z
@@ -511,7 +513,7 @@ export async function updateClient(
 }
 
 export async function archiveClient(clientId: string): Promise<ActionResult<Client>> {
-  return clientWrite.run({
+  return clientArchive.run({
     schema: uuidSchema,
     input: clientId,
     handler: async (validId, { supabase }) => {
@@ -532,7 +534,7 @@ export async function archiveClient(clientId: string): Promise<ActionResult<Clie
 }
 
 export async function unarchiveClient(clientId: string): Promise<ActionResult<Client>> {
-  return clientWrite.run({
+  return clientArchive.run({
     schema: uuidSchema,
     input: clientId,
     handler: async (validId, { supabase }) => {

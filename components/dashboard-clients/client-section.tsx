@@ -53,6 +53,8 @@ import {
   useClients,
   ARCHIVED_STATUS,
 } from '@/lib/hooks/use-clients-page';
+import { useIntents } from '@/lib/hooks/use-session';
+import { either } from '@/lib/capabilities';
 import { useMutation } from '@/lib/hooks/use-mutation';
 import { useDialogPresence } from '@/lib/hooks/use-dialog-presence';
 import { getArchiveEligibility } from '@/lib/utils/archive-rules';
@@ -152,7 +154,7 @@ function EmptyState({
   controller: { isFiltered: boolean; clearAll: () => void };
   onCreate: () => void;
 }) {
-  const { canCreate } = useClients();
+  const intent = useIntents({ create: 'client.create' });
   const Icon = controller.isFiltered ? SearchX : Users;
   return (
     <div className="flex h-full min-h-[300px] flex-col items-center justify-center gap-4 px-6 py-12 text-center">
@@ -166,7 +168,7 @@ function EmptyState({
         <p className="max-w-sm text-sm text-muted-foreground">
           {controller.isFiltered
             ? 'Try a different search term, or clear the filters to view all clients.'
-            : canCreate
+            : intent.create
               ? 'Add the first client to start maintaining client records and contact information.'
               : 'No client records have been registered in the system yet.'}
         </p>
@@ -180,7 +182,7 @@ function EmptyState({
           <X className="h-3.5 w-3.5" />
           Clear filters
         </Button>
-      ) : canCreate ? (
+      ) : intent.create ? (
         <Button
           onClick={onCreate}
           className="gap-2 bg-primary text-primary-foreground hover:bg-[color-mix(in_srgb,var(--primary)_85%,black)]"
@@ -282,7 +284,13 @@ function ClientRowActions({
   onRestore: () => Promise<void>;
 }) {
   const router = useRouter();
-  const { openDialog, isSystemAdmin, canEdit, canDelete } = useClients();
+  const { openDialog } = useClients();
+  const intent = useIntents({
+    edit: 'client.edit',
+    archive: 'client.archive',
+    delete: 'client.delete',
+    manageLifecycle: either('client.archive', 'client.delete'),
+  });
 
   return (
     // The card owns Enter and Space for its own activation, so the menu has to
@@ -339,15 +347,15 @@ function ClientRowActions({
             Client summary PDF
           </DropdownMenuItem>
           <DropdownMenuItem
-            hidden={!canEdit}
+            hidden={!intent.edit}
             icon={<Edit3 className="h-4 w-4" />}
             onSelect={() => openDialog({ type: 'edit', client })}
           >
             Edit client
           </DropdownMenuItem>
-          {(canEdit || canDelete) && <DropdownMenuSeparator />}
+          {intent.manageLifecycle && <DropdownMenuSeparator />}
           <DropdownMenuItem
-            hidden={!isArchived || !canEdit}
+            hidden={!isArchived || !intent.archive}
             icon={<ArchiveRestore className="h-4 w-4" />}
             disabled={isRestoring}
             onSelect={(e) => {
@@ -358,14 +366,14 @@ function ClientRowActions({
             Restore client
           </DropdownMenuItem>
           <DropdownMenuItem
-            hidden={isArchived || !canEdit}
+            hidden={isArchived || !intent.archive}
             icon={<Archive className="h-4 w-4" />}
             onSelect={() => openDialog({ type: 'archive', client })}
           >
             Archive client
           </DropdownMenuItem>
           <DropdownMenuItem
-            hidden={!isArchived || !canDelete}
+            hidden={!isArchived || !intent.delete}
             disabled={!eligibility.isEligibleForDelete}
             disabledReason={eligibility.tooltipReason}
             variant="destructive"
@@ -388,8 +396,8 @@ function ClientsContent() {
     openDialog,
     missingDocumentAlerts,
     restoreClient,
-    canCreate,
   } = useClients();
+  const intent = useIntents({ create: 'client.create' });
 
   const { rendered: dialog, isOpen: isDialogOpen } = useDialogPresence(activeDialog);
 
@@ -433,7 +441,7 @@ function ClientsContent() {
                 <FileSearch className="h-4 w-4" />
                 Search documents
               </Button>
-              {canCreate && (
+              {intent.create && (
                 <Button
                   responsive
                   onClick={() => openDialog({ type: 'create' })}
