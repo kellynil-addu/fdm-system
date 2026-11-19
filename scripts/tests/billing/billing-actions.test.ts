@@ -13,6 +13,7 @@ import {
   getAvailableClientsAndLots,
   createBillingLedger,
   postBillingPayment,
+  updateBillingPayment,
   voidBillingPayment,
   updateBillingPolicies,
   recordBillingNotice,
@@ -148,8 +149,43 @@ describe("Billing Server Actions End-to-End Integration", () => {
     const afterPost = await getBillingLedgerById(accountId, "2024-03-20");
     expect(afterPost?.ledger.payments.length).toBe(1);
 
+    // 4b. Edit the posted OR: correct receipt number, amount, date, method, notes
+    const posted = afterPost?.ledger.payments.find((p) => p.receiptNo === "OR-2024-001");
+    expect(posted).toBeDefined();
+    const editRes = await updateBillingPayment({
+      paymentId: posted!.id,
+      paymentDate: "2024-01-16",
+      amount: 32500,
+      receiptNumber: " or-2024-001a ",
+      paymentMethod: "check",
+      waivePenalty: true,
+      notes: "",
+    });
+    expect(editRes.success).toBe(true);
+
+    const afterEdit = await getBillingLedgerById(accountId, "2024-03-20");
+    expect(afterEdit?.ledger.payments.length).toBe(1);
+    const edited = afterEdit?.ledger.payments[0];
+    expect(edited?.id).toBe(posted!.id);
+    expect(edited?.receiptNo).toBe("OR-2024-001A");
+    expect(edited?.amount).toBe(32500);
+    expect(edited?.date).toBe("2024-01-16");
+    expect(edited?.method).toBe("check");
+    expect(edited?.waivePenalty).toBe(true);
+    expect(edited?.notes ?? null).toBeNull();
+
+    const badEditRes = await updateBillingPayment({
+      paymentId: posted!.id,
+      paymentDate: "2024-01-16",
+      amount: 0,
+      receiptNumber: "OR-2024-001A",
+      paymentMethod: "check",
+      waivePenalty: false,
+    });
+    expect(badEditRes.success).toBe(false);
+
     // 5. Void the installment payment
-    const paymentToVoid = afterPost?.ledger.payments.find((p) => p.receiptNo === "OR-2024-001");
+    const paymentToVoid = afterEdit?.ledger.payments.find((p) => p.receiptNo === "OR-2024-001A");
     expect(paymentToVoid).toBeDefined();
     if (paymentToVoid) {
       const voidRes = await voidBillingPayment({ paymentId: paymentToVoid.id });
@@ -311,6 +347,23 @@ describe("Billing Server Actions End-to-End Integration", () => {
     expect(intakePayRes.success).toBe(false);
     if (!intakePayRes.success) {
       expect(intakePayRes.error).toContain("view-only");
+    }
+
+    // Editing an existing OR is blocked too
+    const { ledger: clearedLedger } = await getBillingLedgerById(accountId);
+    const settledPayment = clearedLedger.payments.find((p) => p.receiptNo === "CR-FULL-001");
+    expect(settledPayment).toBeDefined();
+    const intakeEditRes = await updateBillingPayment({
+      paymentId: settledPayment!.id,
+      paymentDate: "2024-01-01",
+      amount: 199999,
+      receiptNumber: "CR-FULL-001",
+      paymentMethod: "cash",
+      waivePenalty: true,
+    });
+    expect(intakeEditRes.success).toBe(false);
+    if (!intakeEditRes.success) {
+      expect(intakeEditRes.error).toContain("view-only");
     }
 
     // Undo clearance

@@ -243,7 +243,7 @@ export function TitleIntakeTab({ item, onStartedProcessing }: TitleIntakeTabProp
                 e.preventDefault();
                 if (activeAwaiting) void runReturn(activeAwaiting.account_id);
               }}
-              className="bg-destructive text-destructive-foreground hover:opacity-90"
+              variant="destructive"
             >
               {isReturning ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
               Confirm Return

@@ -345,7 +345,7 @@ async function DashboardContent() {
         {/* ROW 2: WIND-DOWN OPERATIONS (Billing & Titles) */}
         {hasWindDown && (
           <section aria-labelledby="wind-down-heading" className="space-y-3">
-            <div className="flex items-center gap-2 border-b border-border/60 pb-2">
+            <div className="flex items-center gap-2 border-b border-[color-mix(in_srgb,var(--border)_60%,transparent)] pb-2">
               <Briefcase className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
               <h2 id="wind-down-heading" className="text-base font-semibold tracking-tight text-foreground">
                 Wind-Down Operations
@@ -379,7 +379,7 @@ async function DashboardContent() {
         {/* ROW 3: CLIENT RECORDS & PROPERTY PORTFOLIO */}
         {hasRecordsAndPortfolio && (
           <section aria-labelledby="records-properties-heading" className="space-y-3">
-            <div className="flex items-center gap-2 border-b border-border/60 pb-2">
+            <div className="flex items-center gap-2 border-b border-[color-mix(in_srgb,var(--border)_60%,transparent)] pb-2">
               <Layers className="h-4 w-4 text-primary shrink-0" aria-hidden="true" />
               <h2 id="records-properties-heading" className="text-base font-semibold tracking-tight text-foreground">
                 Records &amp; Property Portfolio

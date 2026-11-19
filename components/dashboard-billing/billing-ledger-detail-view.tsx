@@ -14,6 +14,7 @@ import { ExcelSoaDocument } from "@/components/dashboard-billing/excel-soa-docum
 import { PaymentHistoryDocument } from "@/components/dashboard-billing/payment-history-document";
 import {
   postBillingPayment,
+  updateBillingPayment,
   voidBillingPayment,
   updateBillingPolicies,
   recordBillingNotice,
@@ -76,6 +77,16 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -114,6 +125,7 @@ import {
   MapPin,
   Ruler,
   Tag,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -379,6 +391,10 @@ export function BillingLedgerDetailView({
   const [payMethod, setPayMethod] = useState<"cash" | "check" | "bank_transfer">("cash");
   const [waivePenalty, setWaivePenalty] = useState(false);
   const [payNotes, setPayNotes] = useState("");
+  // Set when the payment modal is correcting an existing OR instead of posting
+  // a new one. Left as-is on close so the title doesn't flip mid-animation;
+  // the open helpers reset it.
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
 
   const [showPoliciesModal, setShowPoliciesModal] = useState(false);
   const [polPenaltyRate, setPolPenaltyRate] = useState<number | "">(3.5);
@@ -417,6 +433,8 @@ export function BillingLedgerDetailView({
   const [selectedDocNotice, setSelectedDocNotice] = useState<OverdueNoticeEvent | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [voidTarget, setVoidTarget] = useState<{ paymentId: string; receiptNo: string } | null>(null);
+  const [isVoiding, setIsVoiding] = useState(false);
 
   const handleConfirmClearance = async () => {
     setIsSubmitting(true);
@@ -554,9 +572,33 @@ export function BillingLedgerDetailView({
 
   const openPaymentModal = () => {
     if (isLedgerLocked) return;
+    if (editingPaymentId) {
+      // Don't carry the edited payment's values into a new entry.
+      setEditingPaymentId(null);
+      setPayReceipt("");
+      setPayNotes("");
+      setPayMethod("cash");
+    }
     setPayDate(asOfDate);
     setPayAmount(summary.totalPayableNow > 0 ? summary.totalPayableNow : summary.ledger.monthlyAmortization);
     setWaivePenalty(false);
+    setShowPaymentModal(true);
+  };
+
+  const openEditPaymentModal = (paymentId: string) => {
+    if (isLedgerLocked) return;
+    const payment = ledger.payments.find((p) => p.id === paymentId);
+    if (!payment) {
+      toast.error("Payment entry not found");
+      return;
+    }
+    setEditingPaymentId(payment.id);
+    setPayDate(payment.date);
+    setPayAmount(payment.amount);
+    setPayReceipt(payment.receiptNo);
+    setPayMethod(payment.method);
+    setWaivePenalty(Boolean(payment.waivePenalty));
+    setPayNotes(payment.notes ?? "");
     setShowPaymentModal(true);
   };
 
@@ -577,6 +619,38 @@ export function BillingLedgerDetailView({
 
     setIsSubmitting(true);
     try {
+      if (editingPaymentId) {
+        const receiptNo = payReceipt.trim().toUpperCase();
+        const notes = payNotes.trim() || undefined;
+        const result = await updateBillingPayment({
+          paymentId: editingPaymentId,
+          paymentDate: payDate,
+          amount: numericPayAmount,
+          receiptNumber: receiptNo,
+          paymentMethod: payMethod,
+          waivePenalty,
+          notes,
+        });
+
+        if (!result.success) {
+          toast.error(result.error || "Failed to update payment");
+          return;
+        }
+
+        setLedger((prev) => ({
+          ...prev,
+          payments: prev.payments.map((p) =>
+            p.id === editingPaymentId
+              ? { ...p, date: payDate, amount: numericPayAmount, receiptNo, method: payMethod, waivePenalty, notes }
+              : p
+          ),
+        }));
+
+        setShowPaymentModal(false);
+        toast.success(`Payment ${receiptNo} updated`);
+        return;
+      }
+
       const result = await postBillingPayment({
         accountId: ledger.id,
         paymentDate: payDate,
@@ -617,9 +691,11 @@ export function BillingLedgerDetailView({
     }
   };
 
-  const handleVoidPayment = async (paymentId: string, receiptNo: string) => {
-    if (!confirm(`Void payment entry ${receiptNo} and recalculate ledger?`)) return;
+  const handleVoidPayment = async () => {
+    if (!voidTarget) return;
+    const { paymentId, receiptNo } = voidTarget;
 
+    setIsVoiding(true);
     try {
       const result = await voidBillingPayment({ paymentId });
       if (!result.success) {
@@ -632,9 +708,12 @@ export function BillingLedgerDetailView({
         payments: prev.payments.filter((p) => p.id !== paymentId),
       }));
 
-      toast.success(`Payment ${receiptNo} voided`);
+      setVoidTarget(null);
+      toast.success(receiptNo ? `Payment ${receiptNo} voided` : "Payment voided");
     } catch {
       toast.error("Failed to void payment");
+    } finally {
+      setIsVoiding(false);
     }
   };
 
@@ -976,7 +1055,7 @@ export function BillingLedgerDetailView({
           <div>
             <span className="font-medium text-destructive">{row.description}</span>
             {row.penaltyBase ? (
-              <div className="text-[11px] text-destructive/80 mt-0.5">
+              <div className="text-[11px] text-[color-mix(in_srgb,var(--destructive)_80%,transparent)] mt-0.5">
                 Assessed on <span className="font-mono tabular-nums">{formatCurrency(row.penaltyBase)}</span> overdue
               </div>
             ) : null}
@@ -1010,7 +1089,7 @@ export function BillingLedgerDetailView({
                   <span className="font-mono tabular-nums">{formatCurrency(row.penaltyWaived)}</span> pen waived
                 </span>
               ) : null}
-              {row.notes && <span className="text-muted-foreground/80 italic">• {row.notes}</span>}
+              {row.notes && <span className="text-[color-mix(in_srgb,var(--muted-foreground)_80%,transparent)] italic">• {row.notes}</span>}
             </div>
           )}
         </div>
@@ -1024,7 +1103,7 @@ export function BillingLedgerDetailView({
     }
     if (row.rowType === "downpayment_due" || row.rowType === "installment_due") {
       return (
-        <span className="font-mono text-foreground/80">+{formatCurrency(row.monthlyDue || 0)}</span>
+        <span className="font-mono text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]">+{formatCurrency(row.monthlyDue || 0)}</span>
       );
     }
     if (row.rowType === "penalty_charge") {
@@ -1329,7 +1408,7 @@ export function BillingLedgerDetailView({
             {!isLedgerLocked && summary.status !== "settled" && ledger.status !== "Forfeited" && (
               <button
                 onClick={openPaymentModal}
-                className="px-3.5 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors flex items-center space-x-1 shadow-2xs"
+                className="px-3.5 py-1.5 text-xs font-medium bg-primary text-primary-foreground rounded-lg hover:bg-[color-mix(in_srgb,var(--primary)_90%,transparent)] transition-colors flex items-center space-x-1 shadow-2xs"
               >
                 <PlusCircle className="w-3.5 h-3.5 mr-1" />
                 <span>Post Payment</span>
@@ -1342,9 +1421,9 @@ export function BillingLedgerDetailView({
       {/* Clearance & Forfeiture Status Notification Banners */}
       {isForfeited ? (
         <TooltipProvider delayDuration={150}>
-          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs print:hidden">
+          <div className="rounded-xl border border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] bg-[color-mix(in_srgb,var(--destructive)_5%,transparent)] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs print:hidden">
             <div className="flex items-start sm:items-center space-x-3">
-              <div className="w-8 h-8 rounded-full bg-destructive/15 flex items-center justify-center text-destructive shrink-0 mt-0.5 sm:mt-0">
+              <div className="w-8 h-8 rounded-full bg-[color-mix(in_srgb,var(--destructive)_15%,transparent)] flex items-center justify-center text-destructive shrink-0 mt-0.5 sm:mt-0">
                 <Ban className="w-4 h-4" />
               </div>
               <div>
@@ -1352,7 +1431,7 @@ export function BillingLedgerDetailView({
                   <span>Contract Rescinded &amp; Forfeited</span>
                   <Tooltip>
                     <TooltipTrigger asChild>
-                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-destructive/20 text-destructive cursor-help">
+                      <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-[color-mix(in_srgb,var(--destructive)_20%,transparent)] text-destructive cursor-help">
                         Forfeited
                       </span>
                     </TooltipTrigger>
@@ -1360,7 +1439,7 @@ export function BillingLedgerDetailView({
                       The contract has been cancelled and the property returned to inventory pursuant to Republic Act No. 6552 (Maceda Law).
                     </TooltipContent>
                   </Tooltip>
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-destructive/10 text-destructive border border-destructive/20">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] text-destructive border border-[color-mix(in_srgb,var(--destructive)_20%,transparent)]">
                     <Lock className="w-2.5 h-2.5 mr-1" />
                     View-Only
                   </span>
@@ -1493,7 +1572,7 @@ export function BillingLedgerDetailView({
         <div
           className={`p-4 rounded-xl border flex flex-col justify-between shadow-xs ${
             summary.status === "overdue"
-              ? "bg-destructive/5 border-destructive/20"
+              ? "bg-[color-mix(in_srgb,var(--destructive)_5%,transparent)] border-[color-mix(in_srgb,var(--destructive)_20%,transparent)]"
               : summary.status === "due_soon"
               ? "bg-amber-500/5 border-amber-500/20"
               : "bg-card border-border-warm"
@@ -1562,7 +1641,7 @@ export function BillingLedgerDetailView({
               </div>
             </div>
             {(summary.totalPenaltyPaid > 0 || summary.totalPenaltyWaived > 0) && (
-              <div className="pt-1 text-[11px] text-muted-foreground flex items-center justify-between border-t border-border-warm/50">
+              <div className="pt-1 text-[11px] text-muted-foreground flex items-center justify-between border-t border-[color-mix(in_srgb,var(--border-warm)_50%,transparent)]">
                 <span>Paid Pen: <span className="font-mono font-medium text-foreground">{formatCurrency(summary.totalPenaltyPaid)}</span></span>
                 {summary.totalPenaltyWaived > 0 && (
                   <span className="text-amber-700 dark:text-amber-400 font-medium">
@@ -1581,7 +1660,7 @@ export function BillingLedgerDetailView({
             "bg-card p-4 rounded-xl border border-border-warm flex flex-col justify-between shadow-xs transition-all",
             isLedgerLocked
               ? "cursor-default"
-              : "cursor-pointer hover:border-primary/50 hover:shadow-sm group"
+              : "cursor-pointer hover:border-[color-mix(in_srgb,var(--primary)_50%,transparent)] hover:shadow-sm group"
           )}
         >
           <div>
@@ -1763,7 +1842,7 @@ export function BillingLedgerDetailView({
               className={`px-2 py-1 rounded transition-colors ${
                 journalFilter === "all"
                   ? "bg-muted text-foreground font-semibold"
-                  : "text-muted-foreground hover:bg-muted/50"
+                  : "text-muted-foreground hover:bg-[color-mix(in_srgb,var(--muted)_50%,transparent)]"
               }`}
             >
               All ({summary.journal.length})
@@ -1774,7 +1853,7 @@ export function BillingLedgerDetailView({
                 className={`px-2 py-1 rounded transition-colors ${
                   journalFilter === "recent"
                     ? "bg-muted text-foreground font-semibold"
-                    : "text-muted-foreground hover:bg-muted/50"
+                    : "text-muted-foreground hover:bg-[color-mix(in_srgb,var(--muted)_50%,transparent)]"
                 }`}
               >
                 Recent 14
@@ -1785,7 +1864,7 @@ export function BillingLedgerDetailView({
               className={`px-2 py-1 rounded transition-colors ${
                 journalFilter === "payments"
                   ? "bg-muted text-foreground font-semibold"
-                  : "text-muted-foreground hover:bg-muted/50"
+                  : "text-muted-foreground hover:bg-[color-mix(in_srgb,var(--muted)_50%,transparent)]"
               }`}
             >
               Payments Only
@@ -1800,18 +1879,18 @@ export function BillingLedgerDetailView({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-border-warm bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <tr className="border-b border-border-warm bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <th className="py-2.5 px-3 w-20">Term</th>
                   <th className="py-2.5 px-3 w-28">Date</th>
                   <th className="py-2.5 px-3">Particulars</th>
                   <th className="py-2.5 px-3 text-right">Change</th>
-                  <th className="py-2.5 px-3 text-right bg-muted/30 border-l border-border-warm">
+                  <th className="py-2.5 px-3 text-right bg-[color-mix(in_srgb,var(--muted)_30%,transparent)] border-l border-border-warm">
                     Running Due
                   </th>
                   <th className="py-2.5 px-3 text-right border-l border-border-warm">
                     Contract Bal
                   </th>
-                  <th className="py-2.5 px-2 w-8 print:hidden"></th>
+                  <th className="py-2.5 px-2 w-16 print:hidden"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-warm">
@@ -1827,12 +1906,12 @@ export function BillingLedgerDetailView({
                     <tr
                       key={row.id}
                       className={cn(
-                        "hover:bg-muted/40 transition-colors",
+                        "hover:bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] transition-colors",
                         isNewTerm && "border-t-2 !border-t-border-warm-strong [&>td]:border-t-2 [&>td]:!border-t-border-warm-strong",
                         isPayment
                           ? "bg-emerald-500/5"
                           : isPenalty
-                          ? "bg-destructive/5"
+                          ? "bg-[color-mix(in_srgb,var(--destructive)_5%,transparent)]"
                           : isCurrentTerm
                           ? "bg-blue-500/5"
                           : ""
@@ -1853,14 +1932,14 @@ export function BillingLedgerDetailView({
                             : `#${row.instLabel}`}
                         </span>
                       </td>
-                      <td className="py-2.5 px-3 text-foreground/90 whitespace-nowrap align-top">
+                      <td className="py-2.5 px-3 text-[color-mix(in_srgb,var(--foreground)_90%,transparent)] whitespace-nowrap align-top">
                         {formatDate(row.date)}
                       </td>
                       <td className="py-2.5 px-3 align-top">{renderDynamicParticulars(row)}</td>
                       <td className="py-2.5 px-3 text-right tabular-nums whitespace-nowrap align-top">
                         {renderDynamicChange(row)}
                       </td>
-                      <td className="py-2.5 px-3 text-right tabular-nums bg-muted/15 border-l border-border-warm align-top">
+                      <td className="py-2.5 px-3 text-right tabular-nums bg-[color-mix(in_srgb,var(--muted)_15%,transparent)] border-l border-border-warm align-top">
                         {renderRunningDueCell(row)}
                       </td>
                       <td className="py-2.5 px-3 text-right tabular-nums font-mono font-semibold text-foreground border-l border-border-warm align-top">
@@ -1868,13 +1947,11 @@ export function BillingLedgerDetailView({
                       </td>
                       <td className="py-2.5 px-2 text-center align-top print:hidden">
                         {!isLedgerLocked && row.paymentId && (
-                          <button
-                            onClick={() => handleVoidPayment(row.paymentId!, row.receiptNo || "")}
-                            title="Void payment entry"
-                            className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <PaymentRowActions
+                            receiptNo={row.receiptNo || ""}
+                            onEdit={() => openEditPaymentModal(row.paymentId!)}
+                            onVoid={() => setVoidTarget({ paymentId: row.paymentId!, receiptNo: row.receiptNo || "" })}
+                          />
                         )}
                       </td>
                     </tr>
@@ -1892,7 +1969,7 @@ export function BillingLedgerDetailView({
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-border-warm bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <tr className="border-b border-border-warm bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   <th className="py-2.5 px-3">Date Paid</th>
                   <th className="py-2.5 px-3">Receipt No.</th>
                   <th className="py-2.5 px-3">Method</th>
@@ -1901,7 +1978,7 @@ export function BillingLedgerDetailView({
                   <th className="py-2.5 px-3 text-right">To Principal</th>
                   <th className="py-2.5 px-3 text-right">Waived</th>
                   <th className="py-2.5 px-3">Notes</th>
-                  <th className="py-2.5 px-2 w-8"></th>
+                  <th className="py-2.5 px-2 w-16"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-warm">
@@ -1917,7 +1994,7 @@ export function BillingLedgerDetailView({
                     .slice()
                     .reverse()
                     .map((r) => (
-                      <tr key={r.id} className="hover:bg-muted/40 transition-colors">
+                      <tr key={r.id} className="hover:bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] transition-colors">
                         <td className="py-2.5 px-3 font-medium text-foreground">
                           {formatDate(r.date)}
                         </td>
@@ -1942,13 +2019,11 @@ export function BillingLedgerDetailView({
                         </td>
                         <td className="py-2.5 px-2 text-center">
                           {!isLedgerLocked && r.paymentId && (
-                            <button
-                              onClick={() => handleVoidPayment(r.paymentId!, r.receiptNo || "")}
-                              title="Void payment entry"
-                              className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <PaymentRowActions
+                              receiptNo={r.receiptNo || ""}
+                              onEdit={() => openEditPaymentModal(r.paymentId!)}
+                              onVoid={() => setVoidTarget({ paymentId: r.paymentId!, receiptNo: r.receiptNo || "" })}
+                            />
                           )}
                         </td>
                       </tr>
@@ -1965,7 +2040,7 @@ export function BillingLedgerDetailView({
         <div className="space-y-4 print:hidden">
           <div className="bg-card rounded-xl border border-border-warm shadow-xs overflow-hidden">
             {/* Header with Title and Action Controls */}
-            <div className="p-4 border-b border-border-warm flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/20">
+            <div className="p-4 border-b border-border-warm flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[color-mix(in_srgb,var(--muted)_20%,transparent)]">
               <div>
                 <div className="flex items-center space-x-2">
                   <h3 className="font-semibold text-sm text-foreground">Formal Notices &amp; Forfeiture</h3>
@@ -1974,7 +2049,7 @@ export function BillingLedgerDetailView({
                       Contract Forfeited
                     </span>
                   ) : summary.status === "overdue" ? (
-                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-destructive/10 text-destructive border border-destructive/20">
+                    <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] text-destructive border border-[color-mix(in_srgb,var(--destructive)_20%,transparent)]">
                       {summary.monthsOverdue}m Overdue
                     </span>
                   ) : (
@@ -2005,7 +2080,7 @@ export function BillingLedgerDetailView({
                       setForfeitReason("");
                       setShowForfeitModal(true);
                     }}
-                    className="px-3 py-1.5 border border-destructive/30 bg-card text-destructive font-medium rounded-lg hover:bg-destructive/10 transition-colors flex items-center space-x-1 text-xs"
+                    className="px-3 py-1.5 border border-[color-mix(in_srgb,var(--destructive)_30%,transparent)] bg-card text-destructive font-medium rounded-lg hover:bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] transition-colors flex items-center space-x-1 text-xs"
                   >
                     <Ban className="w-3.5 h-3.5 mr-1" />
                     <span>Forfeit Account</span>
@@ -2016,11 +2091,11 @@ export function BillingLedgerDetailView({
 
             {/* Forfeited Notice Banner */}
             {ledger.status === "Forfeited" && (
-              <div className="bg-destructive/10 border-b border-destructive/20 p-4 flex items-start space-x-3 text-xs text-destructive">
+              <div className="bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] border-b border-[color-mix(in_srgb,var(--destructive)_20%,transparent)] p-4 flex items-start space-x-3 text-xs text-destructive">
                 <Ban className="w-4 h-4 shrink-0 mt-0.5" />
                 <div>
                   <div className="font-bold">Contract Rescinded and Property Forfeited</div>
-                  <div className="text-destructive/90 mt-0.5">
+                  <div className="text-[color-mix(in_srgb,var(--destructive)_90%,transparent)] mt-0.5">
                     Ownership has been rescinded and the lot returned to inventory pursuant to Contract to Sell Section 8 and the Maceda Law.
                   </div>
                 </div>
@@ -2030,7 +2105,7 @@ export function BillingLedgerDetailView({
             {/* Notice Events List or Empty State */}
             {noticeHistory.length === 0 ? (
               <div className="py-12 px-4 text-center space-y-3">
-                <FileText className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+                <FileText className="w-10 h-10 text-[color-mix(in_srgb,var(--muted-foreground)_40%,transparent)] mx-auto" />
                 <div className="space-y-1">
                   <p className="font-semibold text-foreground text-sm">No notices recorded yet</p>
                   <p className="text-xs text-muted-foreground max-w-sm mx-auto">
@@ -2058,13 +2133,13 @@ export function BillingLedgerDetailView({
                     switch (ev.stage) {
                       case "forfeited":
                         return (
-                          <div className="w-6 h-6 rounded-md bg-foreground/10 text-foreground flex items-center justify-center shrink-0">
+                          <div className="w-6 h-6 rounded-md bg-[color-mix(in_srgb,var(--foreground)_10%,transparent)] text-foreground flex items-center justify-center shrink-0">
                             <Ban className="w-3.5 h-3.5" />
                           </div>
                         );
                       case "final_demand":
                         return (
-                          <div className="w-6 h-6 rounded-md bg-destructive/10 text-destructive flex items-center justify-center shrink-0">
+                          <div className="w-6 h-6 rounded-md bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)] text-destructive flex items-center justify-center shrink-0">
                             <AlertCircle className="w-3.5 h-3.5" />
                           </div>
                         );
@@ -2087,7 +2162,7 @@ export function BillingLedgerDetailView({
                   return (
                     <div
                       key={ev.id}
-                      className="p-4 hover:bg-muted/30 transition-colors flex flex-col sm:flex-row sm:items-start justify-between gap-4 text-xs"
+                      className="p-4 hover:bg-[color-mix(in_srgb,var(--muted)_30%,transparent)] transition-colors flex flex-col sm:flex-row sm:items-start justify-between gap-4 text-xs"
                     >
                       <div className="space-y-1.5 flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -2170,14 +2245,17 @@ export function BillingLedgerDetailView({
         <DialogContent className="sm:max-w-lg bg-card print:hidden border-border-warm shadow-lg">
           <DialogHeader className="border-b border-border-warm pb-3">
             <DialogTitle className="text-sm font-semibold text-foreground">
-              Post Payment — <span className="font-bold">{ledger.client.fullName}</span>
+              {editingPaymentId ? "Edit Payment" : "Post Payment"} — <span className="font-bold">{ledger.client.fullName}</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Supports partial, regular installment, and full settlements
+              {editingPaymentId
+                ? "Correct the details of this receipt. The ledger recalculates after saving."
+                : "Supports partial, regular installment, and full settlements"}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handlePostPayment} className="space-y-4 text-xs">
+              {!editingPaymentId && (
               <div className="flex flex-wrap gap-1.5">
                 {summary.totalPayableNow > 0 && (
                   <button
@@ -2205,6 +2283,7 @@ export function BillingLedgerDetailView({
                   Regular Amort: <span className="font-mono">{formatCurrency(ledger.monthlyAmortization)}</span>
                 </button>
               </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -2278,8 +2357,8 @@ export function BillingLedgerDetailView({
                 />
               </div>
 
-              {summary.totalPenaltyDue > 0 && (
-                <div className="bg-muted/20 border border-border-warm rounded-lg p-3">
+              {(summary.totalPenaltyDue > 0 || editingPaymentId) && (
+                <div className="bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] border border-border-warm rounded-lg p-3">
                   <label className="flex items-start space-x-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -2298,7 +2377,8 @@ export function BillingLedgerDetailView({
                 </div>
               )}
 
-              <div className="bg-muted/20 border border-border-warm rounded-lg p-3 space-y-1.5">
+              {!editingPaymentId && (
+              <div className="bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] border border-border-warm rounded-lg p-3 space-y-1.5">
                 <div className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1 flex items-center">
                   <span>Payment Split Preview</span>
                   <HelpTip
@@ -2343,6 +2423,7 @@ export function BillingLedgerDetailView({
                   </div>
                 )}
               </div>
+              )}
 
               <DialogFooter className="pt-2">
                 <Button
@@ -2358,7 +2439,9 @@ export function BillingLedgerDetailView({
                   size="sm"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? "Posting..." : "Confirm & Post"}
+                  {editingPaymentId
+                    ? isSubmitting ? "Saving..." : "Save Changes"
+                    : isSubmitting ? "Posting..." : "Confirm & Post"}
                 </Button>
               </DialogFooter>
             </form>
@@ -2371,7 +2454,7 @@ export function BillingLedgerDetailView({
           onOpenAutoFocus={(e) => e.preventDefault()}
           className="sm:max-w-lg bg-card p-0 gap-0 overflow-hidden text-xs border-border-warm shadow-lg"
         >
-          <DialogHeader className="px-5 py-4 border-b border-border-warm bg-muted/20">
+          <DialogHeader className="px-5 py-4 border-b border-border-warm bg-[color-mix(in_srgb,var(--muted)_20%,transparent)]">
             <DialogTitle className="font-bold text-sm text-foreground">
               Contract Policies &amp; Terms
             </DialogTitle>
@@ -2466,7 +2549,7 @@ export function BillingLedgerDetailView({
                 </div>
               </div>
 
-              <div className="bg-muted/20 border border-border-warm rounded-lg p-3 text-xs space-y-1">
+              <div className="bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] border border-border-warm rounded-lg p-3 text-xs space-y-1">
                 <div className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">
                   How penalties will be applied:
                 </div>
@@ -2518,7 +2601,7 @@ export function BillingLedgerDetailView({
       {/* Record Notice Modal */}
       <Dialog open={showRecordNoticeModal} onOpenChange={setShowRecordNoticeModal}>
         <DialogContent className="sm:max-w-md bg-card p-0 gap-0 overflow-hidden text-xs print:hidden border-border-warm shadow-lg">
-          <DialogHeader className="px-5 py-3.5 border-b border-border-warm bg-muted/20">
+          <DialogHeader className="px-5 py-3.5 border-b border-border-warm bg-[color-mix(in_srgb,var(--muted)_20%,transparent)]">
             <DialogTitle className="font-bold text-sm text-foreground">
               Record &amp; Issue Notice
             </DialogTitle>
@@ -2565,8 +2648,8 @@ export function BillingLedgerDetailView({
                       className={cn(
                         "p-3 rounded-lg border text-xs cursor-pointer transition-colors flex items-start space-x-2.5",
                         isSelected
-                          ? "bg-primary/10 border-primary ring-1 ring-primary"
-                          : "bg-card border-border-warm hover:bg-muted/40 text-muted-foreground"
+                          ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] border-primary ring-1 ring-primary"
+                          : "bg-card border-border-warm hover:bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] text-muted-foreground"
                       )}
                     >
                       <input
@@ -2577,7 +2660,7 @@ export function BillingLedgerDetailView({
                         className="mt-0.5 text-primary focus:ring-primary"
                       />
                       <div className="space-y-0.5">
-                        <div className={cn("font-semibold", isSelected ? "text-foreground" : "text-foreground/80")}>
+                        <div className={cn("font-semibold", isSelected ? "text-foreground" : "text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]")}>
                           {choice.label}
                         </div>
                         <div className="text-[11px] text-muted-foreground">
@@ -2629,7 +2712,7 @@ export function BillingLedgerDetailView({
               </div>
             </div>
 
-            <div className="bg-muted/20 border border-border-warm rounded-lg p-3 text-xs space-y-1">
+            <div className="bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] border border-border-warm rounded-lg p-3 text-xs space-y-1">
               <div className="text-[11px] font-medium text-muted-foreground">
                 The following amounts will be recorded on this notice:
               </div>
@@ -2685,7 +2768,7 @@ export function BillingLedgerDetailView({
       {/* Edit Notice Modal */}
       <Dialog open={showEditNoticeModal} onOpenChange={setShowEditNoticeModal}>
         <DialogContent className="sm:max-w-md bg-card p-0 gap-0 overflow-hidden text-xs print:hidden border-border-warm shadow-lg">
-          <DialogHeader className="px-5 py-3.5 border-b border-border-warm bg-muted/20">
+          <DialogHeader className="px-5 py-3.5 border-b border-border-warm bg-[color-mix(in_srgb,var(--muted)_20%,transparent)]">
             <DialogTitle className="font-bold text-sm text-foreground">
               Edit Notice Record
             </DialogTitle>
@@ -2725,8 +2808,8 @@ export function BillingLedgerDetailView({
                       className={cn(
                         "p-3 rounded-lg border text-xs cursor-pointer transition-colors flex items-start space-x-2.5",
                         isSelected
-                          ? "bg-primary/10 border-primary ring-1 ring-primary"
-                          : "bg-card border-border-warm hover:bg-muted/40 text-muted-foreground"
+                          ? "bg-[color-mix(in_srgb,var(--primary)_10%,transparent)] border-primary ring-1 ring-primary"
+                          : "bg-card border-border-warm hover:bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] text-muted-foreground"
                       )}
                     >
                       <input
@@ -2737,7 +2820,7 @@ export function BillingLedgerDetailView({
                         className="mt-0.5 text-primary focus:ring-primary"
                       />
                       <div className="space-y-0.5">
-                        <div className={cn("font-semibold", isSelected ? "text-foreground" : "text-foreground/80")}>
+                        <div className={cn("font-semibold", isSelected ? "text-foreground" : "text-[color-mix(in_srgb,var(--foreground)_80%,transparent)]")}>
                           {choice.label}
                         </div>
                         <div className="text-[11px] text-muted-foreground">
@@ -2790,7 +2873,7 @@ export function BillingLedgerDetailView({
             </div>
 
             {editingNotice && (
-              <div className="bg-muted/20 border border-border-warm rounded-lg p-3 text-xs space-y-1">
+              <div className="bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] border border-border-warm rounded-lg p-3 text-xs space-y-1">
                 <div className="text-[11px] font-medium text-muted-foreground">
                   Amounts recorded when this notice was issued:
                 </div>
@@ -2835,7 +2918,7 @@ export function BillingLedgerDetailView({
       {/* Forfeit Account Modal */}
       <Dialog open={showForfeitModal} onOpenChange={setShowForfeitModal}>
         <DialogContent className="sm:max-w-md bg-card p-0 gap-0 overflow-hidden text-xs print:hidden border-border-warm shadow-lg">
-          <DialogHeader className="px-5 py-3.5 border-b border-border-warm bg-destructive/10">
+          <DialogHeader className="px-5 py-3.5 border-b border-border-warm bg-[color-mix(in_srgb,var(--destructive)_10%,transparent)]">
             <DialogTitle className="font-bold text-sm text-destructive flex items-center gap-1.5">
               <Ban className="w-4 h-4" />
               <span>Confirm Contract Forfeiture</span>
@@ -2877,7 +2960,7 @@ export function BillingLedgerDetailView({
               </div>
             </div>
 
-            <div className="bg-destructive/5 border border-destructive/20 rounded-lg p-3 text-xs space-y-1">
+            <div className="bg-[color-mix(in_srgb,var(--destructive)_5%,transparent)] border border-[color-mix(in_srgb,var(--destructive)_20%,transparent)] rounded-lg p-3 text-xs space-y-1">
               <div className="text-[11px] font-semibold text-destructive">
                 Outstanding Balance at Forfeiture
               </div>
@@ -2889,7 +2972,7 @@ export function BillingLedgerDetailView({
                 <span>Penalties:</span>
                 <span className="font-mono font-medium text-destructive">{formatCurrency(summary.totalPenaltyDue)}</span>
               </div>
-              <div className="flex justify-between font-bold border-t border-destructive/20 pt-1 text-foreground">
+              <div className="flex justify-between font-bold border-t border-[color-mix(in_srgb,var(--destructive)_20%,transparent)] pt-1 text-foreground">
                 <span>Total Amount Demanded:</span>
                 <span className="font-mono">{formatCurrency(summary.totalPayableNow)}</span>
               </div>
@@ -2922,7 +3005,7 @@ export function BillingLedgerDetailView({
       {/* Printable Notice Document Preview Modal */}
       <Dialog open={showDocModal} onOpenChange={setShowDocModal}>
         <DialogContent className="sm:max-w-2xl bg-card p-0 gap-0 overflow-hidden max-h-[90vh] flex flex-col text-xs print:hidden border-border-warm shadow-lg">
-          <DialogHeader className="px-5 py-3 border-b border-border-warm flex flex-row items-center justify-between space-y-0 bg-muted/20 pr-10">
+          <DialogHeader className="px-5 py-3 border-b border-border-warm flex flex-row items-center justify-between space-y-0 bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] pr-10">
             <div className="flex items-center space-x-2">
               <FileText className="w-4 h-4 text-muted-foreground" />
               <DialogTitle className="font-bold text-sm text-foreground">
@@ -2962,7 +3045,7 @@ export function BillingLedgerDetailView({
       {/* Statement of Account Preview & Print Modal */}
       <Dialog open={showSoaModal} onOpenChange={setShowSoaModal}>
         <DialogContent className="sm:max-w-5xl bg-card p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col text-xs print:hidden border-border-warm shadow-lg">
-          <DialogHeader className="px-5 py-3 border-b border-border-warm flex flex-row items-center justify-between space-y-0 bg-muted/20 pr-10">
+          <DialogHeader className="px-5 py-3 border-b border-border-warm flex flex-row items-center justify-between space-y-0 bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] pr-10">
             <div className="flex items-center space-x-2">
               <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
               <DialogTitle className="font-bold text-sm text-foreground">
@@ -3008,7 +3091,7 @@ export function BillingLedgerDetailView({
             </div>
           </DialogHeader>
 
-          <div className="p-4 sm:p-8 bg-muted/20 flex-1 overflow-y-auto">
+          <div className="p-4 sm:p-8 bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] flex-1 overflow-y-auto">
             <div id="soa-printable-sheet" className="bg-white rounded-lg shadow-md border border-border-warm overflow-hidden">
               <ExcelSoaDocument
                 ledger={ledger}
@@ -3023,7 +3106,7 @@ export function BillingLedgerDetailView({
       {/* Payment History Preview & Print Modal */}
       <Dialog open={showPaymentHistoryModal} onOpenChange={setShowPaymentHistoryModal}>
         <DialogContent className="sm:max-w-4xl bg-card p-0 gap-0 overflow-hidden max-h-[92vh] flex flex-col text-xs print:hidden border-border-warm shadow-lg">
-          <DialogHeader className="px-5 py-3 border-b border-border-warm flex flex-row items-center justify-between space-y-0 bg-muted/20 pr-10">
+          <DialogHeader className="px-5 py-3 border-b border-border-warm flex flex-row items-center justify-between space-y-0 bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] pr-10">
             <div className="flex items-center space-x-2">
               <FileText className="w-4 h-4 text-emerald-600" />
               <DialogTitle className="font-bold text-sm text-foreground">
@@ -3065,7 +3148,7 @@ export function BillingLedgerDetailView({
             </div>
           </DialogHeader>
 
-          <div className="p-4 sm:p-8 bg-muted/20 flex-1 overflow-y-auto">
+          <div className="p-4 sm:p-8 bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] flex-1 overflow-y-auto">
             <div id="payment-history-printable-sheet" className="bg-white rounded-lg shadow-md border border-border-warm overflow-hidden">
               <PaymentHistoryDocument ledger={ledger} />
             </div>
@@ -3085,7 +3168,7 @@ export function BillingLedgerDetailView({
         }}
       >
         <DialogContent className="sm:max-w-lg bg-card p-0 gap-0 overflow-hidden text-xs border-border-warm shadow-lg">
-          <DialogHeader className="px-5 py-3.5 border-b border-border-warm bg-muted/20">
+          <DialogHeader className="px-5 py-3.5 border-b border-border-warm bg-[color-mix(in_srgb,var(--muted)_20%,transparent)]">
             <div className="flex items-center space-x-2">
               {ledger.clearedAt ? (
                 <Undo2 className="w-4 h-4 text-amber-600 dark:text-amber-400" />
@@ -3103,7 +3186,7 @@ export function BillingLedgerDetailView({
 
           <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
             {/* Account Summary Strip */}
-            <div className="bg-muted/20 rounded-lg p-3 border border-border-warm space-y-1">
+            <div className="bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] rounded-lg p-3 border border-border-warm space-y-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground">
                   <ClientHoverLink client={ledger.client} className="text-foreground">
@@ -3217,7 +3300,7 @@ export function BillingLedgerDetailView({
                             <span>{clearanceCustomSoaFile ? "Change File" : "Upload Custom SOA"}</span>
                           </Button>
                           {clearanceCustomSoaFile && (
-                            <div className="flex items-center gap-1.5 text-xs text-foreground bg-muted/40 px-2 py-1 rounded border border-border-warm">
+                            <div className="flex items-center gap-1.5 text-xs text-foreground bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] px-2 py-1 rounded border border-border-warm">
                               <Paperclip className="w-3 h-3 text-muted-foreground shrink-0" />
                               <span className="truncate max-w-[180px] font-mono text-[11px]">
                                 {clearanceCustomSoaFile.name}
@@ -3315,7 +3398,7 @@ export function BillingLedgerDetailView({
                             <span>{clearanceCustomPaymentsFile ? "Change File" : "Upload Custom History"}</span>
                           </Button>
                           {clearanceCustomPaymentsFile && (
-                            <div className="flex items-center gap-1.5 text-xs text-foreground bg-muted/40 px-2 py-1 rounded border border-border-warm">
+                            <div className="flex items-center gap-1.5 text-xs text-foreground bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] px-2 py-1 rounded border border-border-warm">
                               <Paperclip className="w-3 h-3 text-muted-foreground shrink-0" />
                               <span className="truncate max-w-[180px] font-mono text-[11px]">
                                 {clearanceCustomPaymentsFile.name}
@@ -3350,7 +3433,7 @@ export function BillingLedgerDetailView({
             )}
           </div>
 
-          <DialogFooter className="px-5 py-3.5 border-t border-border-warm bg-muted/20 gap-2 sm:gap-2">
+          <DialogFooter className="px-5 py-3.5 border-t border-border-warm bg-[color-mix(in_srgb,var(--muted)_20%,transparent)] gap-2 sm:gap-2">
             <Button
               type="button"
               variant="outline"
@@ -3386,6 +3469,74 @@ export function BillingLedgerDetailView({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Void Payment Confirmation */}
+      <AlertDialog
+        open={voidTarget !== null}
+        onOpenChange={(open) => {
+          if (!open && !isVoiding) setVoidTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Void payment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will void payment entry{" "}
+              <strong className="text-foreground">{voidTarget?.receiptNo || "(no receipt no.)"}</strong>{" "}
+              and recalculate the ledger.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isVoiding}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={isVoiding}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleVoidPayment();
+              }}
+            >
+              {isVoiding && <Loader2 className="animate-spin" />}
+              Void Payment
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+/** Edit + void icon buttons shown on each payment row while the ledger is editable. */
+function PaymentRowActions({
+  receiptNo,
+  onEdit,
+  onVoid,
+}: {
+  receiptNo: string;
+  onEdit: () => void;
+  onVoid: () => void;
+}) {
+  const ref = receiptNo ? ` ${receiptNo}` : "";
+  return (
+    <div className="inline-flex items-center gap-0.5">
+      <button
+        type="button"
+        onClick={onEdit}
+        title="Edit payment entry"
+        aria-label={`Edit payment${ref}`}
+        className="text-muted-foreground hover:text-foreground p-1 rounded transition-colors"
+      >
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={onVoid}
+        title="Void payment entry"
+        aria-label={`Void payment${ref}`}
+        className="text-muted-foreground hover:text-destructive p-1 rounded transition-colors"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }

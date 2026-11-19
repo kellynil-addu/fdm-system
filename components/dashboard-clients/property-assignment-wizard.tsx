@@ -1083,7 +1083,7 @@ export function PropertyAssignmentWizard({
                 </div>
               </div>
 
-              <div className="bg-muted/40 border border-border rounded-lg p-4 text-xs space-y-2">
+              <div className="bg-[color-mix(in_srgb,var(--muted)_40%,transparent)] border border-border rounded-lg p-4 text-xs space-y-2">
                 <div className="text-[11px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">
                   Payment Breakdown
                 </div>
@@ -1158,7 +1158,7 @@ export function PropertyAssignmentWizard({
                 </p>
               </div>
 
-              <div className="rounded-lg border border-border p-3.5 space-y-2 bg-sidebar-accent/50">
+              <div className="rounded-lg border border-border p-3.5 space-y-2 bg-[color-mix(in_srgb,var(--sidebar-accent)_50%,transparent)]">
                 <label className="flex items-start gap-3 cursor-pointer select-none">
                   <input
                     type="checkbox"

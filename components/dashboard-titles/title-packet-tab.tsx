@@ -100,6 +100,7 @@ export function TitlePacketTab({
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [busyDocType, setBusyDocType] = useState<string | null>(null);
+  const [isRemovingDoc, setIsRemovingDoc] = useState(false);
   const [docToRemove, setDocToRemove] = useState<ClientDocument | null>(null);
   const [isGenerateDeedOpen, setIsGenerateDeedOpen] = useState(false);
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
@@ -204,15 +205,17 @@ export function TitlePacketTab({
   async function handleConfirmRemoveDoc() {
     if (!docToRemove) return;
     setBusyDocType(docToRemove.document_type as ReleaseDocumentType);
+    setIsRemovingDoc(true);
     try {
       await removeDocument(docToRemove);
       onDocumentsChange(documents.filter((d) => d.document_id !== docToRemove.document_id));
+      setDocToRemove(null);
       toast.success('Document removed');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to delete');
     } finally {
       setBusyDocType(null);
-      setDocToRemove(null);
+      setIsRemovingDoc(false);
     }
   }
 
@@ -734,7 +737,12 @@ export function TitlePacketTab({
       />
 
       {/* Confirmation Alert to Remove Document */}
-      <AlertDialog open={docToRemove !== null} onOpenChange={(open) => !open && setDocToRemove(null)}>
+      <AlertDialog
+        open={docToRemove !== null}
+        onOpenChange={(open) => {
+          if (!open && !isRemovingDoc) setDocToRemove(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Remove document?</AlertDialogTitle>
@@ -745,11 +753,16 @@ export function TitlePacketTab({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isRemovingDoc}>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => void handleConfirmRemoveDoc()}
-              className="bg-destructive text-destructive-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_85%,black)]"
+              variant="destructive"
+              disabled={isRemovingDoc}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmRemoveDoc();
+              }}
             >
+              {isRemovingDoc ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -805,9 +818,9 @@ export function TitlePacketTab({
                 setRevertReason('');
                 onStatusChange(target, reason || undefined);
               }}
-              className="bg-destructive text-destructive-foreground hover:bg-[color-mix(in_srgb,var(--destructive)_85%,black)]"
+              variant="destructive"
             >
-              {isUpdatingStatus ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null}
+              {isUpdatingStatus ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               Confirm Revert
             </AlertDialogAction>
           </AlertDialogFooter>

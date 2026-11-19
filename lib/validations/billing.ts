@@ -29,6 +29,16 @@ export const postBillingPaymentSchema = z.object({
   notes: z.string().optional(),
 });
 
+export const updateBillingPaymentSchema = z.object({
+  paymentId: z.string().uuid("Invalid payment ID"),
+  paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Payment date must be YYYY-MM-DD"),
+  amount: z.number().positive("Payment amount must be greater than 0"),
+  receiptNumber: z.string().trim().min(1, "Receipt number is required"),
+  paymentMethod: z.enum(["cash", "check", "bank_transfer"]),
+  waivePenalty: z.boolean(),
+  notes: z.string().optional(),
+});
+
 export const voidBillingPaymentSchema = z.object({
   paymentId: z.string().uuid("Invalid payment ID"),
 });
@@ -94,6 +104,7 @@ export const clearanceInputSchema = z.union([
 
 export type CreateBillingLedgerInput = z.infer<typeof createBillingLedgerSchema>;
 export type PostBillingPaymentInput = z.infer<typeof postBillingPaymentSchema>;
+export type UpdateBillingPaymentInput = z.infer<typeof updateBillingPaymentSchema>;
 export type VoidBillingPaymentInput = z.infer<typeof voidBillingPaymentSchema>;
 export type UpdateBillingPoliciesInput = z.infer<typeof updateBillingPoliciesSchema>;
 export type RecordBillingNoticeInput = z.infer<typeof recordBillingNoticeSchema>;
