@@ -53,16 +53,6 @@ export function OcrQueueProvider({ children }: { children: ReactNode }) {
 
   const isProcessing = jobs.some((j) => j.status === 'pending' || j.status === 'processing');
 
-  useEffect(() => {
-    if (!isProcessing) return;
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      e.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isProcessing]);
-
   // Processes the next pending OCR job using server-side PaddleOCR
   const processNextJob = useCallback(async () => {
     if (isWorkingRef.current) return;
